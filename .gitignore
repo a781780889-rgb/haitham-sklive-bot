@@ -1,0 +1,18 @@
+# لا ترفع هذه الملفات على GitHub أبداً
+.env
+*.db
+*.log
+__pycache__/
+*.pyc
+*.pyo
+logos/
+signatures/
+templates/*.pdf
+/tmp/
+*.jpg
+*.png
+!seha_logo.png
+!nhic_logo.png
+!template.png
+!bg_pattern.png
+!ksa_text.png
