@@ -1,7 +1,8 @@
 python-telegram-bot==20.7
-weasyprint
 reportlab>=4.0
 Pillow>=10.0
 python-dotenv>=1.0
 flask>=3.0
 qrcode
+arabic-reshaper>=3.0
+python-bidi>=0.4
