@@ -1,2 +1,2 @@
 [phases.setup]
-nixPkgs = ["wkhtmltopdf"]
+nixPkgs = ["pango", "cairo", "gdk-pixbuf", "libffi"]
