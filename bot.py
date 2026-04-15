@@ -1728,10 +1728,10 @@ async def handle_templates(update, context, text, uid):
 
     if text == "➕ إضافة قالب PDF جديد":
         context.user_data["state"] = "admin_add_template_hospital"
-        hospitals = db.get_all_hospitals()
-        txt = "\n".join([f"• {h['name']}" for h in hospitals])
         await update.message.reply_text(
-            f"أرسل اسم المستشفى لربط القالب به:\n\n{txt}\n\n(أو أرسل 'عام' لربطه بكل المستشفيات)",
+            "أرسل اسم المستشفى لربط القالب به:\n\n"
+            "💡 مثال: مستشفى الملك فهد\n\n"
+            "(أو أرسل 'عام' لربطه بكل المستشفيات)",
             reply_markup=back_keyboard()
         )
 
