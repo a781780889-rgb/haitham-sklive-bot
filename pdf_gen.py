@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-pdf_gen.py — توليد PDF من قالب HTML
-يستخدم ملف seha_template.html كقالب مرئي ويملأ البيانات الديناميكية
-ويحولها إلى PDF باستخدام wkhtmltopdf
+pdf_gen.py — توليد PDF من قالب HTML باستخدام WeasyPrint
 """
 
-import os, re, uuid, tempfile, io, json as _json, urllib.parse, urllib.request, base64, subprocess
+import os, re, uuid, tempfile, io, json as _json, urllib.parse, urllib.request, base64
 from datetime import datetime, timedelta
 
 TEMP_DIR  = tempfile.gettempdir()
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 HTML_TEMPLATE = os.path.join(_BASE_DIR, 'templates', 'seha_template.html')
+
+# ── دوال مساعدة ──────────────────────────────────────────────────────────────
 
 def en_only(t):
     r = ''.join(ch for ch in str(t) if not ('\u0600'<=ch<='\u06FF')).strip()
@@ -151,7 +151,6 @@ def _esc(text):
 
 def _replace_by_classes(html, cls_key1, cls_key2, new_text,
                          duplicated=False, span_class=None):
-    """Replace content of the div identified by two unique CSS position classes."""
     escaped = _esc(new_text)
     pattern = (r'(<div class="t m0 [^"]*' + re.escape(cls_key1) +
                r'[^"]*' + re.escape(cls_key2) + r'[^"]*">).*?(</div>)')
@@ -162,20 +161,17 @@ def _replace_by_classes(html, cls_key1, cls_key2, new_text,
     return re.sub(pattern, repl, html, count=1, flags=re.DOTALL)
 
 def _replace_duration(html, dur_en, dur_ar):
-    """Replace duration field (complex: EN + span + AR)."""
     pattern = r'(<div class="t m0 [^"]*x1a[^"]*y1e[^"]*">).*?(</div>)'
     repl = rf'\g<1>{_esc(dur_en)}<span class="_ _0"> </span>{_esc(dur_ar)}\g<2>'
     return re.sub(pattern, repl, html, count=1, flags=re.DOTALL)
 
 def _replace_nationality(html, nat_english, nat_arabic):
-    """Replace nationality (EN + span + AR span)."""
     pattern = r'(<div class="t m0 [^"]*x22[^"]*y28[^"]*">).*?(</div>)'
     repl = (rf'\g<1>{_esc(nat_english)}<span class="_ _1"> </span>'
             rf'<span class="ff5">{_esc(nat_arabic)}</span>\g<2>')
     return re.sub(pattern, repl, html, count=1, flags=re.DOTALL)
 
 def _replace_name_en(html, name_en):
-    """Split English name across two divs (y24 line1, y25 line2)."""
     name_en = name_en.upper().strip()
     words = name_en.split()
     if len(words) <= 3:
@@ -184,7 +180,6 @@ def _replace_name_en(html, name_en):
         mid = len(words) // 2
         line1 = " ".join(words[:mid])
         line2 = " ".join(words[mid:])
-
     p1 = r'(<div class="t m0 [^"]*x1e[^"]*y24[^"]*">).*?(</div>)'
     p2 = r'(<div class="t m0 [^"]*x1f[^"]*y25[^"]*">).*?(</div>)'
     html = re.sub(p1, rf'\g<1>{_esc(line1)}\g<2>', html, count=1, flags=re.DOTALL)
@@ -192,11 +187,8 @@ def _replace_name_en(html, name_en):
     return html
 
 def _inject_qr_and_logo(html, qr_data_uri, logo_data_uri):
-    """Inject QR code and hospital logo as absolutely positioned images."""
-    # PDF→HTML scale (PDF 595.5×841.89 pt → HTML 842×1190 px)
     sx = 842 / 595.5
     sy = 1190 / 841.89
-
     imgs = ""
     if qr_data_uri:
         ql  = 125.5 * sx
@@ -205,7 +197,6 @@ def _inject_qr_and_logo(html, qr_data_uri, logo_data_uri):
         imgs += (f'<img src="{qr_data_uri}" alt="QR" style="position:absolute;'
                  f'left:{ql:.1f}px;top:{qt:.1f}px;width:{qsz:.1f}px;'
                  f'height:{qsz:.1f}px;z-index:10;"/>')
-
     if logo_data_uri:
         ll = 414.4 * sx
         lt = (841.89 - 257.2 - 67.4) * sy
@@ -214,7 +205,6 @@ def _inject_qr_and_logo(html, qr_data_uri, logo_data_uri):
         imgs += (f'<img src="{logo_data_uri}" alt="logo" style="position:absolute;'
                  f'left:{ll:.1f}px;top:{lt:.1f}px;width:{lw:.1f}px;'
                  f'height:{lh:.1f}px;z-index:10;object-fit:contain;"/>')
-
     if imgs:
         html = html.replace(
             '<div class="pf w0 h0">',
@@ -236,8 +226,7 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
 
     if not os.path.exists(HTML_TEMPLATE):
         raise FileNotFoundError(
-            f"لم يعثر على قالب HTML\nالمسار: {HTML_TEMPLATE}\n"
-            "الحل: ضع seha_template.html داخل مجلد templates/")
+            f"لم يعثر على قالب HTML\nالمسار: {HTML_TEMPLATE}")
 
     # ── تحضير البيانات ──────────────────────────────────────────────────────
     days      = safe_int(order_data.get("days_count", 1))
@@ -289,48 +278,26 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
         html = f.read()
 
     # ── استبدال الحقول ──────────────────────────────────────────────────────
-
-    # رقم الإجازة
     html = _replace_by_classes(html, 'x19', 'y1d', leave_id)
-
-    # مدة الإجازة
     html = _replace_duration(html, dur_en, dur_ar)
-
-    # تواريخ الدخول والخروج والإصدار
-    html = _replace_by_classes(html, 'x1b', 'y1f', start)       # admission EN
-    html = _replace_by_classes(html, 'x1c', 'y20', start)       # admission AR
-    html = _replace_by_classes(html, 'x1b', 'y21', discharge)   # discharge EN
-    html = _replace_by_classes(html, 'x1c', 'y22', discharge)   # discharge AR
-    html = _replace_by_classes(html, 'x1d', 'y23', today_str)   # issue date
-
-    # الاسم
-    html = _replace_name_en(html, name_en)                       # name EN (2 lines)
-    html = _replace_by_classes(html, 'x20', 'y26', full_name)   # name AR
-
-    # الهوية
+    html = _replace_by_classes(html, 'x1b', 'y1f', start)
+    html = _replace_by_classes(html, 'x1c', 'y20', start)
+    html = _replace_by_classes(html, 'x1b', 'y21', discharge)
+    html = _replace_by_classes(html, 'x1c', 'y22', discharge)
+    html = _replace_by_classes(html, 'x1d', 'y23', today_str)
+    html = _replace_name_en(html, name_en)
+    html = _replace_by_classes(html, 'x20', 'y26', full_name)
     html = _replace_by_classes(html, 'x21', 'y27', id_number)
-
-    # الجنسية
     html = _replace_nationality(html, nat_english, nat_arabic)
-
-    # جهة العمل
-    html = _replace_by_classes(html, 'x23', 'y29', workplace)   # employer AR
-
-    # الطبيب
-    html = _replace_by_classes(html, 'x24', 'y2a', doc_en)      # doctor EN
-    html = _replace_by_classes(html, 'x25', 'y2b', doctor or "")# doctor AR
-
-    # التخصص
-    html = _replace_by_classes(html, 'x26', 'y2c', spec_en)     # specialty EN
-    html = _replace_by_classes(html, 'x27', 'y2d', specialty or "")# specialty AR
-
-    # الوقت والتاريخ (مكرران في HTML)
+    html = _replace_by_classes(html, 'x23', 'y29', workplace)
+    html = _replace_by_classes(html, 'x24', 'y2a', doc_en)
+    html = _replace_by_classes(html, 'x25', 'y2b', doctor or "")
+    html = _replace_by_classes(html, 'x26', 'y2c', spec_en)
+    html = _replace_by_classes(html, 'x27', 'y2d', specialty or "")
     html = _replace_by_classes(html, 'x28', 'y2e', issue_time_str,
                                 duplicated=True, span_class='_2')
     html = _replace_by_classes(html, 'x28', 'y2f', date_str,
                                 duplicated=True, span_class='_3')
-
-    # المستشفى
     if hospital:
         html = _replace_by_classes(html, 'x29', 'y30', str(hospital),
                                     duplicated=True, span_class='_4')
@@ -338,36 +305,37 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
         html = _replace_by_classes(html, 'x2a', 'y31', hospital_en,
                                     duplicated=True, span_class='_5')
 
-    # ── حقن QR والشعار ──────────────────────────────────────────────────────
     html = _inject_qr_and_logo(html, qr_uri, logo_uri)
 
-    # ── تحويل HTML → PDF ────────────────────────────────────────────────────
+    # ── تحويل HTML → PDF باستخدام WeasyPrint ────────────────────────────────
+    try:
+        from weasyprint import HTML as WeasyprintHTML
+        pdf_bytes = WeasyprintHTML(string=html).write_pdf()
+        with open(output_path, 'wb') as f:
+            f.write(pdf_bytes)
+        return output_path
+    except ImportError:
+        pass
+
+    # ── Fallback: wkhtmltopdf ────────────────────────────────────────────────
+    import subprocess
     tmp_html = os.path.join(TEMP_DIR, f"sick_{uuid.uuid4().hex}.html")
     try:
         with open(tmp_html, 'w', encoding='utf-8') as f:
             f.write(html)
-
         cmd = [
-            'wkhtmltopdf',
-            '--quiet',
+            'wkhtmltopdf', '--quiet',
             '--page-size', 'A4',
-            '--orientation', 'Portrait',
-            '--margin-top', '0mm',
-            '--margin-bottom', '0mm',
-            '--margin-left', '0mm',
-            '--margin-right', '0mm',
-            '--dpi', '150',
+            '--margin-top', '0mm', '--margin-bottom', '0mm',
+            '--margin-left', '0mm', '--margin-right', '0mm',
             '--disable-smart-shrinking',
             '--enable-local-file-access',
-            tmp_html,
-            output_path
+            tmp_html, output_path
         ]
-        result = subprocess.run(cmd, capture_output=True, timeout=30)
-        if result.returncode != 0 and not os.path.exists(output_path):
-            raise RuntimeError(f"wkhtmltopdf: {result.stderr.decode('utf-8','ignore')[:200]}")
-
+        subprocess.run(cmd, capture_output=True, timeout=30)
+        if os.path.exists(output_path):
+            return output_path
+        raise RuntimeError("wkhtmltopdf failed")
     finally:
         try: os.remove(tmp_html)
         except: pass
-
-    return output_path
