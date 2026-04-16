@@ -2,8 +2,11 @@
 # -*- coding: utf-8 -*-
 """
 pdf_gen.py — توليد PDF إجازة مرضية ثنائية اللغة
-كل حقل يُكتب في عمودين: إنجليزي (يسار) + عربي (يمين)
-مرجع التصميم: ملف صحتي الأصلي (842.25 × 1190.25 نقطة)
+المواصفات المطبّقة:
+  • الخطوط : TimesRoman (إنجليزي) + NotoSansArabic (عربي)
+  • الحجم  : 13.5 pt لجميع بيانات الجدول
+  • الأرقام: غربية (0-9) في كل السياقات
+  • التخطيط: EN في عمود اليسار + AR في عمود اليمين
 """
 
 import os, re, io, uuid, random, tempfile, json as _json
@@ -27,77 +30,96 @@ TEMP_DIR  = tempfile.gettempdir()
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # ══════════════════════════════════════════════════════════════════════
-# ✅ هيكل الأعمدة — مستخرج من ملف صحتي المرجعي (842.25 × 1190.25)
-#
-#  ┌──────────┬────────────────────┬────────────────────┬─────────────┐
-#  │ EN label │   EN data col      │   AR data col      │  AR label   │
-#  │ 31→173   │  175 ──────── 413  │  415 ──────── 650  │  655→810    │
-#  └──────────┴────────────────────┴────────────────────┴─────────────┘
-#
-#  الحقول أحادية العمود (تمتد عبر المنطقتين):
-#    leave_id, issue_date, national_id → توسيط في (175, 650)
-#
-#  الحقول ثنائية العمود:
-#    EN قيمة في اليسار  → توسيط في (175, 413)
-#    AR قيمة في اليمين  → drawRightString عند 650
+# ✅ أسماء الخطوط وأحجامها
 # ══════════════════════════════════════════════════════════════════════
+FONT_EN         = "TimesRoman"           # للنص الإنجليزي والأرقام
+FONT_EN_BOLD    = "TimesRoman-Bold"
+FONT_AR         = "NotoSansArabic"       # للنص العربي
+FONT_AR_BOLD    = "NotoSansArabic-Bold"
 
+# أحجام الخطوط (pt)
+FONT_SIZE_DATA      = 13.5   # بيانات الجدول (قيم الحقول)
+FONT_SIZE_TITLE     = 22.5   # عنوان "تقرير إجازة مرضية"
+FONT_SIZE_SUBTITLE  = 18.67  # "Sick Leave Report"
+FONT_SIZE_KSA       = 17.25  # "Kingdom of Saudi Arabia"
+FONT_SIZE_FOOTER    = 12.75  # التذييل (عيادة، وقت، تاريخ)
+FONT_SIZE_VERIFY    = 11.25  # نص التحقق والرابط
+
+# ══════════════════════════════════════════════════════════════════════
+# ✅ الإحداثيات المرجعية — 842.25 × 1190.25
+# ══════════════════════════════════════════════════════════════════════
 REF_W = 842.25
 REF_H = 1190.25
 
-# y_rl = REF_H − y_center_from_top
-# y_center_from_top = (label_top + label_bot) / 2
 FIELD_Y_RL = {
-    "leave_id":          939.89,   # label top=243.61 bot=257.11
-    "leave_duration":    897.14,   # label top=286.36 bot=299.86
-    "admission_date":    855.14,   # label top=328.36 bot=341.86
-    "discharge_date":    813.13,   # label top=370.37 bot=383.87
-    "issue_date":        771.13,   # label top=412.37 bot=425.87
-    "name":              727.87,   # label top=455.64 bot=469.13
-    "national_id":       684.60,   # label top=498.91 bot=512.40
-    "nationality":       642.60,   # label top=540.91 bot=554.40
-    "employer":          600.60,   # label top=582.91 bot=596.40
-    "practitioner_name": 557.33,   # label top=626.17 bot=639.67
-    "position":          514.05,   # label top=669.45 bot=682.95
+    "leave_id":          939.89,
+    "leave_duration":    897.14,
+    "admission_date":    855.14,
+    "discharge_date":    813.13,
+    "issue_date":        771.13,
+    "name":              727.87,
+    "national_id":       684.60,
+    "nationality":       642.60,
+    "employer":          600.60,
+    "practitioner_name": 557.33,
+    "position":          514.05,
 }
 
-X_EN_START = 175.0    # بداية عمود البيانات
-X_COL_MID  = 415.0    # الفاصل بين EN و AR
-X_AR_END   = 650.0    # نهاية عمود البيانات (للـ drawRightString)
+X_EN_START = 175.0
+X_COL_MID  = 415.0
+X_AR_END   = 650.0
 
-# الحقول التي تمتد عبر العمودين (قيمة واحدة في المنتصف)
 SINGLE_COL = {"leave_id", "issue_date", "national_id"}
 
-FONT_SIZE_REF = 9.0
-
-# مواضع QR والشعار (مرجع 842×1190)
 QR_REF   = {"x": 170.3, "y_rl": 362.4, "size": 112.5}
 LOGO_REF = {"x": 540.0, "y_rl": 340.2, "w":  150.0, "h":   100.0}
 
 
 def _scale(page_w, page_h):
     sx, sy = page_w / REF_W, page_h / REF_H
-    fs = FONT_SIZE_REF * min(sx, sy)
-    fields = {fid: (
-        X_EN_START * sx,
-        X_COL_MID  * sx,
-        X_AR_END   * sx,
-        y_rl       * sy
-    ) for fid, y_rl in FIELD_Y_RL.items()}
-    qr   = {k: v * (sy if k == "y_rl" else sx if k in ("x","size") else sx)
-            for k, v in QR_REF.items()}
-    logo = {k: v * (sy if k in ("y_rl","h") else sx)
-            for k, v in LOGO_REF.items()}
+    fields = {fid: (X_EN_START * sx, X_COL_MID * sx, X_AR_END * sx, y * sy)
+              for fid, y in FIELD_Y_RL.items()}
+    fs = FONT_SIZE_DATA * min(sx, sy)
+    qr = {
+        "x":    QR_REF["x"]    * sx,
+        "y_rl": QR_REF["y_rl"] * sy,
+        "size": QR_REF["size"] * min(sx, sy),
+    }
+    logo = {
+        "x":    LOGO_REF["x"]  * sx,
+        "y_rl": LOGO_REF["y_rl"] * sy,
+        "w":    LOGO_REF["w"]  * sx,
+        "h":    LOGO_REF["h"]  * sy,
+    }
     return fields, qr, logo, fs
 
 
 # ══════════════════════════════════════════════════════════════
-# تسجيل الخطوط
+# تسجيل الخطوط المخصصة
 # ══════════════════════════════════════════════════════════════
 _fonts_done = False
+
 def _register_fonts():
     global _fonts_done
     if _fonts_done: return
+
+    fonts_dir = os.path.join(_BASE_DIR, 'fonts')
+
+    registrations = [
+        (FONT_EN,      os.path.join(fonts_dir, 'TimesRoman-Regular.ttf')),
+        (FONT_EN_BOLD, os.path.join(fonts_dir, 'TimesRoman-Bold.ttf')),
+        (FONT_AR,      os.path.join(fonts_dir, 'NotoSansArabic-Regular.ttf')),
+        (FONT_AR_BOLD, os.path.join(fonts_dir, 'NotoSansArabic-Bold.ttf')),
+    ]
+
+    for name, path in registrations:
+        if os.path.exists(path):
+            try:
+                pdfmetrics.registerFont(TTFont(name, path))
+            except Exception:
+                pass
+
+    # احتياطي: Amiri إذا كانت موجودة في الجذر (للتوافق العكسي)
     for name, path in [
         ('Amiri',      os.path.join(_BASE_DIR, 'Amiri-Regular.ttf')),
         ('Amiri-Bold', os.path.join(_BASE_DIR, 'Amiri-Bold.ttf')),
@@ -105,12 +127,23 @@ def _register_fonts():
         if os.path.exists(path):
             try: pdfmetrics.registerFont(TTFont(name, path))
             except: pass
+
     _fonts_done = True
 
 
 # ══════════════════════════════════════════════════════════════
 # دوال مساعدة
 # ══════════════════════════════════════════════════════════════
+
+# تحويل الأرقام العربية-الهندية إلى غربية (0-9)
+_DIGITS_TRANS = str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789")
+
+def to_western_digits(text):
+    """يُحوّل أي أرقام ١٢٣ أو ۱۲۳ إلى 1 2 3"""
+    if text is None: return text
+    return str(text).translate(_DIGITS_TRANS)
+
+
 def shape_arabic(text):
     if not text: return ""
     text = str(text)
@@ -133,17 +166,18 @@ def _clean(t):
 def safe_int(v, d=1):
     try: return int(v)
     except:
-        m = re.search(r'\d+', str(v))
+        m = re.search(r'\d+', to_western_digits(v))
         return int(m.group()) if m else d
 
 def calc_dates(s, days, ex=None):
+    s = to_western_digits(s)
     for fmt in ["%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%d/%m/%y"]:
         try:
             d  = datetime.strptime(s.strip(), fmt)
             st = d.strftime("%d-%m-%Y")
             en = (d + timedelta(days=days-1)).strftime("%d-%m-%Y")
             if ex:
-                exc = _clean(ex)
+                exc = to_western_digits(_clean(ex))
                 for ef in ["%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%d/%m/%y"]:
                     try:
                         ex = datetime.strptime(exc.strip(), ef).strftime("%d-%m-%Y")
@@ -241,8 +275,7 @@ def make_qr_image(url):
         import qrcode
         qr = qrcode.QRCode(version=2, box_size=6, border=1,
                            error_correction=qrcode.constants.ERROR_CORRECT_M)
-        qr.add_data(url)
-        qr.make(fit=True)
+        qr.add_data(url); qr.make(fit=True)
         return qr.make_image(fill_color="black", back_color="white")
     except: return None
 
@@ -250,9 +283,7 @@ def make_qr_base64(url):
     img = make_qr_image(url)
     if not img: return None
     try:
-        buf = io.BytesIO()
-        img.save(buf, 'PNG')
-        buf.seek(0)
+        buf = io.BytesIO(); img.save(buf, 'PNG'); buf.seek(0)
         return f"data:image/png;base64,{base64.b64encode(buf.read()).decode()}"
     except: return None
 
@@ -276,26 +307,40 @@ def _get_page_size(template_path):
 
 
 # ══════════════════════════════════════════════════════════════
-# كتابة نص مع تقليص الخط تلقائياً
+# كتابة النص مع اختيار الخط حسب اللغة + تقليص تلقائي
 # ══════════════════════════════════════════════════════════════
-def _draw_text(c, text, x, y, font_name, font_size, max_width,
+def _draw_text(c, text, x, y, font_size_base, max_width,
                align="center", x_start=None):
     """
-    align: "center" → يوسّط النص | "right" → drawRightString | "left" → drawString
-    x_start: نقطة البداية لـ center (x_start, x) أو (x, max_width)
+    يختار الخط تلقائياً:
+      عربي → NotoSansArabic
+      إنجليزي/أرقام → TimesRoman
     """
+    text = to_western_digits(text)
+    if not text: return
     text = str(text).strip()
     if not text: return
 
     is_ar = _has_ar(text)
+
+    # ① اختيار الخط حسب اللغة
+    font_name = FONT_AR if is_ar else FONT_EN
+    try:
+        pdfmetrics.getFont(font_name)
+    except:
+        font_name = 'Helvetica'  # احتياطي أخير
+
+    # ② تشكيل النص العربي
     display = shape_arabic(text) if is_ar else text
 
-    fs = font_size
+    # ③ تقليص حجم الخط إذا كان النص أعرض من الخلية
+    fs = font_size_base
     c.setFont(font_name, fs)
-    while fs > 4.0 and c.stringWidth(display, font_name, fs) > max_width * 0.95:
+    while fs > 5.0 and c.stringWidth(display, font_name, fs) > max_width * 0.95:
         fs -= 0.3
         c.setFont(font_name, fs)
 
+    # ④ الرسم حسب المحاذاة
     if align == "right":
         c.drawRightString(x, y, display)
     elif align == "center":
@@ -312,11 +357,6 @@ def _draw_text(c, text, x, y, font_name, font_size, max_width,
 def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_path):
     _register_fonts()
     c = rl_canvas.Canvas(overlay_path, pagesize=(page_w, page_h))
-    try:
-        pdfmetrics.getFont('Amiri')
-        fn = 'Amiri'
-    except:
-        fn = 'Helvetica'
 
     fields, qr_pos, logo_pos, fs = _scale(page_w, page_h)
     c.setFillColorRGB(0.05, 0.05, 0.05)
@@ -330,28 +370,27 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
         single = vals.get("single", False)
 
         if single:
-            # ── قيمة واحدة مُوسَّطة عبر المنطقتين ──
+            # قيمة واحدة مُوسَّطة عبر المنطقتين
             val = en_val or ar_val
             if not val: continue
             full_w = x_ar_e - x_en_s
             if _has_ar(val):
-                _draw_text(c, val, x_ar_e, y_rl, fn, fs, full_w, align="right")
+                _draw_text(c, val, x_ar_e, y_rl, fs, full_w, align="right")
             else:
-                _draw_text(c, val, x_ar_e, y_rl, fn, fs, full_w,
+                _draw_text(c, val, x_ar_e, y_rl, fs, full_w,
                            align="center", x_start=x_en_s)
         else:
-            # ── قيمة EN في يسار ── قيمة AR في يمين ──
-            en_w = x_mid  - x_en_s   # عرض عمود EN
-            ar_w = x_ar_e - x_mid    # عرض عمود AR
+            # EN يسار | AR يمين
+            en_w = x_mid  - x_en_s
+            ar_w = x_ar_e - x_mid
 
             if en_val:
-                _draw_text(c, en_val, x_ar_e, y_rl, fn, fs, en_w,
+                _draw_text(c, en_val, x_ar_e, y_rl, fs, en_w,
                            align="center", x_start=x_en_s)
-
             if ar_val:
-                _draw_text(c, ar_val, x_ar_e, y_rl, fn, fs, ar_w, align="right")
+                _draw_text(c, ar_val, x_ar_e, y_rl, fs, ar_w, align="right")
 
-    # ── الشعار ──
+    # الشعار
     if logo_path and os.path.exists(logo_path):
         try:
             c.drawImage(logo_path, logo_pos["x"], logo_pos["y_rl"],
@@ -359,12 +398,10 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
                         preserveAspectRatio=True, mask='auto')
         except: pass
 
-    # ── QR Code ──
+    # QR Code
     if qr_img:
         try:
-            buf = io.BytesIO()
-            qr_img.save(buf, 'PNG')
-            buf.seek(0)
+            buf = io.BytesIO(); qr_img.save(buf, 'PNG'); buf.seek(0)
             c.drawImage(ImageReader(buf),
                         qr_pos["x"], qr_pos["y_rl"],
                         width=qr_pos["size"], height=qr_pos["size"],
@@ -400,11 +437,11 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
 
     leave_id    = gsl_code or gen_leave_id(order_data)
     full_name   = str(order_data.get("full_name",   "") or "")
-    id_number   = str(order_data.get("id_number",   "") or "")
+    id_number   = to_western_digits(str(order_data.get("id_number", "") or ""))
     nationality = str(order_data.get("nationality", "") or "")
     workplace   = str(order_data.get("workplace",   "") or "")
 
-    _iss      = order_data.get("issue_date_input", "")
+    _iss      = to_western_digits(order_data.get("issue_date_input", ""))
     today_str = datetime.now().strftime("%d-%m-%Y")
     if _iss:
         for _fmt in ["%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y", "%Y-%m-%d"]:
@@ -413,11 +450,11 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
                 break
             except: pass
 
-    # ── تنسيق المدة (EN + AR) ──
-    dwe_en   = "day"  if days == 1 else "days"
-    dwe_ar   = "يوم"  if days == 1 else "أيام"
-    dur_en   = f"{days} {dwe_en} ( {start} to {end} )"
-    dur_ar   = f"{days} {dwe_ar} ({start} الى {end})"
+    # ── تنسيق المدة (EN + AR) — أرقام غربية في كلا اللغتين ──
+    dwe_en = "day"  if days == 1 else "days"
+    dwe_ar = "يوم"  if days == 1 else "أيام"
+    dur_en = f"{days} {dwe_en} ( {start} to {end} )"
+    dur_ar = f"{days} {dwe_ar} ({start} الى {end})"
 
     # ── ترجمة للإنجليزية ──
     name_en  = _to_en(full_name)
@@ -425,7 +462,7 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
     doc_en   = _to_en(doctor   or "")
     spec_en  = _to_en(specialty or "")
 
-    # ── اسم عربي فقط إذا كان النص عربياً ──
+    # ── قيم عربية (الأصل) ──
     name_ar  = full_name   if _has_ar(full_name)   else None
     nat_ar   = nationality if _has_ar(nationality) else None
     doc_ar   = doctor      if _has_ar(doctor or "") else None
@@ -433,22 +470,22 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
     emp_en   = workplace   if not _has_ar(workplace) else None
     emp_ar   = workplace   if _has_ar(workplace)     else None
 
-    # ══ بناء القاموس ثنائي اللغة ══
+    # ══ القاموس ثنائي اللغة ══
     field_values = {
         # أحادية العمود (مُوسَّطة)
-        "leave_id":    {"en": leave_id,  "ar": None,    "single": True},
-        "issue_date":  {"en": today_str, "ar": None,    "single": True},
-        "national_id": {"en": id_number, "ar": None,    "single": True},
+        "leave_id":    {"en": leave_id,  "ar": None, "single": True},
+        "issue_date":  {"en": today_str, "ar": None, "single": True},
+        "national_id": {"en": id_number, "ar": None, "single": True},
 
         # ثنائية العمود (EN يسار | AR يمين)
-        "leave_duration":    {"en": dur_en,  "ar": dur_ar,  "single": False},
-        "admission_date":    {"en": start,   "ar": start,   "single": False},
-        "discharge_date":    {"en": discharge,"ar": discharge,"single": False},
-        "name":              {"en": name_en  or full_name, "ar": name_ar, "single": False},
-        "nationality":       {"en": nat_en_v, "ar": nat_ar, "single": False},
-        "employer":          {"en": emp_en,   "ar": emp_ar, "single": False},
-        "practitioner_name": {"en": doc_en   or doctor,   "ar": doc_ar,  "single": False},
-        "position":          {"en": spec_en  or specialty, "ar": spec_ar, "single": False},
+        "leave_duration":    {"en": dur_en,    "ar": dur_ar,    "single": False},
+        "admission_date":    {"en": start,     "ar": start,     "single": False},
+        "discharge_date":    {"en": discharge, "ar": discharge, "single": False},
+        "name":              {"en": name_en  or full_name,   "ar": name_ar, "single": False},
+        "nationality":       {"en": nat_en_v, "ar": nat_ar,   "single": False},
+        "employer":          {"en": emp_en,   "ar": emp_ar,   "single": False},
+        "practitioner_name": {"en": doc_en   or doctor,      "ar": doc_ar, "single": False},
+        "position":          {"en": spec_en  or specialty,   "ar": spec_ar,"single": False},
     }
 
     uid         = uuid.uuid4().hex[:8]
