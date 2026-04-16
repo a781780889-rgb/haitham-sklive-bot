@@ -36,6 +36,54 @@ TEMP_DIR = tempfile.gettempdir()
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 # ══════════════════════════════════════════════════════════════
+# ✅ الإحداثيات الثابتة للنصوص والشعار
+#    X, Y محسوبة من الأعلى (نظام الشاشة)
+#    يتم تحويلها تلقائياً لنظام ReportLab (من الأسفل)
+# ══════════════════════════════════════════════════════════════
+
+# حجم الصفحة الافتراضي (A4 بالنقاط)
+_PAGE_H_DEFAULT = 842.0
+
+# إحداثيات النصوص: { field_id: (x, y_from_top) }
+# X = نقطة محاذاة النص (المحاذاة لليمين للعربي، لليسار للإنجليزي)
+# Y = المسافة من أعلى الصفحة
+FIELD_COORDS_FIXED = {
+    # 🔑 بيانات الإجازة
+    "leave_id":          (420, 220),   # رمز الإجازة
+    "leave_duration":    (420, 260),   # مدة الإجازة
+    "admission_date":    (420, 300),   # تاريخ الدخول
+    "discharge_date":    (420, 340),   # تاريخ الخروج
+    "issue_date":        (420, 380),   # تاريخ إصدار التقرير
+
+    # 👤 بيانات المريض
+    "name":              (420, 440),   # الاسم
+    "national_id":       (420, 500),   # رقم الهوية / الإقامة
+    "nationality":       (420, 540),   # الجنسية
+    "employer":          (420, 580),   # جهة العمل
+
+    # 🩺 بيانات الطبيب
+    "practitioner_name": (420, 640),   # اسم الممارس
+    "position":          (420, 680),   # المسمى الوظيفي
+}
+
+# إحداثيات الشعار: { x_from_left, y_from_top, width, height }
+LOGO_COORDS = {
+    "x":      80,
+    "y":      140,
+    "width":  120,
+    "height": 120,
+}
+
+# حجم الخط الافتراضي للنصوص
+FONT_SIZE_DEFAULT = 9.0
+
+
+def _y_to_rl(y_from_top, page_h=_PAGE_H_DEFAULT):
+    """تحويل إحداثية Y من نظام الشاشة (أعلى→أسفل) إلى نظام ReportLab (أسفل→أعلى)"""
+    return page_h - y_from_top
+
+
+# ══════════════════════════════════════════════════════════════
 # تسجيل الخطوط
 # ══════════════════════════════════════════════════════════════
 _fonts_registered = False
@@ -263,12 +311,12 @@ def logo_to_base64(logo_path):
 
 
 # ══════════════════════════════════════════════════════════════
-# تحليل القالب — استخراج حقول النموذج + مواقعها
+# تحليل القالب — استخراج حقول النموذج + مواقعها (احتياطي)
 # ══════════════════════════════════════════════════════════════
 
 def _extract_field_coords(template_path):
     """
-    يستخرج إحداثيات حقول النموذج من القالب PDF
+    يستخرج إحداثيات حقول النموذج من القالب PDF (تُستخدم كاحتياطي)
     يرجع dict: { field_name: (x_left, y_bottom, x_right, y_top) }
     """
     reader = PdfReader(template_path)
@@ -306,7 +354,7 @@ def _create_overlay(page_w, page_h, field_coords, field_values,
                     qr_img, logo_path, overlay_path):
     """
     إنشاء PDF شفاف بنفس أبعاد القالب يحتوي:
-    - النصوص الديناميكية بخط Amiri
+    - النصوص الديناميكية بخط Amiri في الإحداثيات الثابتة
     - QR code + شعار المستشفى
     """
     _register_fonts()
@@ -318,61 +366,81 @@ def _create_overlay(page_w, page_h, field_coords, field_values,
     except:
         font_name = 'Helvetica'
 
-    # ── كتابة قيم الحقول ──
-    for field_id, value in field_values.items():
-        if not value or field_id not in field_coords:
-            continue
+    c.setFont(font_name, FONT_SIZE_DEFAULT)
+    c.setFillColorRGB(0.1, 0.1, 0.1)
 
-        x_left, y_bottom, x_right, y_top = field_coords[field_id]
-        field_width = x_right - x_left
-        field_height = y_top - y_bottom
+    # ── كتابة قيم الحقول بالإحداثيات الثابتة ──
+    for field_id, value in field_values.items():
+        if not value:
+            continue
 
         text_str = str(value)
 
-        # حجم الخط ديناميكي حسب طول النص وعرض الحقل
-        chars_per_pt = field_width / 4.5  # تقدير عدد الأحرف اللي تدخل
-        if len(text_str) > chars_per_pt:
-            font_size = max(4.0, field_height * 0.55)
-        else:
-            font_size = min(field_height * 0.75, 8.0)
+        # ① أولوية: الإحداثيات الثابتة المحددة
+        if field_id in FIELD_COORDS_FIXED:
+            fx, fy_top = FIELD_COORDS_FIXED[field_id]
+            # تحويل Y من نظام الشاشة إلى ReportLab
+            fy_rl = _y_to_rl(fy_top, page_h)
 
-        text_y = y_bottom + (field_height - font_size) / 2
+            c.setFont(font_name, FONT_SIZE_DEFAULT)
 
-        c.setFont(font_name, font_size)
-        c.setFillColorRGB(0.1, 0.1, 0.1)
+            if _has_arabic(text_str):
+                shaped = shape_arabic(text_str)
+                c.drawRightString(fx, fy_rl, shaped)
+            else:
+                c.drawString(fx, fy_rl, text_str)
 
-        if _has_arabic(text_str):
-            shaped = shape_arabic(text_str)
-            c.drawRightString(x_right - 2, text_y, shaped)
-        else:
-            c.drawString(x_left + 2, text_y, text_str)
+        # ② احتياطي: إحداثيات حقول النموذج (إن وُجدت في القالب)
+        elif field_id in field_coords:
+            x_left, y_bottom, x_right, y_top = field_coords[field_id]
+            field_width = x_right - x_left
+            field_height = y_top - y_bottom
 
-    # ── QR Code — في أول مربع فاضي أسفل الجدول (يسار) ──
+            chars_per_pt = field_width / 4.5
+            if len(text_str) > chars_per_pt:
+                font_size = max(4.0, field_height * 0.55)
+            else:
+                font_size = min(field_height * 0.75, 8.0)
+
+            text_y = y_bottom + (field_height - font_size) / 2
+            c.setFont(font_name, font_size)
+
+            if _has_arabic(text_str):
+                shaped = shape_arabic(text_str)
+                c.drawRightString(x_right - 2, text_y, shaped)
+            else:
+                c.drawString(x_left + 2, text_y, text_str)
+
+    # ── شعار المستشفى — بالإحداثيات الثابتة المحددة ──
+    if logo_path and os.path.exists(logo_path):
+        try:
+            logo_x   = LOGO_COORDS["x"]
+            logo_y_t = LOGO_COORDS["y"]        # من الأعلى
+            logo_w   = LOGO_COORDS["width"]
+            logo_h   = LOGO_COORDS["height"]
+            # تحويل Y: نقطة الزاوية السفلى لـ ReportLab
+            logo_y_rl = _y_to_rl(logo_y_t + logo_h, page_h)
+
+            c.drawImage(
+                logo_path, logo_x, logo_y_rl,
+                width=logo_w, height=logo_h,
+                preserveAspectRatio=True, mask='auto'
+            )
+        except:
+            pass
+
+    # ── QR Code — أسفل يسار الجدول ──
     if qr_img:
         try:
             buf = io.BytesIO()
             qr_img.save(buf, 'PNG')
             buf.seek(0)
             img_reader = ImageReader(buf)
-            # موقع QR: أسفل يسار الجدول
             qr_size = min(page_w * 0.12, page_h * 0.08)
             qr_x = page_w * 0.14
             qr_y = page_h * 0.30
             c.drawImage(img_reader, qr_x, qr_y,
                         width=qr_size, height=qr_size,
-                        preserveAspectRatio=True, mask='auto')
-        except:
-            pass
-
-    # ── شعار المستشفى — في المربع الأيمن ──
-    if logo_path and os.path.exists(logo_path):
-        try:
-            logo_w = page_w * 0.22
-            logo_h = page_h * 0.07
-            logo_x = page_w * 0.55
-            logo_y = page_h * 0.30
-            c.drawImage(logo_path, logo_x, logo_y,
-                        width=logo_w, height=logo_h,
                         preserveAspectRatio=True, mask='auto')
         except:
             pass
@@ -409,7 +477,7 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
 
     # ── تحليل القالب ──
     page_w, page_h = _get_page_size(template_path)
-    field_coords = _extract_field_coords(template_path)
+    field_coords = _extract_field_coords(template_path)   # احتياطي فقط
 
     # ── تحضير البيانات ──
     days = safe_int(order_data.get("days_count", 1))
@@ -443,7 +511,6 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
     spec_display = _to_en(specialty or "")
 
     # ── ربط أسماء الحقول بالقيم ──
-    # يدعم أسماء الحقول المعروفة + أي اسم حقل مخصص
     field_values = {
         "leave_id":          leave_id,
         "leave_duration":    duration_display,
