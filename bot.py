@@ -1642,7 +1642,8 @@ async def handle_admin_router(update, context, text, uid, name):
         return
 
     # ── قوالب PDF ──
-    if state in ["admin_templates", "admin_add_template_name", "admin_add_template_hospital", "admin_del_template", "admin_set_active_template"]:
+    if state in ["admin_templates", "admin_add_template_name", "admin_add_template_hospital",
+                 "admin_add_template_file", "admin_del_template", "admin_set_active_template"]:
         await handle_templates(update, context, text, uid)
         return
 
@@ -1728,12 +1729,26 @@ async def handle_templates(update, context, text, uid):
 
     if text == "➕ إضافة قالب PDF جديد":
         context.user_data["state"] = "admin_add_template_hospital"
-        hospitals = db.get_all_hospitals()
-        txt = "\n".join([f"• {h['name']}" for h in hospitals])
-        await update.message.reply_text(
-            f"أرسل اسم المستشفى لربط القالب به:\n\n{txt}\n\n(أو أرسل 'عام' لربطه بكل المستشفيات)",
-            reply_markup=back_keyboard()
-        )
+        try:
+            hospitals = db.get_all_hospitals()
+            if hospitals:
+                names = [h['name'] for h in hospitals[:50]]  # حد أقصى 50 مستشفى
+                txt = "\n".join([f"• {n}" for n in names])
+                if len(hospitals) > 50:
+                    txt += f"\n... و{len(hospitals)-50} مستشفى آخر"
+                msg = f"أرسل اسم المستشفى لربط القالب به:\n\n{txt}\n\n(أو أرسل 'عام' لربطه بكل المستشفيات)"
+            else:
+                msg = "أرسل اسم المستشفى لربط القالب به:\n\n(أو أرسل 'عام' لربطه بكل المستشفيات)"
+            # تأكد من عدم تجاوز حد تيليقرام
+            if len(msg) > 4000:
+                msg = "أرسل اسم المستشفى لربط القالب به:\n\n(أو أرسل 'عام' لربطه بكل المستشفيات)\n\n💡 يمكنك كتابة جزء من اسم المستشفى"
+            await update.message.reply_text(msg, reply_markup=back_keyboard())
+        except Exception as e:
+            logger.error(f"Template add error: {e}")
+            await update.message.reply_text(
+                "أرسل اسم المستشفى لربط القالب به:\n\n(أو أرسل 'عام' لربطه بكل المستشفيات)",
+                reply_markup=back_keyboard()
+            )
 
     elif text == "📋 عرض كل القوالب":
         templates = db.get_all_templates()
@@ -1786,6 +1801,9 @@ async def handle_templates(update, context, text, uid):
         context.user_data["template_name"] = text
         context.user_data["state"] = "admin_add_template_file"
         await update.message.reply_text(f"✅ الاسم: {text}\n\n📤 أرسل ملف PDF القالب:", reply_markup=back_keyboard())
+
+    elif state == "admin_add_template_file":
+        await update.message.reply_text("❌ يجب إرسال ملف PDF وليس نص.\n\n📤 أرسل ملف PDF القالب:", reply_markup=back_keyboard())
 
 # ══════════════════════════════════════════════
 # إدارة الشعارات
