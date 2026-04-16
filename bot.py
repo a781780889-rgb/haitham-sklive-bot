@@ -1360,6 +1360,30 @@ async def generate_and_send_pdf(update, context, uid):
         pdf_path_temp = os.path.join(tempfile.gettempdir(), f"excuse_{uid}_{int(datetime.now().timestamp())}.pdf")
         pdf_path = pdf_path_temp
 
+        # ── جلب القالب من قاعدة البيانات ──
+        active_template = db.get_active_template()
+        if not active_template or not active_template.get("file_path"):
+            await update.effective_message.reply_text(
+                "❌ *لا يوجد قالب PDF!*\n\n"
+                "يجب رفع قالب أولاً من:\n"
+                "⚙️ نظام البوت ← 📄 قوالب PDF ← ➕ إضافة قالب",
+                parse_mode="Markdown",
+                reply_markup=main_menu_keyboard(is_admin_user(uid))
+            )
+            db.refund_balance(uid, price, "لا يوجد قالب PDF")
+            return
+
+        template_path = active_template["file_path"]
+        if not os.path.exists(template_path):
+            await update.effective_message.reply_text(
+                "❌ *ملف القالب مفقود!*\n\n"
+                "أعد رفع القالب من لوحة التحكم.",
+                parse_mode="Markdown",
+                reply_markup=main_menu_keyboard(is_admin_user(uid))
+            )
+            db.refund_balance(uid, price, "ملف القالب مفقود")
+            return
+
         generate_excuse_pdf(
             order_data  = od,
             hospital    = hospital,
@@ -1369,6 +1393,7 @@ async def generate_and_send_pdf(update, context, uid):
             output_path = pdf_path,
             logo_path   = logo_path,
             website_url = website_url,
+            template_path = template_path,
         )
 
         full_data = {**od, "hospital": hospital, "doctor": doctor, "specialty": specialty}
