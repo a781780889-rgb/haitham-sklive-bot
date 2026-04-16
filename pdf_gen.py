@@ -74,19 +74,34 @@ DRAW_SLOTS = {
     'position_ar':          {'x': 556.8, 'rl_y': 507.6, 'size': 13},
 }
 
-# ── شعار المستشفى (إحداثيات ReportLab مباشرة) ──────────────────
+# ── شعار المستشفى — المربع الأزرق (إحداثيات ReportLab مستخرجة بـ PyMuPDF) ──
+# fitz: Rect(602.52, 724.05, 725.43, 836.43)  →  RL bottom-left + size
 LOGO_SLOT = {
-    'x':      480,
-    'rl_y':   310,
-    'width':  130,
-    'height': 100,
+    'x':      602.52,   # RL x (= fitz x1)
+    'rl_y':   353.82,   # RL y = page_h − fitz_y2
+    'width':  122.91,   # fitz x2 − x1
+    'height': 112.37,   # fitz y2 − y1
 }
 
-# ── QR Code ────────────────────────────────────────────────────
-QR_SLOT = {
-    'x':    71,
-    'rl_y': 230,
-    'size': 100,
+# ── Barcode — المربع الأحمر (إحداثيات ReportLab مستخرجة بـ PyMuPDF) ──
+# fitz: Rect(171.92, 724.24, 282.69, 834.15)  →  RL bottom-left + size
+BARCODE_SLOT = {
+    'x':      171.91,   # RL x (= fitz x1)
+    'rl_y':   356.10,   # RL y = page_h − fitz_y2
+    'width':  110.77,   # fitz x2 − x1
+    'height': 109.92,   # fitz y2 − y1
+}
+
+# ── معلومات المستشفى — المستطيل الأصفر (إحداثيات ReportLab) ──
+# fitz: Rect(475.15, 851.14, 727.59, 910.10)
+# السطر الأول: اسم المستشفى  |  السطر الثاني: رقم الترخيص (11 رقم)
+HOSPITAL_INFO_SLOT = {
+    'x_center': 601.37,   # مركز المستطيل أفقياً
+    'width':    252.44,
+    'line1_rl_y': 319.65, # RL y للسطر الأول  (اسم المستشفى)
+    'line2_rl_y': 297.83, # RL y للسطر الثاني (رقم الترخيص)
+    'font_size1': 11,
+    'font_size2': 10,
 }
 
 # حرف LRM لمنع بيدي من عكس التواريخ داخل النص العربي
@@ -339,7 +354,8 @@ def _get_page_size(template_path):
 # إنشاء طبقة النصوص والصور
 # ══════════════════════════════════════════════════════════════
 
-def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_path):
+def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_path,
+                    hospital_name="", license_number=""):
     """
     طبقة شفافة بنفس أبعاد القالب:
     • كل حقل يُرسم بـ drawCentredString على إحداثيات DRAW_SLOTS
@@ -381,37 +397,63 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
         else:
             c.drawCentredString(x, rl_y, text_str)
 
-    # ─── شعار المستشفى ────────────────────────────────────────
+    # ─── شعار المستشفى — المربع الأزرق ───────────────────────
     if logo_path and os.path.exists(logo_path):
         try:
             c.drawImage(
                 logo_path,
                 LOGO_SLOT['x']    * x_scale,
                 LOGO_SLOT['rl_y'] * y_scale,
-                width=LOGO_SLOT['width'],
-                height=LOGO_SLOT['height'],
+                width=LOGO_SLOT['width']  * x_scale,
+                height=LOGO_SLOT['height'] * y_scale,
                 preserveAspectRatio=True,
                 mask='auto',
             )
         except Exception:
             pass
 
-    # ─── QR Code ─────────────────────────────────────────────
+    # ─── Barcode — المربع الأحمر ─────────────────────────────
     if qr_img:
         try:
             buf = io.BytesIO()
             qr_img.save(buf, 'PNG')
             buf.seek(0)
             img_reader = ImageReader(buf)
-            qs = QR_SLOT['size']
             c.drawImage(
                 img_reader,
-                QR_SLOT['x']    * x_scale,
-                QR_SLOT['rl_y'] * y_scale,
-                width=qs, height=qs,
+                BARCODE_SLOT['x']    * x_scale,
+                BARCODE_SLOT['rl_y'] * y_scale,
+                width=BARCODE_SLOT['width']  * x_scale,
+                height=BARCODE_SLOT['height'] * y_scale,
                 preserveAspectRatio=True,
                 mask='auto',
             )
+        except Exception:
+            pass
+
+    # ─── معلومات المستشفى — المستطيل الأصفر ─────────────────
+    # السطر الأول: اسم المستشفى (عربي/إنجليزي)
+    # السطر الثاني: رقم الترخيص (11 رقم غربي)
+    if hospital_name:
+        try:
+            c.setFillColorRGB(0.08, 0.08, 0.08)
+            c.setFont(font_name, HOSPITAL_INFO_SLOT['font_size1'])
+            cx   = HOSPITAL_INFO_SLOT['x_center'] * x_scale
+            rl_y = HOSPITAL_INFO_SLOT['line1_rl_y'] * y_scale
+            hn   = shape_arabic(hospital_name) if _has_arabic(hospital_name) else hospital_name
+            c.drawCentredString(cx, rl_y, hn)
+        except Exception:
+            pass
+
+    if license_number:
+        try:
+            c.setFillColorRGB(0.08, 0.08, 0.08)
+            c.setFont('Helvetica', HOSPITAL_INFO_SLOT['font_size2'])
+            cx   = HOSPITAL_INFO_SLOT['x_center'] * x_scale
+            rl_y = HOSPITAL_INFO_SLOT['line2_rl_y'] * y_scale
+            # يُطبع دائماً بالأرقام الغربية (Western digits)
+            lic  = str(license_number).strip()
+            c.drawCentredString(cx, rl_y, lic)
         except Exception:
             pass
 
@@ -425,7 +467,8 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
 def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
                         output_path=None, logo_path=None, gsl_code=None,
                         website_url="https://www.seha.sa/#/inquiries/slenquiry",
-                        template_path=None):
+                        template_path=None,
+                        hospital_name="", license_number=""):
     """
     إنشاء PDF إجازة مرضية بإحداثيات مطابقة لملف صحة المرجعي.
     template_path: مسار القالب PDF من لوحة التحكم (إلزامي).
@@ -516,7 +559,8 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
 
     try:
         qr_img = make_qr_image(website_url)
-        _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_tmp)
+        _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_tmp,
+                        hospital_name=hospital_name, license_number=license_number)
 
         template_reader = PdfReader(template_path)
         overlay_reader  = PdfReader(overlay_tmp)
