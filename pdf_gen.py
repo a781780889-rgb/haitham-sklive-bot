@@ -455,7 +455,9 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
     dwe_en = "day" if days == 1 else "days"
     dwe_ar = "يوم" if days == 1 else "أيام"
     dur_en = f"{days} {dwe_en} ( {start} to {end} )"
-    dur_ar = f"{days} {dwe_ar} ({start} الى {end})"
+    # إصلاح bidi: التواريخ داخل العربي تظهر مقلوبة بدون LRE/PDF
+    _LRE, _PDF = "\u202A", "\u202C"
+    dur_ar = f"{days} {dwe_ar} ({_LRE}{start}{_PDF} الى {_LRE}{end}{_PDF})"
 
     name_en  = _to_en(full_name)
     nat_en_v = nat_en(nationality)
