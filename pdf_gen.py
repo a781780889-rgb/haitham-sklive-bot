@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-pdf_gen.py — توليد PDF إجازة مرضية بتصميم مطابق لقالب صحة
-يستخدم reportlab لإنشاء PDF مباشرة بدون wkhtmltopdf
+pdf_gen.py — توليد PDF إجازة مرضية من قالب PDF حقيقي
+يستخدم القالب كخلفية ثابتة + طبقة نص فوقية بخط Amiri يدعم العربي والإنجليزي
++ إضافة QR code وشعار المستشفى
 """
 
 import os
@@ -17,15 +18,12 @@ import urllib.request
 import base64
 from datetime import datetime, timedelta
 
-from reportlab.lib.pagesizes import A4
-from reportlab.lib.units import mm
-from reportlab.lib.colors import HexColor, white, black
-from reportlab.pdfgen import canvas
+from pypdf import PdfReader, PdfWriter
+from reportlab.pdfgen import canvas as rl_canvas
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.utils import ImageReader
 
-# ── محاولة استيراد مكتبات الدعم العربي ──
 try:
     import arabic_reshaper
     from bidi.algorithm import get_display
@@ -36,22 +34,37 @@ except ImportError:
 # ── المسارات ──
 TEMP_DIR = tempfile.gettempdir()
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+TEMPLATES_DIR = os.path.join(_BASE_DIR, 'templates')
+TEMPLATE_PDF = os.path.join(TEMPLATES_DIR, 'sick_leave_template.pdf')
 FONTS_DIR = os.path.join(_BASE_DIR, 'fonts')
 
-# ── الألوان ──
-BLUE_HEADER = HexColor('#2B5F9E')
-BLUE_LIGHT = HexColor('#D6E4F0')
-BLUE_ROW = HexColor('#2B5F9E')
-WHITE = white
-BLACK = black
-GRAY_BORDER = HexColor('#B0B0B0')
-GRAY_TEXT = HexColor('#555555')
-BLUE_LINK = HexColor('#1A5276')
+# ── أبعاد صفحة القالب ──
+PAGE_W = 288
+PAGE_H = 432
+
+# ── إحداثيات حقول القيم (من تحليل annotations في القالب) ──
+# كل حقل: (x_left, y_bottom, x_right, y_top) — PDF coords y=0 أسفل
+FIELD_COORDS = {
+    "leave_id":          (69.03, 320.68, 227.19, 330.78),
+    "leave_duration":    (69.03, 306.86, 227.19, 316.95),
+    "admission_date":    (69.03, 293.03, 227.19, 303.13),
+    "discharge_date":    (69.03, 279.21, 227.19, 289.30),
+    "issue_date":        (69.03, 265.38, 227.19, 275.48),
+    "name":              (69.03, 251.56, 227.19, 261.66),
+    "national_id":       (69.03, 237.74, 227.19, 247.83),
+    "nationality":       (69.03, 223.91, 227.19, 234.01),
+    "employer":          (69.03, 210.09, 227.19, 220.18),
+    "practitioner_name": (69.03, 196.26, 227.19, 206.36),
+    "position":          (69.03, 182.44, 227.19, 192.54),
+}
+
+# ── إحداثيات مربعات QR والشعار ──
+QR_BOX   = (42,  128, 30, 30)
+LOGO_BOX = (158, 128, 62, 30)
 
 # ══════════════════════════════════════════════════════════════
 # تسجيل الخطوط
 # ══════════════════════════════════════════════════════════════
-
 _fonts_registered = False
 
 
@@ -59,56 +72,23 @@ def _register_fonts():
     global _fonts_registered
     if _fonts_registered:
         return
-
-    font_paths = {
-        'Amiri': os.path.join(_BASE_DIR, 'Amiri-Regular.ttf'),
-        'Amiri-Bold': os.path.join(_BASE_DIR, 'Amiri-Bold.ttf'),
-        'TimesRoman': os.path.join(FONTS_DIR, 'TimesRoman-Regular.ttf'),
-        'TimesRoman-Bold': os.path.join(FONTS_DIR, 'TimesRoman-Bold.ttf'),
-        'NotoArabic': os.path.join(FONTS_DIR, 'NotoSansArabic-Regular.ttf'),
-        'NotoArabic-Bold': os.path.join(FONTS_DIR, 'NotoSansArabic-Bold.ttf'),
-    }
-
-    for name, path in font_paths.items():
+    for name, path in [
+        ('Amiri', os.path.join(_BASE_DIR, 'Amiri-Regular.ttf')),
+        ('Amiri-Bold', os.path.join(_BASE_DIR, 'Amiri-Bold.ttf')),
+    ]:
         if os.path.exists(path):
             try:
                 pdfmetrics.registerFont(TTFont(name, path))
-            except Exception:
+            except:
                 pass
-
-    lib_path = os.path.join(_BASE_DIR, 'LiberationSerif-Bold.ttf')
-    if os.path.exists(lib_path):
-        try:
-            pdfmetrics.registerFont(TTFont('Liberation-Bold', lib_path))
-        except Exception:
-            pass
-
     _fonts_registered = True
 
 
-def _get_font(bold=False, arabic=False):
-    """اختيار أفضل خط متاح"""
-    if arabic:
-        candidates = (['Amiri-Bold', 'NotoArabic-Bold', 'Amiri'] if bold
-                       else ['Amiri', 'NotoArabic', 'Amiri-Bold'])
-    else:
-        candidates = (['TimesRoman-Bold', 'Liberation-Bold', 'Amiri-Bold'] if bold
-                       else ['TimesRoman', 'Amiri', 'TimesRoman-Bold'])
-    for f in candidates:
-        try:
-            pdfmetrics.getFont(f)
-            return f
-        except:
-            pass
-    return 'Helvetica'
-
-
 # ══════════════════════════════════════════════════════════════
-# دوال النص العربي والمساعدة
+# دوال مساعدة
 # ══════════════════════════════════════════════════════════════
 
 def shape_arabic(text):
-    """تشكيل النص العربي لعرض صحيح في reportlab"""
     if not text:
         return ""
     text = str(text)
@@ -119,8 +99,12 @@ def shape_arabic(text):
             reshaped = arabic_reshaper.reshape(text)
             return get_display(reshaped)
         except:
-            return text
+            pass
     return text
+
+
+def _has_arabic(text):
+    return any('\u0600' <= c <= '\u06FF' for c in str(text))
 
 
 def en_only(t):
@@ -250,25 +234,29 @@ def translate_ar_to_en(text):
 
 
 def _to_en(text):
+    """ترجمة للإنجليزي — إذا فشلت يرجع النص العربي الأصلي"""
     if not text:
         return ""
+    # إذا لا يحتوي عربي أصلاً
+    if not _has_arabic(text):
+        return str(text).strip()
+    # محاولة الترجمة من القاموس المحلي أولاً
     found = _lookup_title(text)
     if found:
         return found.strip()
+    # محاولة الترجمة بالـ API
     result = translate_ar_to_en(text)
-    if not result or any('\u0600' <= ch <= '\u06FF' for ch in result):
-        result = en_only(text)
-    if result and len(result.split()) > 6:
-        result = en_only(text)
-    return result.strip()
+    if result and not _has_arabic(result):
+        return result.strip()
+    # إذا فشل كل شيء — أرجع النص الأصلي كما هو
+    return str(text).strip()
 
 
 # ══════════════════════════════════════════════════════════════
-# توليد QR
+# QR Code
 # ══════════════════════════════════════════════════════════════
 
 def make_qr_image(url):
-    """إنشاء صورة QR كـ PIL Image"""
     try:
         import qrcode
         qr = qrcode.QRCode(
@@ -282,7 +270,6 @@ def make_qr_image(url):
         return None
 
 
-# للتوافق مع الكود القديم
 def make_qr_base64(url):
     img = make_qr_image(url)
     if not img:
@@ -313,270 +300,113 @@ def logo_to_base64(logo_path):
 
 
 # ══════════════════════════════════════════════════════════════
-# رسم PDF — الأقسام
+# إنشاء طبقة النص والصور الفوقية
 # ══════════════════════════════════════════════════════════════
 
-def _draw_header(c, width, height):
-    """رسم الجزء العلوي: شعار صحة + نص المملكة + النمط الزخرفي"""
-
-    # ── النمط الزخرفي (أعلى يمين) ──
-    bg_path = os.path.join(_BASE_DIR, 'bg_pattern.png')
-    if os.path.exists(bg_path):
-        try:
-            c.drawImage(bg_path, width - 165 * mm, height - 50 * mm,
-                        width=165 * mm, height=50 * mm,
-                        preserveAspectRatio=True, mask='auto')
-        except:
-            pass
-
-    # ── شعار صحة (أعلى يسار) ──
-    seha_path = os.path.join(_BASE_DIR, 'seha_logo.png')
-    if os.path.exists(seha_path):
-        try:
-            c.drawImage(seha_path, 14 * mm, height - 26 * mm,
-                        width=42 * mm, height=17 * mm,
-                        preserveAspectRatio=True, mask='auto')
-        except:
-            pass
-
-    # ── نص المملكة العربية السعودية (وسط) ──
-    ksa_path = os.path.join(_BASE_DIR, 'ksa_text.png')
-    if os.path.exists(ksa_path):
-        try:
-            c.drawImage(ksa_path, width / 2 - 32 * mm, height - 25 * mm,
-                        width=64 * mm, height=16 * mm,
-                        preserveAspectRatio=True, mask='auto')
-        except:
-            pass
-
-    # ── "Kingdom of Saudi Arabia" بالإنجليزي ──
-    font_en = _get_font(bold=False, arabic=False)
-    c.setFont(font_en, 8)
-    c.setFillColor(GRAY_TEXT)
-    c.drawCentredString(width / 2, height - 30 * mm, "Kingdom of Saudi Arabia")
-
-
-def _draw_title(c, width, y_pos):
-    """رسم العنوان: تقرير إجازة مرضية / Sick Leave Report"""
-    font_ar = _get_font(bold=True, arabic=True)
-    font_en = _get_font(bold=True, arabic=False)
-
-    # العنوان العربي
-    c.setFont(font_ar, 18)
-    c.setFillColor(BLUE_HEADER)
-    title_ar = shape_arabic("تقرير إجازة مرضية")
-    c.drawCentredString(width / 2, y_pos, title_ar)
-
-    # العنوان الإنجليزي
-    c.setFont(font_en, 13)
-    c.setFillColor(BLUE_HEADER)
-    c.drawCentredString(width / 2, y_pos - 18, "Sick Leave Report")
-
-    return y_pos - 35
-
-
-def _draw_table(c, width, y_start, data_rows):
+def _create_overlay(field_values, qr_img, logo_path, overlay_path):
     """
-    رسم الجدول الرئيسي
-    data_rows = [(label_en, value, label_ar, is_highlighted), ...]
+    إنشاء PDF شفاف بنفس أبعاد القالب يحتوي:
+    - كل النصوص الديناميكية بخط Amiri (يدعم العربي)
+    - QR code + شعار المستشفى
     """
-    margin_left = 14 * mm
-    margin_right = 14 * mm
-    table_width = width - margin_left - margin_right
-    row_height = 11 * mm
-    label_en_width = 42 * mm
-    label_ar_width = 42 * mm
-    value_width = table_width - label_en_width - label_ar_width
+    _register_fonts()
 
-    x_start = margin_left
-    y = y_start
+    c = rl_canvas.Canvas(overlay_path, pagesize=(PAGE_W, PAGE_H))
 
-    font_en = _get_font(bold=False, arabic=False)
-    font_en_bold = _get_font(bold=True, arabic=False)
-    font_ar = _get_font(bold=False, arabic=True)
-    font_ar_bold = _get_font(bold=True, arabic=True)
+    # ── اختيار الخط ──
+    try:
+        pdfmetrics.getFont('Amiri')
+        font_name = 'Amiri'
+    except:
+        font_name = 'Helvetica'
 
-    for i, (label_en, value, label_ar, highlighted) in enumerate(data_rows):
-        # ── خلفية الصف ──
-        if highlighted:
-            c.setFillColor(BLUE_ROW)
+    # ── كتابة قيم الحقول ──
+    for field_id, value in field_values.items():
+        if not value or field_id not in FIELD_COORDS:
+            continue
+
+        x_left, y_bottom, x_right, y_top = FIELD_COORDS[field_id]
+        field_width = x_right - x_left
+        field_height = y_top - y_bottom
+
+        # حجم الخط حسب طول النص
+        text_str = str(value)
+        if len(text_str) > 35:
+            font_size = 5.5
+        elif len(text_str) > 25:
+            font_size = 6.5
         else:
-            c.setFillColor(white)
-        c.rect(x_start, y - row_height, table_width, row_height, fill=1, stroke=0)
+            font_size = 7.5
 
-        # ── حدود الصف الخارجية ──
-        c.setStrokeColor(GRAY_BORDER)
-        c.setLineWidth(0.4)
-        c.rect(x_start, y - row_height, table_width, row_height, fill=0, stroke=1)
+        # موضع النص عمودياً (وسط الحقل)
+        text_y = y_bottom + (field_height - font_size) / 2
 
-        # ── خطوط فاصلة عمودية ──
-        c.line(x_start + label_en_width, y, x_start + label_en_width, y - row_height)
-        c.line(x_start + label_en_width + value_width, y,
-               x_start + label_en_width + value_width, y - row_height)
+        c.setFont(font_name, font_size)
+        c.setFillColorRGB(0.1, 0.1, 0.1)  # أسود تقريباً
 
-        text_y = y - row_height + 3.2 * mm
-
-        # ── تسمية إنجليزية (يسار) ──
-        if highlighted:
-            c.setFillColor(WHITE)
-            c.setFont(font_en_bold, 8.5)
+        if _has_arabic(text_str):
+            # نص عربي أو مختلط — محاذاة من اليمين
+            shaped = shape_arabic(text_str)
+            c.drawRightString(x_right - 2, text_y, shaped)
         else:
-            c.setFillColor(BLUE_HEADER)
-            c.setFont(font_en_bold, 8.5)
-        c.drawString(x_start + 2.5 * mm, text_y, label_en)
+            # نص إنجليزي / أرقام — محاذاة من اليسار
+            c.drawString(x_left + 2, text_y, text_str)
 
-        # ── القيمة (وسط) ──
-        val_x = x_start + label_en_width + 2.5 * mm
-        val_str = str(value) if value else ""
-        has_arabic = any('\u0600' <= ch <= '\u06FF' for ch in val_str)
-
-        if highlighted:
-            c.setFillColor(WHITE)
-        else:
-            c.setFillColor(BLACK)
-
-        if has_arabic:
-            # نص مختلط: نطبع أجزاء الأرقام والإنجليزي عادي، العربي بـ shape
-            # الأبسط: نعرض النص كاملاً مع shape
-            c.setFont(font_ar, 8)
-            shaped = shape_arabic(val_str)
-            # محاذاة وسط العمود
-            val_center_x = x_start + label_en_width + value_width / 2
-            c.drawCentredString(val_center_x, text_y, shaped)
-        else:
-            c.setFont(font_en, 8.5)
-            # إذا النص طويل، صغر الخط
-            if len(val_str) > 40:
-                c.setFont(font_en, 7)
-            c.drawString(val_x, text_y, val_str)
-
-        # ── تسمية عربية (يمين) ──
-        ar_x = x_start + label_en_width + value_width + label_ar_width - 2.5 * mm
-        if highlighted:
-            c.setFillColor(WHITE)
-            c.setFont(font_ar_bold, 9)
-        else:
-            c.setFillColor(BLUE_HEADER)
-            c.setFont(font_ar_bold, 9)
-        ar_shaped = shape_arabic(label_ar)
-        c.drawRightString(ar_x, text_y, ar_shaped)
-
-        y -= row_height
-
-    return y
-
-
-def _draw_bottom_section(c, width, y_pos, qr_img, logo_path,
-                         website_url, license_num=""):
-    """رسم القسم السفلي: مربع QR + مربع الشعار + نص التحقق + NHIC"""
-
-    margin_left = 14 * mm
-    margin_right = 14 * mm
-    box_size = 28 * mm
-    box_y = y_pos - 10 * mm - box_size
-
-    # ── مربع QR (يسار) ──
-    c.setStrokeColor(GRAY_BORDER)
-    c.setLineWidth(0.5)
-    c.rect(margin_left, box_y, box_size, box_size, fill=0, stroke=1)
-
+    # ── QR Code ──
     if qr_img:
         try:
             buf = io.BytesIO()
             qr_img.save(buf, 'PNG')
             buf.seek(0)
             img_reader = ImageReader(buf)
-            c.drawImage(img_reader, margin_left + 1.5 * mm, box_y + 1.5 * mm,
-                        width=box_size - 3 * mm, height=box_size - 3 * mm,
+            x, y, w, h = QR_BOX
+            c.drawImage(img_reader, x + 2, y + 2,
+                        width=w - 4, height=h - 4,
                         preserveAspectRatio=True, mask='auto')
         except:
             pass
 
-    # ── مربع شعار المستشفى / الختم (يمين) ──
-    logo_box_w = 55 * mm
-    logo_box_x = width - margin_right - logo_box_w
-    c.rect(logo_box_x, box_y, logo_box_w, box_size, fill=0, stroke=1)
-
+    # ── شعار المستشفى ──
     if logo_path and os.path.exists(logo_path):
         try:
-            c.drawImage(logo_path,
-                        logo_box_x + 3 * mm, box_y + 2 * mm,
-                        width=logo_box_w - 6 * mm, height=box_size - 4 * mm,
+            x, y, w, h = LOGO_BOX
+            c.drawImage(logo_path, x + 2, y + 2,
+                        width=w - 4, height=h - 4,
                         preserveAspectRatio=True, mask='auto')
         except:
             pass
 
-    # ── نص التحقق (تحت المربعات) ──
-    verify_y = box_y - 6 * mm
-    font_ar = _get_font(bold=True, arabic=True)
-    font_ar_reg = _get_font(bold=False, arabic=True)
-    font_en = _get_font(bold=False, arabic=False)
-    font_en_bold = _get_font(bold=True, arabic=False)
-
-    c.setFont(font_ar, 7.5)
-    c.setFillColor(BLACK)
-    line1_ar = shape_arabic("للتحقق من بيانات التقرير يرجى التأكد من زيارة موقع منصة صحة")
-    c.drawString(margin_left, verify_y, line1_ar)
-
-    c.setFont(font_ar_reg, 7.5)
-    line2_ar = shape_arabic("الرسمي")
-    c.drawString(margin_left, verify_y - 4.5 * mm, line2_ar)
-
-    c.setFont(font_en, 6.5)
-    c.setFillColor(GRAY_TEXT)
-    c.drawString(margin_left, verify_y - 10 * mm,
-                 "To check the report please visit Seha's official website")
-
-    # خط تحت النص
-    c.setStrokeColor(GRAY_BORDER)
-    c.setLineWidth(0.3)
-    c.line(margin_left, verify_y - 14 * mm,
-           margin_left + 55 * mm, verify_y - 14 * mm)
-
-    # ── رقم الترخيص (يمين) ──
-    c.setFont(font_ar, 8.5)
-    c.setFillColor(BLACK)
-    lic_label = shape_arabic("رقم الترخيص :")
-    c.drawRightString(width - margin_right, verify_y, lic_label)
-    if license_num:
-        c.setFont(font_en, 8.5)
-        c.drawRightString(width - margin_right, verify_y - 5 * mm,
-                          str(license_num))
-
-    # ── شعار المركز الوطني للمعلومات الصحية ──
-    nhic_path = os.path.join(_BASE_DIR, 'nhic_logo.png')
-    if os.path.exists(nhic_path):
-        try:
-            nhic_y = verify_y - 28 * mm
-            c.drawImage(nhic_path, width - margin_right - 40 * mm, nhic_y,
-                        width=38 * mm, height=15 * mm,
-                        preserveAspectRatio=True, mask='auto')
-        except:
-            pass
+    c.save()
 
 
 # ══════════════════════════════════════════════════════════════
-#  الدالة الرئيسية — نفس التوقيع القديم
+#  الدالة الرئيسية
 # ══════════════════════════════════════════════════════════════
 
 def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
                         output_path=None, logo_path=None, gsl_code=None,
                         website_url="https://www.seha.sa/#/inquiries/slenquiry"):
     """
-    إنشاء PDF إجازة مرضية مطابق لتصميم صحة
-    نفس التوقيع (signature) للدالة القديمة — لا يحتاج تعديل bot.py
+    إنشاء PDF إجازة مرضية باستخدام القالب الأصلي + نص فوقي بخط عربي
+    نفس التوقيع القديم — لا يحتاج تعديل bot.py
     """
-
-    _register_fonts()
 
     if not output_path:
         output_path = os.path.join(TEMP_DIR, f"excuse_{uuid.uuid4().hex}.pdf")
 
-    # ── تحضير البيانات ──────────────────────────────────────
+    template = TEMPLATE_PDF
+    if not os.path.exists(template):
+        raise FileNotFoundError(
+            f"لم يُعثر على قالب PDF\nالمسار: {template}\n"
+            "الحل: ضع sick_leave_template.pdf داخل مجلد templates/"
+        )
+
+    # ── تحضير البيانات ──
     days = safe_int(order_data.get("days_count", 1))
     exit_raw = _clean(order_data.get("exit_date", "") or "")
     start, end, discharge = calc_dates(
-        order_data.get("excuse_date", ""), days, exit_raw or None)
+        order_data.get("excuse_date", ""), days, exit_raw or None
+    )
 
     leave_id = gsl_code or gen_leave_id(order_data)
     full_name = str(order_data.get("full_name", "") or "")
@@ -589,100 +419,67 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
     if _iss:
         for _fmt in ["%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y", "%Y-%m-%d"]:
             try:
-                today_str = datetime.strptime(
-                    _iss.strip(), _fmt).strftime("%d-%m-%Y")
+                today_str = datetime.strptime(_iss.strip(), _fmt).strftime("%d-%m-%Y")
                 break
             except:
                 pass
 
     dwe = "day" if days == 1 else "days"
-    dur_text = f"{days} {dwe} ( {start} to {end} )"
-    dur_ar_text = f"({start} الى {end}) يوم {days}"
-    duration_display = f"{dur_text}  |  {dur_ar_text}"
+    duration_display = f"{days} {dwe} ( {start} to {end} )"
 
-    name_en = _to_en(full_name).upper()
+    # ── ترجمات ──
+    name_en = _to_en(full_name)
     nat_english = nat_en(nationality)
-    _nat_norm = {"سعودي": "السعودية", "سعودية": "السعودية"}
-    nat_arabic = _nat_norm.get(nationality.strip(), nationality)
-    doc_en = _to_en(doctor or "").upper()
-    spec_en = _to_en(specialty or "")
+    doc_display = _to_en(doctor or "")
+    spec_display = _to_en(specialty or "")
 
-    # اسم المستشفى بالإنجليزي
-    hospital_en = ""
+    # ── قيم الحقول ──
+    field_values = {
+        "leave_id":          leave_id,
+        "leave_duration":    duration_display,
+        "admission_date":    start,
+        "discharge_date":    discharge,
+        "issue_date":        today_str,
+        "name":              name_en or full_name,
+        "national_id":       id_number,
+        "nationality":       nat_english,
+        "employer":          workplace,
+        "practitioner_name": doc_display or (doctor or ""),
+        "position":          spec_display or (specialty or ""),
+    }
+
+    # ── ملفات مؤقتة ──
+    uid = uuid.uuid4().hex[:8]
+    overlay_tmp = os.path.join(TEMP_DIR, f"overlay_{uid}.pdf")
+
     try:
-        import database as db
-        r = db.search_hospitals(hospital)
-        if r:
-            hospital_en = r[0].get("name_en", "") or ""
-    except:
-        pass
+        # ── الخطوة 1: إنشاء طبقة النص + الصور ──
+        qr_img = make_qr_image(website_url)
+        _create_overlay(field_values, qr_img, logo_path, overlay_tmp)
 
-    issue_time_str = issue_time or datetime.now().strftime("%I:%M %p")
+        # ── الخطوة 2: دمج القالب مع الطبقة ──
+        template_reader = PdfReader(template)
+        overlay_reader = PdfReader(overlay_tmp)
 
-    # ترخيص المستشفى
-    license_num = ""
-    try:
-        import database as db
-        r = db.search_hospitals(hospital)
-        if r:
-            license_num = r[0].get("license", "") or ""
-    except:
-        pass
+        writer = PdfWriter()
+        base_page = template_reader.pages[0]
 
-    # ── QR ──
-    qr_img = make_qr_image(website_url)
+        # إزالة حقول النموذج (لن نستخدمها — النص في الطبقة الفوقية)
+        if '/Annots' in base_page:
+            del base_page['/Annots']
 
-    # ── إنشاء ملف PDF ──────────────────────────────────────
-    page_w, page_h = A4  # 595.27 × 841.89 points
+        # دمج الطبقة الفوقية
+        base_page.merge_page(overlay_reader.pages[0])
+        writer.add_page(base_page)
 
-    c_pdf = canvas.Canvas(output_path, pagesize=A4)
-    c_pdf.setTitle("Sick Leave Report")
-    c_pdf.setAuthor("Seha Platform")
+        with open(output_path, "wb") as f:
+            writer.write(f)
 
-    # خلفية بيضاء
-    c_pdf.setFillColor(white)
-    c_pdf.rect(0, 0, page_w, page_h, fill=1, stroke=0)
+    finally:
+        try:
+            if os.path.exists(overlay_tmp):
+                os.remove(overlay_tmp)
+        except:
+            pass
 
-    # ── الجزء العلوي ──
-    _draw_header(c_pdf, page_w, page_h)
-
-    # ── العنوان ──
-    title_y = page_h - 42 * mm
-    table_start_y = _draw_title(c_pdf, page_w, title_y)
-
-    # ── تجهيز عرض البيانات ──
-    name_display = full_name if full_name else name_en
-    nat_display = (f"{nat_english}  |  {nat_arabic}"
-                   if nat_arabic and nat_arabic != nat_english
-                   else nat_english)
-    doctor_display = (f"{doc_en}  |  {doctor}"
-                      if doctor and doc_en
-                      else (doctor or doc_en or ""))
-    spec_display = (f"{spec_en}  |  {specialty}"
-                    if specialty and spec_en
-                    else (specialty or spec_en or ""))
-
-    # ── بناء صفوف الجدول ──
-    table_data = [
-        ("Leave ID",           leave_id,         "رمز الإجازة",        False),
-        ("Leave Duration",     duration_display,  "مدة الإجازة",        True),
-        ("Admission Date",     start,             "تاريخ الدخول",       False),
-        ("Discharge Date",     discharge,         "تاريخ الخروج",       False),
-        ("Issue Date",         today_str,         "تاريخ إصدار التقرير", False),
-        ("Name",               name_display,      "الاسم",              False),
-        ("National ID / Iqama", id_number,        "رقم الهوية / الإقامة", False),
-        ("Nationality",        nat_display,       "الجنسية",            False),
-        ("Employer",           workplace,         "جهة العمل",          False),
-        ("Practitioner Name",  doctor_display,    "اسم الممارس",        False),
-        ("Position",           spec_display,      "المسمى الوظيفي",     False),
-    ]
-
-    table_end_y = _draw_table(c_pdf, page_w, table_start_y, table_data)
-
-    # ── القسم السفلي ──
-    _draw_bottom_section(c_pdf, page_w, table_end_y, qr_img, logo_path,
-                         website_url, license_num)
-
-    # ── حفظ ──
-    c_pdf.save()
     return output_path

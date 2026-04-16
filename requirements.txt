@@ -1,4 +1,5 @@
 python-telegram-bot==20.7
+pypdf>=4.0
 reportlab>=4.0
 Pillow>=10.0
 python-dotenv>=1.0
