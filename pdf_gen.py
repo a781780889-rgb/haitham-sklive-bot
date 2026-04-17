@@ -3,7 +3,7 @@
 """
 pdf_gen.py — توليد PDF إجازة مرضية
 إحداثيات مستخرجة بدقة من ملف صحة المرجعي (842 × 1190 pt)
-كل قيمة مُوسَّطة داخل خليتها تمامًا (drawCentredString)
+جميع القيم مُوسَّطة داخل خلاياها تمامًا
 """
 
 import os
@@ -34,78 +34,99 @@ except ImportError:
 TEMP_DIR  = tempfile.gettempdir()
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# ══════════════════════════════════════════════════════════════
-# 🎯  DRAW_SLOTS  —  إحداثيات ReportLab المُعايَرة بدقة
-#
-#  مصدر الإحداثيات: PyMuPDF على ملف صحة المرجعي (842×1190 pt)
-#  RL_Y = 1190 − fitz_y_center + 6   ← (+6 لتصحيح offset الـ baseline)
-#
-#  X الأعمدة (ثابتة من التحليل):
-#    إنجليزي — صف واسع   : 437.5
-#    إنجليزي — صف عادي   : 318.3
-#    عربي    — صف عادي   : 556.8
-#
-#  size = حجم الخط (pt) — عدّله هنا عند الحاجة
-# ══════════════════════════════════════════════════════════════
-
-DRAW_SLOTS = {
-    # ── صفوف واسعة: قيمة واحدة تمتد على الجدول ────────────────
-    'leave_id':             {'x': 437.5, 'rl_y': 935.0, 'size': 13},
-    'issue_date':           {'x': 437.5, 'rl_y': 765.7, 'size': 13},
-    'national_id':          {'x': 437.5, 'rl_y': 679.1, 'size': 13},
-
-    # ── صفوف عادية: عمود إنجليزي ──────────────────────────────
-    'leave_duration_en':    {'x': 318.3, 'rl_y': 891.7, 'size': 10},
-    'admission_date_en':    {'x': 318.3, 'rl_y': 849.7, 'size': 13},
-    'discharge_date_en':    {'x': 318.3, 'rl_y': 807.7, 'size': 13},
-    'name_en':              {'x': 318.3, 'rl_y': 721.5, 'size': 11},
-    'nationality_en':       {'x': 318.3, 'rl_y': 637.1, 'size': 13},
-    'practitioner_name_en': {'x': 318.3, 'rl_y': 550.9, 'size': 11},
-    'position_en':          {'x': 318.3, 'rl_y': 507.6, 'size': 13},
-
-    # ── صفوف عادية: عمود عربي ─────────────────────────────────
-    'leave_duration_ar':    {'x': 556.8, 'rl_y': 891.7, 'size': 10},
-    'admission_date_ar':    {'x': 556.8, 'rl_y': 849.7, 'size': 13},
-    'discharge_date_ar':    {'x': 556.8, 'rl_y': 807.7, 'size': 13},
-    'name_ar':              {'x': 556.8, 'rl_y': 721.5, 'size': 11},
-    'nationality_ar':       {'x': 556.8, 'rl_y': 637.1, 'size': 13},
-    'employer_ar':          {'x': 556.8, 'rl_y': 595.1, 'size': 13},
-    'practitioner_name_ar': {'x': 556.8, 'rl_y': 550.9, 'size': 11},
-    'position_ar':          {'x': 556.8, 'rl_y': 507.6, 'size': 13},
-}
-
-# ── شعار المستشفى — المربع الأزرق (إحداثيات ReportLab مستخرجة بـ PyMuPDF) ──
-# fitz: Rect(602.52, 724.05, 725.43, 836.43)  →  RL bottom-left + size
-LOGO_SLOT = {
-    'x':      602.52,   # RL x (= fitz x1)
-    'rl_y':   353.82,   # RL y = page_h − fitz_y2
-    'width':  122.91,   # fitz x2 − x1
-    'height': 112.37,   # fitz y2 − y1
-}
-
-# ── Barcode — المربع الأحمر (إحداثيات ReportLab مستخرجة بـ PyMuPDF) ──
-# fitz: Rect(171.92, 724.24, 282.69, 834.15)  →  RL bottom-left + size
-BARCODE_SLOT = {
-    'x':      171.91,   # RL x (= fitz x1)
-    'rl_y':   356.10,   # RL y = page_h − fitz_y2
-    'width':  110.77,   # fitz x2 − x1
-    'height': 109.92,   # fitz y2 − y1
-}
-
-# ── معلومات المستشفى — المستطيل الأصفر (إحداثيات ReportLab) ──
-# fitz: Rect(475.15, 851.14, 727.59, 910.10)
-# السطر الأول: اسم المستشفى  |  السطر الثاني: رقم الترخيص (11 رقم)
-HOSPITAL_INFO_SLOT = {
-    'x_center': 601.37,   # مركز المستطيل أفقياً
-    'width':    252.44,
-    'line1_rl_y': 319.65, # RL y للسطر الأول  (اسم المستشفى)
-    'line2_rl_y': 297.83, # RL y للسطر الثاني (رقم الترخيص)
-    'font_size1': 11,
-    'font_size2': 10,
-}
-
-# حرف LRM لمنع بيدي من عكس التواريخ داخل النص العربي
+# حرف LRM يمنع BiDi من عكس التواريخ داخل النص العربي
 _LRM = '\u200e'
+
+# ══════════════════════════════════════════════════════════════
+# 🎯  DRAW_SLOTS
+#     مصدر الإحداثيات: PyMuPDF على ملف صحة المرجعي 842×1190 pt
+#
+#  الحقول:
+#    x       — مركز النص أفقياً (ReportLab)
+#    rl_y    — مركز النص رأسياً  (ReportLab Bottom-Left)
+#    size    — حجم الخط (pt)
+#    color   — (R,G,B) قيم 0.0-1.0 — افتراضي أسود ناعم
+#    align   — 'center' | 'left' | 'right'
+# ══════════════════════════════════════════════════════════════
+DRAW_SLOTS = {
+
+    # ── 🔑 صفوف واسعة (قيمة مشتركة بلا عمود عربي منفصل) ─────
+    'leave_id':             {'x': 437.5, 'rl_y': 935.0, 'size': 13,
+                             'color': (0.17, 0.24, 0.47)},          # #2c3e77
+    'issue_date':           {'x': 437.5, 'rl_y': 765.7, 'size': 13,
+                             'color': (0.17, 0.24, 0.47)},
+    'national_id':          {'x': 437.5, 'rl_y': 679.1, 'size': 13,
+                             'color': (0.17, 0.24, 0.47)},
+
+    # ── 📅 صف مدة الإجازة — أبيض اللون ─────────────────────────
+    'leave_duration_en':    {'x': 318.3, 'rl_y': 891.7, 'size': 13,
+                             'color': (1.0, 1.0, 1.0)},             # أبيض
+    'leave_duration_ar':    {'x': 556.8, 'rl_y': 891.7, 'size': 13,
+                             'color': (1.0, 1.0, 1.0)},             # أبيض
+
+    # ── صفوف عادية: عمود إنجليزي ─────────────────────────────
+    'admission_date_en':    {'x': 318.3, 'rl_y': 849.7, 'size': 13,
+                             'color': (0.17, 0.24, 0.47)},
+    'discharge_date_en':    {'x': 318.3, 'rl_y': 807.7, 'size': 13,
+                             'color': (0.17, 0.24, 0.47)},
+    'name_en':              {'x': 318.3, 'rl_y': 721.5, 'size': 11,
+                             'color': (0.17, 0.24, 0.47)},
+    'nationality_en':       {'x': 318.3, 'rl_y': 637.1, 'size': 13,
+                             'color': (0.17, 0.24, 0.47)},
+    'practitioner_name_en': {'x': 318.3, 'rl_y': 550.9, 'size': 11,
+                             'color': (0.17, 0.24, 0.47)},
+    'position_en':          {'x': 318.3, 'rl_y': 507.6, 'size': 13,
+                             'color': (0.17, 0.24, 0.47)},
+
+    # ── صفوف عادية: عمود عربي ────────────────────────────────
+    'admission_date_ar':    {'x': 556.8, 'rl_y': 849.7, 'size': 13,
+                             'color': (0.17, 0.24, 0.47)},
+    'discharge_date_ar':    {'x': 556.8, 'rl_y': 807.7, 'size': 13,
+                             'color': (0.17, 0.24, 0.47)},
+    'name_ar':              {'x': 556.8, 'rl_y': 721.5, 'size': 11,
+                             'color': (0.17, 0.24, 0.47)},
+    'nationality_ar':       {'x': 556.8, 'rl_y': 637.1, 'size': 13,
+                             'color': (0.17, 0.24, 0.47)},
+    'employer_ar':          {'x': 556.8, 'rl_y': 595.1, 'size': 13,
+                             'color': (0.17, 0.24, 0.47)},
+    'practitioner_name_ar': {'x': 556.8, 'rl_y': 550.9, 'size': 11,
+                             'color': (0.17, 0.24, 0.47)},
+    'position_ar':          {'x': 556.8, 'rl_y': 507.6, 'size': 13,
+                             'color': (0.17, 0.24, 0.47)},
+
+    # ── 🏥 قسم المستشفى (يمين أسفل الجدول) ─────────────────────
+    'hospital_name_ar':     {'x': 633.1, 'rl_y': 333.6, 'size': 12.8,
+                             'color': (0.0, 0.0, 0.0)},
+    'hospital_name_en':     {'x': 633.1, 'rl_y': 313.7, 'size': 12.8,
+                             'color': (0.0, 0.0, 0.0)},
+
+    # رقم الترخيص: التسمية ثم الرقم (يُرسمان منفصلَين)
+    'license_label':        {'x': 669.8, 'rl_y': 292.0, 'size': 12.8,
+                             'color': (0.0, 0.0, 0.0)},             # ": رقم الترخيص"
+    'license_number':       {'x': 593.0, 'rl_y': 292.4, 'size': 12.8,
+                             'color': (0.0, 0.0, 0.0)},             # الأرقام فقط
+
+    # ── 🕐 الوقت والتاريخ (يسار أسفل الصفحة) محاذاة يسار ────────
+    'issue_time':           {'x': 38.0,  'rl_y': 229.1, 'size': 12.8,
+                             'color': (0.0, 0.0, 0.0), 'align': 'left'},
+    'issue_weekday_date':   {'x': 38.0,  'rl_y': 201.7, 'size': 12.8,
+                             'color': (0.0, 0.0, 0.0), 'align': 'left'},
+}
+
+# ── شعار المستشفى (إحداثيات ReportLab) ─────────────────────────
+LOGO_SLOT = {
+    'x':      480,     # يسار الصورة
+    'rl_y':   310,     # أسفل الصورة
+    'width':  130,
+    'height': 100,
+}
+
+# ── QR Code ─────────────────────────────────────────────────────
+QR_SLOT = {
+    'x':    71,
+    'rl_y': 230,
+    'size': 100,
+}
 
 
 # ══════════════════════════════════════════════════════════════
@@ -135,7 +156,6 @@ def _register_fonts():
 # ══════════════════════════════════════════════════════════════
 
 def shape_arabic(text):
-    """تشكيل + BiDi للنص العربي (مع حفظ LRM markers)"""
     if not text:
         return ""
     text = str(text)
@@ -196,44 +216,71 @@ def gen_leave_id(_):
     return "PSL" + "".join([str(random.randint(0, 9)) for _ in range(11)])
 
 
+def gen_license_number():
+    """رقم ترخيص عشوائي مكوّن من 11 رقماً غربياً"""
+    return "".join([str(random.randint(0, 9)) for _ in range(11)])
+
+
+def format_weekday_date(dt=None):
+    """
+    يُنتج نص التاريخ بصيغة:
+      Thursday, 26 March 2026
+    الأيام والأشهر بالإنجليزية، الأرقام غربية
+    """
+    if dt is None:
+        dt = datetime.now()
+    return dt.strftime("%A, %d %B %Y")
+
+
 # ══════════════════════════════════════════════════════════════
 # خرائط الترجمة
 # ══════════════════════════════════════════════════════════════
 
 _NAT_MAP = {
-    "سعودي": "Saudi Arabia",    "سعودية": "Saudi Arabia",  "يمني":        "Yemeni",
-    "مصري":  "Egyptian",        "سوداني": "Sudanese",      "اردني":       "Jordanian",
-    "سوري":  "Syrian",          "لبناني": "Lebanese",      "عراقي":       "Iraqi",
-    "كويتي": "Kuwaiti",         "اماراتي":"Emirati",       "قطري":        "Qatari",
-    "بحريني":"Bahraini",        "عماني":  "Omani",         "باكستاني":    "Pakistani",
-    "هندي":  "Indian",          "فلبيني": "Filipino",      "اندونيسي":    "Indonesian",
-    "بنغلاديشي":"Bangladeshi",  "مغربي":  "Moroccan",      "تونسي":       "Tunisian",
-    "جزائري":"Algerian",        "ليبي":   "Libyan",        "صومالي":      "Somali",
-    "سريلانكي":"Sri Lankan",    "افغاني": "Afghan",        "ايراني":      "Iranian",
-    "تركي":  "Turkish",         "امريكي": "American",      "بريطاني":     "British",
+    "سعودي": "Saudi Arabia",    "سعودية": "Saudi Arabia",
+    "يمني":  "Yemeni",          "مصري":   "Egyptian",
+    "سوداني":"Sudanese",        "اردني":  "Jordanian",
+    "سوري":  "Syrian",          "لبناني": "Lebanese",
+    "عراقي": "Iraqi",           "كويتي":  "Kuwaiti",
+    "اماراتي":"Emirati",        "قطري":   "Qatari",
+    "بحريني":"Bahraini",        "عماني":  "Omani",
+    "باكستاني":"Pakistani",     "هندي":   "Indian",
+    "فلبيني":"Filipino",        "اندونيسي":"Indonesian",
+    "بنغلاديشي":"Bangladeshi",  "مغربي":  "Moroccan",
+    "تونسي": "Tunisian",        "جزائري": "Algerian",
+    "ليبي":  "Libyan",          "صومالي": "Somali",
+    "سريلانكي":"Sri Lankan",    "افغاني": "Afghan",
+    "ايراني":"Iranian",         "تركي":   "Turkish",
+    "امريكي":"American",        "بريطاني":"British",
 }
 
 _TITLE_MAP = {
-    "دكتور":"Doctor",             "دكتورة":"Doctor",          "طبيب":"Physician",
-    "طبيبة":"Physician",          "استشاري":"Consultant",     "استشارية":"Consultant",
-    "أخصائي":"Specialist",        "أخصائية":"Specialist",     "اخصائي":"Specialist",
-    "اخصائية":"Specialist",       "ممارس عام":"General Practitioner",
-    "طب عام":"General Medicine",  "جراح":"Surgeon",
+    "دكتور":"Doctor",            "دكتورة":"Doctor",
+    "طبيب":"Physician",          "طبيبة":"Physician",
+    "استشاري":"Consultant",      "استشارية":"Consultant",
+    "أخصائي":"Specialist",       "أخصائية":"Specialist",
+    "اخصائي":"Specialist",       "اخصائية":"Specialist",
+    "ممارس عام":"General Practitioner",
+    "طب عام":"General Medicine", "جراح":"Surgeon",
     "طب الطوارئ":"Emergency Medicine","طوارئ":"Emergency",
-    "باطنية":"Internal Medicine", "باطنة":"Internal Medicine",
-    "طب الأطفال":"Pediatrics",    "أطفال":"Pediatrics",       "اطفال":"Pediatrics",
+    "باطنية":"Internal Medicine","باطنة":"Internal Medicine",
+    "طب الأطفال":"Pediatrics",   "أطفال":"Pediatrics",
+    "اطفال":"Pediatrics",
     "نساء وولادة":"Obstetrics & Gynecology","نساء":"Gynecology",
-    "عظام":"Orthopedics",         "عيون":"Ophthalmology",
-    "أنف وأذن وحنجرة":"ENT",     "جلدية":"Dermatology",
-    "قلب":"Cardiology",           "مخ وأعصاب":"Neurology",
-    "نفسية":"Psychiatry",         "أسنان":"Dentistry",
+    "عظام":"Orthopedics",        "عيون":"Ophthalmology",
+    "أنف وأذن وحنجرة":"ENT",    "جلدية":"Dermatology",
+    "قلب":"Cardiology",          "مخ وأعصاب":"Neurology",
+    "نفسية":"Psychiatry",        "أسنان":"Dentistry",
     "عيادة عامة":"General Clinic","رعاية أولية":"Primary Care",
-    "صيدلة":"Pharmacy",           "صيدلي":"Pharmacist",
-    "تمريض":"Nursing",            "ممرض":"Nurse",              "ممرضة":"Nurse",
+    "صيدلة":"Pharmacy",          "صيدلي":"Pharmacist",
+    "تمريض":"Nursing",           "ممرض":"Nurse",
+    "ممرضة":"Nurse",
     "فيزيوثيرابي":"Physiotherapy","أشعة":"Radiology",
-    "استشاري أول":"Senior Consultant","رئيس قسم":"Department Head",
-    "مدير":"Director",            "مدير طبي":"Medical Director",
-    "طبيب أسنان عام":"General Dentist","طب الأسنان":"Dentistry",
+    "استشاري أول":"Senior Consultant",
+    "رئيس قسم":"Department Head",
+    "مدير":"Director",           "مدير طبي":"Medical Director",
+    "طبيب أسنان عام":"General Dentist",
+    "طب الأسنان":"Dentistry",
 }
 
 _TRANS_CACHE = {}
@@ -354,13 +401,12 @@ def _get_page_size(template_path):
 # إنشاء طبقة النصوص والصور
 # ══════════════════════════════════════════════════════════════
 
-def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_path,
-                    hospital_name="", license_number=""):
+def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_path):
     """
-    طبقة شفافة بنفس أبعاد القالب:
-    • كل حقل يُرسم بـ drawCentredString على إحداثيات DRAW_SLOTS
-    • النص العربي يُشكَّل بـ arabic_reshaper + BiDi قبل الرسم
-    • معامل تحجيم تلقائي لقوالب بأبعاد غير 842×1190 pt
+    طبقة شفافة تُرسم فوق القالب:
+    • كل حقل في DRAW_SLOTS يُرسم بلونه الصحيح ومحاذاته الصحيحة
+    • النص الأبيض على الشريط الداكن لمدة الإجازة
+    • رقم الترخيص + اسم المستشفى + الوقت/التاريخ في أسفل الصفحة
     """
     _register_fonts()
     c = rl_canvas.Canvas(overlay_path, pagesize=(page_w, page_h))
@@ -371,11 +417,10 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
     except Exception:
         font_name = 'Helvetica'
 
-    # معامل التحجيم للقوالب ذات الأبعاد المختلفة
+    # معامل تحجيم تلقائي للقوالب بأبعاد مختلفة عن 842×1190
     x_scale = page_w / 842.0
     y_scale = page_h / 1190.0
 
-    # ─── رسم كل حقل ──────────────────────────────────────────
     for slot_id, slot in DRAW_SLOTS.items():
         value = field_values.get(slot_id)
         if not value:
@@ -384,76 +429,62 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
         if not text_str:
             continue
 
-        x         = slot['x']   * x_scale
+        x         = slot['x']    * x_scale
         rl_y      = slot['rl_y'] * y_scale
         font_size = slot['size']
+        rgb       = slot.get('color', (0.08, 0.08, 0.08))
+        align     = slot.get('align', 'center')
 
         c.setFont(font_name, font_size)
-        c.setFillColorRGB(0.08, 0.08, 0.08)
+        c.setFillColorRGB(*rgb)
 
         if _has_arabic(text_str):
             shaped = shape_arabic(text_str)
-            c.drawCentredString(x, rl_y, shaped)
+            if align == 'left':
+                c.drawString(x, rl_y, shaped)
+            elif align == 'right':
+                c.drawRightString(x, rl_y, shaped)
+            else:
+                c.drawCentredString(x, rl_y, shaped)
         else:
-            c.drawCentredString(x, rl_y, text_str)
+            if align == 'left':
+                c.drawString(x, rl_y, text_str)
+            elif align == 'right':
+                c.drawRightString(x, rl_y, text_str)
+            else:
+                c.drawCentredString(x, rl_y, text_str)
 
-    # ─── شعار المستشفى — المربع الأزرق ───────────────────────
+    # ─── شعار المستشفى ─────────────────────────────────────────
     if logo_path and os.path.exists(logo_path):
         try:
             c.drawImage(
                 logo_path,
                 LOGO_SLOT['x']    * x_scale,
                 LOGO_SLOT['rl_y'] * y_scale,
-                width=LOGO_SLOT['width']  * x_scale,
-                height=LOGO_SLOT['height'] * y_scale,
+                width=LOGO_SLOT['width'],
+                height=LOGO_SLOT['height'],
                 preserveAspectRatio=True,
                 mask='auto',
             )
         except Exception:
             pass
 
-    # ─── Barcode — المربع الأحمر ─────────────────────────────
+    # ─── QR Code ───────────────────────────────────────────────
     if qr_img:
         try:
             buf = io.BytesIO()
             qr_img.save(buf, 'PNG')
             buf.seek(0)
             img_reader = ImageReader(buf)
+            qs = QR_SLOT['size']
             c.drawImage(
                 img_reader,
-                BARCODE_SLOT['x']    * x_scale,
-                BARCODE_SLOT['rl_y'] * y_scale,
-                width=BARCODE_SLOT['width']  * x_scale,
-                height=BARCODE_SLOT['height'] * y_scale,
+                QR_SLOT['x']    * x_scale,
+                QR_SLOT['rl_y'] * y_scale,
+                width=qs, height=qs,
                 preserveAspectRatio=True,
                 mask='auto',
             )
-        except Exception:
-            pass
-
-    # ─── معلومات المستشفى — المستطيل الأصفر ─────────────────
-    # السطر الأول: اسم المستشفى (عربي/إنجليزي)
-    # السطر الثاني: رقم الترخيص (11 رقم غربي)
-    if hospital_name:
-        try:
-            c.setFillColorRGB(0.08, 0.08, 0.08)
-            c.setFont(font_name, HOSPITAL_INFO_SLOT['font_size1'])
-            cx   = HOSPITAL_INFO_SLOT['x_center'] * x_scale
-            rl_y = HOSPITAL_INFO_SLOT['line1_rl_y'] * y_scale
-            hn   = shape_arabic(hospital_name) if _has_arabic(hospital_name) else hospital_name
-            c.drawCentredString(cx, rl_y, hn)
-        except Exception:
-            pass
-
-    if license_number:
-        try:
-            c.setFillColorRGB(0.08, 0.08, 0.08)
-            c.setFont('Helvetica', HOSPITAL_INFO_SLOT['font_size2'])
-            cx   = HOSPITAL_INFO_SLOT['x_center'] * x_scale
-            rl_y = HOSPITAL_INFO_SLOT['line2_rl_y'] * y_scale
-            # يُطبع دائماً بالأرقام الغربية (Western digits)
-            lic  = str(license_number).strip()
-            c.drawCentredString(cx, rl_y, lic)
         except Exception:
             pass
 
@@ -466,12 +497,22 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
 
 def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
                         output_path=None, logo_path=None, gsl_code=None,
+                        license_number=None,
                         website_url="https://www.seha.sa/#/inquiries/slenquiry",
-                        template_path=None,
-                        hospital_name="", license_number=""):
+                        template_path=None):
     """
-    إنشاء PDF إجازة مرضية بإحداثيات مطابقة لملف صحة المرجعي.
-    template_path: مسار القالب PDF من لوحة التحكم (إلزامي).
+    ينشئ PDF إجازة مرضية بإحداثيات مطابقة لملف صحة المرجعي.
+
+    المعاملات:
+        order_data      — dict: بيانات الطلب
+        hospital        — اسم المستشفى (عربي)
+        doctor          — اسم الطبيب   (عربي)
+        specialty       — التخصص       (عربي)
+        issue_time      — وقت الإصدار  مثل "4:14 PM"
+        logo_path       — مسار شعار المستشفى (PNG/JPG)
+        gsl_code        — رمز الإجازة (اختياري، يُولَّد تلقائياً)
+        license_number  — رقم الترخيص 11 رقماً (اختياري، يُولَّد تلقائياً)
+        template_path   — مسار قالب PDF (إلزامي)
     """
 
     if not template_path or not os.path.exists(template_path):
@@ -500,31 +541,44 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
     workplace   = str(order_data.get("workplace",   "") or "")
 
     # تاريخ الإصدار
-    today_str = datetime.now().strftime("%d-%m-%Y")
+    issue_dt  = datetime.now()
+    today_str = issue_dt.strftime("%d-%m-%Y")
     _iss = order_data.get("issue_date_input", "")
     if _iss:
         for _fmt in ["%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y", "%Y-%m-%d"]:
             try:
-                today_str = datetime.strptime(_iss.strip(), _fmt).strftime("%d-%m-%Y")
+                issue_dt  = datetime.strptime(_iss.strip(), _fmt)
+                today_str = issue_dt.strftime("%d-%m-%Y")
                 break
             except Exception:
                 pass
 
-    # ── مدة الإجازة (إنجليزي + عربي) ─────────────────────────
-    dwe          = "day" if days == 1 else "days"
-    duration_en  = f"{days} {dwe} ( {start} to {end} )"
+    # ── مدة الإجازة ────────────────────────────────────────────
+    dwe         = "day" if days == 1 else "days"
+    duration_en = f"{days} {dwe} ( {start} to {end} )"
 
-    # LRM حول التواريخ يمنع BiDi من عكسها داخل النص العربي
-    ar_day_word  = "يوم" if days == 1 else "أيام"
-    dur_start    = f"{_LRM}{start}{_LRM}"
-    dur_end      = f"{_LRM}{end}{_LRM}"
-    duration_ar  = f"{days} {ar_day_word} ({dur_start} الى {dur_end})"
+    ar_day_word = "يوم" if days == 1 else "أيام"
+    dur_s       = f"{_LRM}{start}{_LRM}"
+    dur_e       = f"{_LRM}{end}{_LRM}"
+    duration_ar = f"{days} {ar_day_word} ({dur_s} الى {dur_e})"
 
-    # ── ترجمة ──────────────────────────────────────────────────
-    name_en      = _to_en(full_name)
-    nat_english  = nat_en(nationality)
-    doc_en       = _to_en(doctor   or "")
-    spec_en      = _to_en(specialty or "")
+    # ── الترجمة ─────────────────────────────────────────────────
+    name_en   = _to_en(full_name)
+    nat_en_   = nat_en(nationality)
+    doc_en    = _to_en(doctor    or "")
+    spec_en   = _to_en(specialty or "")
+
+    # اسم المستشفى إنجليزي
+    hosp_en   = _to_en(hospital  or "")
+
+    # رقم الترخيص (11 رقم)
+    lic_num   = license_number or gen_license_number()
+
+    # الوقت والتاريخ
+    _time_str = str(issue_time or "").strip() or issue_dt.strftime("%I:%M %p")
+
+    # صيغة التاريخ: Thursday, 26 March 2026
+    weekday_date = format_weekday_date(issue_dt)
 
     # ── ربط القيم بالـ slots ───────────────────────────────────
     field_values = {
@@ -533,24 +587,36 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
         'issue_date':           today_str,
         'national_id':          id_number,
 
-        # عمود إنجليزي
+        # مدة الإجازة — أبيض اللون
         'leave_duration_en':    duration_en,
+        'leave_duration_ar':    duration_ar,
+
+        # عمود إنجليزي
         'admission_date_en':    start,
         'discharge_date_en':    discharge,
         'name_en':              name_en or full_name,
-        'nationality_en':       nat_english,
-        'practitioner_name_en': doc_en or (doctor or ""),
+        'nationality_en':       nat_en_,
+        'practitioner_name_en': doc_en  or (doctor    or ""),
         'position_en':          spec_en or (specialty or ""),
 
         # عمود عربي
-        'leave_duration_ar':    duration_ar,
         'admission_date_ar':    start,
         'discharge_date_ar':    discharge,
         'name_ar':              full_name,
         'nationality_ar':       nationality,
         'employer_ar':          workplace,
-        'practitioner_name_ar': doctor or "",
+        'practitioner_name_ar': doctor    or "",
         'position_ar':          specialty or "",
+
+        # قسم المستشفى
+        'hospital_name_ar':     hospital  or "",
+        'hospital_name_en':     hosp_en if hosp_en and not any('\u0600' <= c <= '\u06FF' for c in hosp_en) else "",
+        'license_label':        ": رقم الترخيص",
+        'license_number':       lic_num,
+
+        # الوقت والتاريخ
+        'issue_time':           _time_str,
+        'issue_weekday_date':   weekday_date,
     }
 
     # ── توليد الـ overlay والدمج ──────────────────────────────
@@ -559,8 +625,7 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
 
     try:
         qr_img = make_qr_image(website_url)
-        _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_tmp,
-                        hospital_name=hospital_name, license_number=license_number)
+        _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_tmp)
 
         template_reader = PdfReader(template_path)
         overlay_reader  = PdfReader(overlay_tmp)
