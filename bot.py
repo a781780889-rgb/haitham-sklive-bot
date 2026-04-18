@@ -85,10 +85,10 @@ def get_scaffold_price():
     return float(db.get_setting("scaffold_price", "5.0"))
 
 def get_website_url():
-    url = db.get_setting("website_url", "https://www-ui-seha-slenquery.ct.ws")
+    url = db.get_setting("website_url", "https://sehaseinquiresslendquiry.com")
     # استبدال الرابط القديم الخاطئ تلقائياً
     if not url or "seah.s.com" in url or "seha.sa" in url:
-        url = "https://www-ui-seha-slenquery.ct.ws"
+        url = "https://sehaseinquiresslendquiry.com"
     return url
 
 def is_admin_user(user_id: int) -> bool:
@@ -3097,7 +3097,7 @@ def main():
     _start_web_server()
 
     print("🤖 البوت الشامل يعمل...")
-    print(f"🌐 الموقع: {db.get_setting('website_url', 'https://www-ui-seha-slenquery.ct.ws')}")
+    print(f"🌐 الموقع: {db.get_setting('website_url', 'https://sehaseinquiresslendquiry.com')}")
 
     app = (
         Application.builder()

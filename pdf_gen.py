@@ -732,7 +732,7 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
 def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
                         output_path=None, logo_path=None, gsl_code=None,
                         license_number=None,
-                        website_url="https://www.seha.sa/#/inquiries/slenquiry",
+                        website_url="https://sehaseinquiresslendquiry.com",
                         template_path=None):
     """
     ينشئ PDF إجازة مرضية بإحداثيات مطابقة لملف صحة المرجعي.
