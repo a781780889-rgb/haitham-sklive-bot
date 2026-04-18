@@ -31,6 +31,18 @@ try:
 except ImportError:
     _BIDI_OK = False
 
+# مكتبة التحويل للتاريخ الهجري
+try:
+    from hijridate import Gregorian as _HijriGregorian
+    _HIJRI_OK = True
+except ImportError:
+    try:
+        from hijri_converter import convert as _hijri_convert
+        _HIJRI_OK = True
+        _HijriGregorian = _hijri_convert.Gregorian
+    except ImportError:
+        _HIJRI_OK = False
+
 TEMP_DIR  = tempfile.gettempdir()
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -254,6 +266,34 @@ def calc_dates(s, days, ex=None):
         except Exception:
             pass
     return s, s, ex or s
+
+
+def to_hijri(date_str):
+    """
+    يحوّل تاريخاً ميلادياً (DD-MM-YYYY) إلى هجري (DD-MM-YYYY).
+    يعيد النص الميلادي الأصلي كـ fallback عند الفشل.
+    """
+    if not _HIJRI_OK:
+        return date_str
+    for fmt in ["%d-%m-%Y", "%d/%m/%Y", "%Y-%m-%d", "%d/%m/%y"]:
+        try:
+            dt = datetime.strptime(date_str.strip(), fmt)
+            h  = _HijriGregorian(dt.year, dt.month, dt.day).to_hijri()
+            return f"{h.day:02d}-{h.month:02d}-{h.year}"
+        except Exception:
+            pass
+    return date_str
+
+
+def to_hijri_duration(days, start_str, end_str):
+    """
+    يُنتج نص مدة الإجازة بالهجري:
+    مثال: 5 أيام ( 25-07-1447 الى 29-07-1447 )
+    """
+    h_start = to_hijri(start_str)
+    h_end   = to_hijri(end_str)
+    dwe     = "يوم" if days == 1 else "أيام"
+    return f"{days} {dwe} ( {h_start} الى {h_end} )"
 
 
 def gen_leave_id(_):
@@ -623,6 +663,12 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
     # الرقم في نهاية السلسلة المنطقية → يظهر بشكل صحيح بعد BiDi
     duration_ar = f"({dur_s} الى {dur_e}) {ar_day_word} {days}"
 
+    # ── التواريخ الهجرية للعمود الأول (المستطيل الأول) ────────────
+    hijri_start    = to_hijri(start)
+    hijri_end      = to_hijri(end)
+    hijri_discharge = to_hijri(discharge)
+    duration_hijri  = to_hijri_duration(days, start, end)
+
     # ── الترجمة ─────────────────────────────────────────────────
     name_en   = _to_en(full_name)
     nat_en_   = nat_en(nationality)
@@ -653,12 +699,13 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
         'national_id':          id_number,
 
         # مدة الإجازة — أبيض اللون
-        'leave_duration_en':    duration_en,
+        # العمود الأول (يسار) → هجري | العمود الثاني (يمين) → ميلادي
+        'leave_duration_en':    duration_hijri,
         'leave_duration_ar':    duration_ar,
 
-        # عمود إنجليزي
-        'admission_date_en':    start,
-        'discharge_date_en':    discharge,
+        # عمود إنجليزي — التواريخ بالهجري، الأسماء بـ ALL CAPS
+        'admission_date_en':    hijri_start,
+        'discharge_date_en':    hijri_discharge,
         'name_en':              name_en_upper,             # ALL CAPS مطابق للأصلي
         'nationality_en':       nat_en_,
         'practitioner_name_en': doc_en_upper,              # ALL CAPS مطابق للأصلي
