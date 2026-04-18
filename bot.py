@@ -455,6 +455,7 @@ def logos_keyboard():
     return ReplyKeyboardMarkup([
         [KeyboardButton("➕ رفع شعار مستشفى")],
         [KeyboardButton("🏙️ رفع شعار (تصفح بالمدينة)")],
+        [KeyboardButton("🤖 تحميل الشعارات تلقائياً من الإنترنت")],
         [KeyboardButton("📋 عرض الشعارات الحالية")],
         [KeyboardButton("🗑 حذف شعار")],
         [KeyboardButton("⬅️ رجوع")],
@@ -1907,6 +1908,39 @@ async def handle_logos(update, context, text, uid):
             )
         else:
             await update.message.reply_text("❌ المدينة غير موجودة في القائمة.")
+
+    # ── تحميل الشعارات تلقائياً من الإنترنت
+    elif text == "🤖 تحميل الشعارات تلقائياً من الإنترنت":
+        await update.message.reply_text(
+            "🤖 *جاري تحميل شعارات المستشفيات تلقائياً...*\n\n"
+            "⏳ هذه العملية قد تستغرق عدة دقائق.\n"
+            "سيتم إشعارك عند الانتهاء.",
+            parse_mode="Markdown"
+        )
+        import subprocess, threading, sys as _sys
+        def _run_logo_download():
+            import asyncio
+            script = os.path.join(os.path.dirname(__file__), "setup_hospital_logos.py")
+            result = subprocess.run(
+                [_sys.executable, script],
+                capture_output=True, text=True, timeout=600
+            )
+            output = result.stdout or ""
+            success_count = output.count("✅ تم")
+            fail_count    = output.count("❌ فشل")
+            total_h       = success_count + fail_count
+            summary = (
+                f"✅ *انتهى تحميل الشعارات!*\n\n"
+                f"🏥 إجمالي: *{total_h}*\n"
+                f"✅ نجح: *{success_count}*\n"
+                f"❌ فشل: *{fail_count}*\n\n"
+                f"💡 أعد تشغيل البوت لتفعيل الشعارات."
+            )
+            asyncio.run_coroutine_threadsafe(
+                update.message.reply_text(summary, parse_mode="Markdown", reply_markup=logos_keyboard()),
+                context.application.loop
+            )
+        threading.Thread(target=_run_logo_download, daemon=True).start()
 
     # ── عرض الشعارات الحالية
     elif text == "📋 عرض الشعارات الحالية":
