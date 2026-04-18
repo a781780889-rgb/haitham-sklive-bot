@@ -51,67 +51,67 @@ _LRM = '\u200e'
 DRAW_SLOTS = {
 
     # ── 🔑 صفوف واسعة (قيمة مشتركة بلا عمود عربي منفصل) ─────
-    'leave_id':             {'x': 437.5, 'rl_y': 935.0, 'size': 13,
+    'leave_id':             {'x': 437.5, 'rl_y': 935.0, 'size': 13.5,
                              'color': (0.17, 0.24, 0.47)},          # #2c3e77
-    'issue_date':           {'x': 437.5, 'rl_y': 765.7, 'size': 13,
+    'issue_date':           {'x': 437.5, 'rl_y': 765.7, 'size': 13.5,
                              'color': (0.17, 0.24, 0.47)},
-    'national_id':          {'x': 437.5, 'rl_y': 679.1, 'size': 13,
+    'national_id':          {'x': 437.5, 'rl_y': 679.1, 'size': 13.5,
                              'color': (0.17, 0.24, 0.47)},
 
     # ── 📅 صف مدة الإجازة — أبيض اللون ─────────────────────────
-    'leave_duration_en':    {'x': 318.3, 'rl_y': 891.7, 'size': 13,
+    'leave_duration_en':    {'x': 318.3, 'rl_y': 891.7, 'size': 13.5,
                              'color': (1.0, 1.0, 1.0)},             # أبيض
-    'leave_duration_ar':    {'x': 556.8, 'rl_y': 891.7, 'size': 13,
+    'leave_duration_ar':    {'x': 556.8, 'rl_y': 891.7, 'size': 13.5,
                              'color': (1.0, 1.0, 1.0)},             # أبيض
 
     # ── صفوف عادية: عمود إنجليزي ─────────────────────────────
-    'admission_date_en':    {'x': 318.3, 'rl_y': 849.7, 'size': 13,
+    'admission_date_en':    {'x': 318.3, 'rl_y': 849.7, 'size': 13.5,
                              'color': (0.17, 0.24, 0.47)},
-    'discharge_date_en':    {'x': 318.3, 'rl_y': 807.7, 'size': 13,
+    'discharge_date_en':    {'x': 318.3, 'rl_y': 807.7, 'size': 13.5,
                              'color': (0.17, 0.24, 0.47)},
-    'name_en':              {'x': 318.3, 'rl_y': 721.5, 'size': 11,
+    'name_en':              {'x': 318.3, 'rl_y': 721.5, 'size': 13.5,
                              'color': (0.17, 0.24, 0.47)},
-    'nationality_en':       {'x': 318.3, 'rl_y': 637.1, 'size': 13,
+    'nationality_en':       {'x': 318.3, 'rl_y': 637.1, 'size': 13.5,
                              'color': (0.17, 0.24, 0.47)},
-    'practitioner_name_en': {'x': 318.3, 'rl_y': 550.9, 'size': 11,
+    'practitioner_name_en': {'x': 318.3, 'rl_y': 550.9, 'size': 13.5,
                              'color': (0.17, 0.24, 0.47)},
-    'position_en':          {'x': 318.3, 'rl_y': 507.6, 'size': 13,
+    'position_en':          {'x': 318.3, 'rl_y': 507.6, 'size': 13.5,
                              'color': (0.17, 0.24, 0.47)},
 
     # ── صفوف عادية: عمود عربي ────────────────────────────────
-    'admission_date_ar':    {'x': 556.8, 'rl_y': 849.7, 'size': 13,
+    'admission_date_ar':    {'x': 556.8, 'rl_y': 849.7, 'size': 13.5,
                              'color': (0.17, 0.24, 0.47)},
-    'discharge_date_ar':    {'x': 556.8, 'rl_y': 807.7, 'size': 13,
+    'discharge_date_ar':    {'x': 556.8, 'rl_y': 807.7, 'size': 13.5,
                              'color': (0.17, 0.24, 0.47)},
-    'name_ar':              {'x': 556.8, 'rl_y': 721.5, 'size': 11,
+    'name_ar':              {'x': 556.8, 'rl_y': 721.5, 'size': 13.5,
                              'color': (0.17, 0.24, 0.47)},
-    'nationality_ar':       {'x': 556.8, 'rl_y': 637.1, 'size': 13,
+    'nationality_ar':       {'x': 556.8, 'rl_y': 637.1, 'size': 13.5,
                              'color': (0.17, 0.24, 0.47)},
-    'employer_ar':          {'x': 556.8, 'rl_y': 595.1, 'size': 13,
+    'employer_ar':          {'x': 556.8, 'rl_y': 595.1, 'size': 13.5,
                              'color': (0.17, 0.24, 0.47)},
-    'practitioner_name_ar': {'x': 556.8, 'rl_y': 550.9, 'size': 11,
+    'practitioner_name_ar': {'x': 556.8, 'rl_y': 550.9, 'size': 13.5,
                              'color': (0.17, 0.24, 0.47)},
-    'position_ar':          {'x': 556.8, 'rl_y': 507.6, 'size': 13,
+    'position_ar':          {'x': 556.8, 'rl_y': 507.6, 'size': 13.5,
                              'color': (0.17, 0.24, 0.47)},
 
     # ── 🏥 قسم المستشفى (أسفل الشعار — مُوسَّط على cx=632) ─────────
-    # الشعار يشغل RL 360-470 ← النصوص تبدأ من RL 338 نزولاً
-    'hospital_name_ar':     {'x': 632.0, 'rl_y': 338.0, 'size': 13.5,
-                             'color': (0.0, 0.0, 0.0)},
-    'hospital_name_en':     {'x': 632.0, 'rl_y': 316.0, 'size': 12.5,
-                             'color': (0.0, 0.0, 0.0)},
+    # bold=True → Times-Bold للإنجليزي، NotoSansArabic-Bold للعربي
+    'hospital_name_ar':     {'x': 632.0, 'rl_y': 338.0, 'size': 12.8,
+                             'color': (0.0, 0.0, 0.0), 'bold': True},
+    'hospital_name_en':     {'x': 632.0, 'rl_y': 316.0, 'size': 12.8,
+                             'color': (0.0, 0.0, 0.0), 'bold': True},
 
     # رقم الترخيص: التسمية (يمين) ثم الرقم (يسار) على نفس السطر
-    'license_label':        {'x': 690.0, 'rl_y': 292.0, 'size': 12.0,
-                             'color': (0.0, 0.0, 0.0)},             # ": رقم الترخيص"
-    'license_number':       {'x': 600.0, 'rl_y': 292.0, 'size': 12.0,
-                             'color': (0.0, 0.0, 0.0)},             # الأرقام فقط
+    'license_label':        {'x': 690.0, 'rl_y': 292.0, 'size': 12.8,
+                             'color': (0.0, 0.0, 0.0), 'bold': True},  # ": رقم الترخيص"
+    'license_number':       {'x': 600.0, 'rl_y': 292.0, 'size': 12.8,
+                             'color': (0.0, 0.0, 0.0), 'bold': True},  # الأرقام فقط
 
     # ── 🕐 الوقت والتاريخ (يسار أسفل الصفحة) محاذاة يسار ────────
     'issue_time':           {'x': 38.0,  'rl_y': 229.1, 'size': 12.8,
-                             'color': (0.0, 0.0, 0.0), 'align': 'left'},
+                             'color': (0.0, 0.0, 0.0), 'align': 'left', 'bold': True},
     'issue_weekday_date':   {'x': 38.0,  'rl_y': 201.7, 'size': 12.8,
-                             'color': (0.0, 0.0, 0.0), 'align': 'left'},
+                             'color': (0.0, 0.0, 0.0), 'align': 'left', 'bold': True},
 }
 
 # ── شعار المستشفى (إحداثيات ReportLab) ─────────────────────────
@@ -119,10 +119,10 @@ DRAW_SLOTS = {
 # الشعار يجب أن يكون تحت الجدول: rl_y + height < 488
 #   rl_y=360  →  أعلى الشعار = 360+110 = 470  (تحت الجدول بهامش 18pt)
 LOGO_SLOT = {
-    'x':      572,     # يسار الشعار — مُوسَّط على عمود cx=632
-    'rl_y':   360,     # أسفل الشعار (RL) — أسفل الجدول مباشرةً
-    'width':  120,
-    'height': 110,
+    'x':      577,      # يسار الشعار — مطابق للأصلي (bbox x=576.9)
+    'rl_y':   351,      # أسفل الشعار (RL) — مطابق للأصلي (1190 - 839.2 ≈ 351)
+    'width':  112.5,    # مطابق للأصلي تماماً
+    'height': 112.5,    # مطابق للأصلي تماماً
 }
 
 # ── QR Code ─────────────────────────────────────────────────────
@@ -136,13 +136,32 @@ QR_SLOT = {
 # ══════════════════════════════════════════════════════════════
 # تسجيل الخطوط
 # ══════════════════════════════════════════════════════════════
-_fonts_registered = False
+_fonts_registered    = False
+_noto_regular_ok     = False   # NotoSansArabic-Regular متاح
+_noto_bold_ok        = False   # NotoSansArabic-Bold متاح
+
+# مسارات بحث NotoSansArabic — مرتّبة بحسب الأولوية على Ubuntu/DigitalOcean
+_NOTO_SEARCH_PATHS = [
+    # مجلد البوت نفسه (أعلى أولوية — ضع الـ TTF هناك)
+    os.path.join(_BASE_DIR, 'NotoSansArabic-Regular.ttf'),
+    os.path.join(_BASE_DIR, 'NotoSansArabic-Bold.ttf'),
+    # Ubuntu system fonts
+    '/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf',
+    '/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf',
+    '/usr/share/fonts/opentype/noto/NotoSansArabic-Regular.otf',
+    '/usr/share/fonts/opentype/noto/NotoSansArabic-Bold.otf',
+    # مسارات بديلة شائعة
+    '/usr/local/share/fonts/NotoSansArabic-Regular.ttf',
+    '/usr/local/share/fonts/NotoSansArabic-Bold.ttf',
+]
 
 
 def _register_fonts():
-    global _fonts_registered
+    global _fonts_registered, _noto_regular_ok, _noto_bold_ok
     if _fonts_registered:
         return
+
+    # ── Amiri ────────────────────────────────────────────────
     for name, path in [
         ('Amiri',      os.path.join(_BASE_DIR, 'Amiri-Regular.ttf')),
         ('Amiri-Bold', os.path.join(_BASE_DIR, 'Amiri-Bold.ttf')),
@@ -152,6 +171,27 @@ def _register_fonts():
                 pdfmetrics.registerFont(TTFont(name, path))
             except Exception:
                 pass
+
+    # ── NotoSansArabic-Regular ───────────────────────────────
+    for path in _NOTO_SEARCH_PATHS:
+        if 'Regular' in path and os.path.exists(path):
+            try:
+                pdfmetrics.registerFont(TTFont('NotoSansArabic-Regular', path))
+                _noto_regular_ok = True
+                break
+            except Exception:
+                pass
+
+    # ── NotoSansArabic-Bold ──────────────────────────────────
+    for path in _NOTO_SEARCH_PATHS:
+        if 'Bold' in path and os.path.exists(path):
+            try:
+                pdfmetrics.registerFont(TTFont('NotoSansArabic-Bold', path))
+                _noto_bold_ok = True
+                break
+            except Exception:
+                pass
+
     _fonts_registered = True
 
 
@@ -408,18 +448,28 @@ def _get_page_size(template_path):
 def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_path):
     """
     طبقة شفافة تُرسم فوق القالب:
-    • كل حقل في DRAW_SLOTS يُرسم بلونه الصحيح ومحاذاته الصحيحة
-    • النص الأبيض على الشريط الداكن لمدة الإجازة
-    • رقم الترخيص + اسم المستشفى + الوقت/التاريخ في أسفل الصفحة
+    • نصوص إنجليزية → Times-Roman / Times-Bold  (مدمج في ReportLab)
+    • نصوص عربية    → NotoSansArabic-Regular / Bold  (أو Amiri كـ fallback)
+    • الخط العريض   → للمستشفى + الوقت + التاريخ + رقم الترخيص
     """
     _register_fonts()
     c = rl_canvas.Canvas(overlay_path, pagesize=(page_w, page_h))
 
+    # ── اختيار الخطوط حسب ما هو متاح ───────────────────────────
+    # إنجليزي: Times-Roman / Times-Bold مدمجان دائماً في ReportLab
+    EN_REG  = 'Times-Roman'
+    EN_BOLD = 'Times-Bold'
+
+    # عربي: NotoSansArabic إذا موجود، وإلا Amiri
+    AR_REG  = 'NotoSansArabic-Regular' if _noto_regular_ok else 'Amiri'
+    AR_BOLD = 'NotoSansArabic-Bold'    if _noto_bold_ok    else 'Amiri-Bold'
+
+    # fallback أخير لو حتى Amiri غير موجود
     try:
-        pdfmetrics.getFont('Amiri')
-        font_name = 'Amiri'
+        pdfmetrics.getFont(AR_REG)
     except Exception:
-        font_name = 'Helvetica'
+        AR_REG  = 'Helvetica'
+        AR_BOLD = 'Helvetica-Bold'
 
     # معامل تحجيم تلقائي للقوالب بأبعاد مختلفة عن 842×1190
     x_scale = page_w / 842.0
@@ -438,11 +488,14 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
         font_size = slot['size']
         rgb       = slot.get('color', (0.08, 0.08, 0.08))
         align     = slot.get('align', 'center')
+        is_bold   = slot.get('bold', False)
 
-        c.setFont(font_name, font_size)
         c.setFillColorRGB(*rgb)
 
         if _has_arabic(text_str):
+            # ── نص عربي ─────────────────────────────────────
+            font = AR_BOLD if is_bold else AR_REG
+            c.setFont(font, font_size)
             shaped = shape_arabic(text_str)
             if align == 'left':
                 c.drawString(x, rl_y, shaped)
@@ -451,6 +504,9 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
             else:
                 c.drawCentredString(x, rl_y, shaped)
         else:
+            # ── نص إنجليزي ──────────────────────────────────
+            font = EN_BOLD if is_bold else EN_REG
+            c.setFont(font, font_size)
             if align == 'left':
                 c.drawString(x, rl_y, text_str)
             elif align == 'right':
@@ -564,13 +620,18 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
     ar_day_word = "يوم" if days == 1 else "أيام"
     dur_s       = f"{_LRM}{start}{_LRM}"
     dur_e       = f"{_LRM}{end}{_LRM}"
-    duration_ar = f"{days} {ar_day_word} ({dur_s} الى {dur_e})"
+    # الرقم في نهاية السلسلة المنطقية → يظهر بشكل صحيح بعد BiDi
+    duration_ar = f"({dur_s} الى {dur_e}) {ar_day_word} {days}"
 
     # ── الترجمة ─────────────────────────────────────────────────
     name_en   = _to_en(full_name)
     nat_en_   = nat_en(nationality)
     doc_en    = _to_en(doctor    or "")
     spec_en   = _to_en(specialty or "")
+
+    # الأسماء الإنجليزية بالحروف الكبيرة (ALL CAPS) — مطابق للأصلي
+    name_en_upper = (name_en or full_name).upper()
+    doc_en_upper  = (doc_en  or (doctor or "")).upper()
 
     # اسم المستشفى إنجليزي
     hosp_en   = _to_en(hospital  or "")
@@ -598,9 +659,9 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
         # عمود إنجليزي
         'admission_date_en':    start,
         'discharge_date_en':    discharge,
-        'name_en':              name_en or full_name,
+        'name_en':              name_en_upper,             # ALL CAPS مطابق للأصلي
         'nationality_en':       nat_en_,
-        'practitioner_name_en': doc_en  or (doctor    or ""),
+        'practitioner_name_en': doc_en_upper,              # ALL CAPS مطابق للأصلي
         'position_en':          spec_en or (specialty or ""),
 
         # عمود عربي
