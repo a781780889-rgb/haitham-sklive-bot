@@ -16,6 +16,7 @@ import json as _json
 import urllib.parse
 import urllib.request
 import base64
+import unicodedata
 from datetime import datetime, timedelta
 
 from pypdf import PdfReader, PdfWriter
@@ -538,18 +539,27 @@ def translate_ar_to_en(text):
     return ""
 
 
+def _to_ascii(text):
+    """تحويل أحرف Unicode الخاصة (Ā Ḥ Ḍ…) إلى ASCII لتجنب مربعات Times-Roman"""
+    if not text:
+        return ""
+    # NFKD decomposition ثم حذف علامات الضبط
+    normalized = unicodedata.normalize('NFKD', str(text))
+    ascii_text = normalized.encode('ascii', 'ignore').decode('ascii')
+    return ascii_text.strip() or str(text).strip()
+
 def _to_en(text):
     if not text:
         return ""
     if not _has_arabic(text):
-        return str(text).strip()
+        return _to_ascii(str(text).strip())
     found = _lookup_title(text)
     if found:
-        return found.strip()
+        return _to_ascii(found.strip())
     result = translate_ar_to_en(text)
     if result and not _has_arabic(result):
-        return result.strip()
-    return str(text).strip()
+        return _to_ascii(result.strip())
+    return _to_ascii(str(text).strip())
 
 
 # ══════════════════════════════════════════════════════════════
