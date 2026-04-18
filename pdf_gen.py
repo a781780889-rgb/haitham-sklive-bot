@@ -236,6 +236,32 @@ def format_weekday_date(dt=None):
     return dt.strftime("%A, %d %B %Y")
 
 
+def _normalize_time(t):
+    """
+    ينظّف صيغة الوقت وتوحيدها:
+      11/43AM  → 11:43 AM
+      4:14PM   → 4:14 PM
+      16:14    → 4:14 PM
+    """
+    if not t:
+        return t
+    t = str(t).strip()
+    # استبدال / أو . بـ : في الوقت
+    t = re.sub(r'^(\d{1,2})[/\.](\d{2})', r'\1:\2', t)
+    # إضافة مسافة قبل AM/PM إذا لم تكن موجودة
+    t = re.sub(r'(\d)(AM|PM|am|pm)', r'\1 \2', t)
+    # تحويل am/pm لحروف كبيرة
+    t = re.sub(r'\b(am|pm)\b', lambda m: m.group().upper(), t, flags=re.IGNORECASE)
+    # إذا كان الوقت بصيغة 24 ساعة بدون AM/PM، نحوّله
+    m24 = re.match(r'^(\d{1,2}):(\d{2})$', t)
+    if m24:
+        h, mi = int(m24.group(1)), m24.group(2)
+        suffix = "PM" if h >= 12 else "AM"
+        h12 = h % 12 or 12
+        t = f"{h12}:{mi} {suffix}"
+    return t
+
+
 # ══════════════════════════════════════════════════════════════
 # خرائط الترجمة
 # ══════════════════════════════════════════════════════════════
@@ -562,9 +588,11 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
     duration_en = f"{days} {dwe} ( {start} to {end} )"
 
     ar_day_word = "يوم" if days == 1 else "أيام"
-    dur_s       = f"{_LRM}{start}{_LRM}"
-    dur_e       = f"{_LRM}{end}{_LRM}"
-    duration_ar = f"{days} {ar_day_word} ({dur_s} الى {dur_e})"
+    # في سياق RTL يعكس BiDi ترتيب الكتل — نكتب (end الى start) في النص المصدر
+    # حتى يظهر بعد المعالجة كـ (start الى end) قراءةً من اليمين لليسار
+    dur_s = f"{_LRM}{start}{_LRM}"
+    dur_e = f"{_LRM}{end}{_LRM}"
+    duration_ar = f"{days} {ar_day_word} ({dur_e} \u0627\u0644\u0649 {dur_s})"
 
     # ── الترجمة ─────────────────────────────────────────────────
     name_en   = _to_en(full_name)
@@ -575,11 +603,31 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
     # اسم المستشفى إنجليزي
     hosp_en   = _to_en(hospital  or "")
 
+    # إذا فشلت الترجمة وعاد نص مشابه للعربي المكسور، نتركه فارغاً
+    def _clean_en(t):
+        """يُزيل النص الإنجليزي إذا كان يحتوي على حروف عربية أو كان مجرد ترجمة صوتية مشوّهة"""
+        if not t:
+            return ""
+        if _has_arabic(t):
+            return ""
+        # إذا النتيجة لا تحتوي على أي حرف إنجليزي حقيقي
+        if not re.search(r'[A-Za-z]', t):
+            return ""
+        return t.strip()
+
+    name_en  = _clean_en(name_en)
+    doc_en   = _clean_en(doc_en)
+    spec_en  = _clean_en(spec_en)
+    hosp_en  = _clean_en(hosp_en)
+
     # رقم الترخيص (11 رقم)
     lic_num   = license_number or gen_license_number()
 
-    # الوقت والتاريخ
-    _time_str = str(issue_time or "").strip() or issue_dt.strftime("%I:%M %p")
+    # الوقت والتاريخ — تطبيع الصيغة لتصبح "H:MM AM/PM"
+    _raw_time = str(issue_time or "").strip()
+    _time_str = _normalize_time(_raw_time) or issue_dt.strftime("%I:%M %p")
+    # إزالة الصفر البادئ من الساعة إذا وُجد (09:30 → 9:30)
+    _time_str = re.sub(r'^0(\d:)', r'\1', _time_str)
 
     # صيغة التاريخ: Thursday, 26 March 2026
     weekday_date = format_weekday_date(issue_dt)
@@ -600,8 +648,8 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
         'discharge_date_en':    discharge,
         'name_en':              name_en or full_name,
         'nationality_en':       nat_en_,
-        'practitioner_name_en': doc_en  or (doctor    or ""),
-        'position_en':          spec_en or (specialty or ""),
+        'practitioner_name_en': doc_en  or "",
+        'position_en':          spec_en or "",
 
         # عمود عربي
         'admission_date_ar':    start,
@@ -614,7 +662,7 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
 
         # قسم المستشفى
         'hospital_name_ar':     hospital  or "",
-        'hospital_name_en':     hosp_en if hosp_en and not any('\u0600' <= c <= '\u06FF' for c in hosp_en) else "",
+        'hospital_name_en':     hosp_en if hosp_en and not _has_arabic(hosp_en) else "",
         'license_label':        ": رقم الترخيص",
         'license_number':       lic_num,
 
