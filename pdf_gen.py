@@ -782,9 +782,9 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
     duration_en = f"{days} {dwe} ( {start} to {end} )"
 
     ar_day_word = "يوم" if days == 1 else "أيام"
-    dur_s       = f"{_LRM}{start}{_LRM}"
-    dur_e       = f"{_LRM}{end}{_LRM}"
-    # الرقم في نهاية السلسلة المنطقية → يظهر بشكل صحيح بعد BiDi
+    dur_s       = start
+    dur_e       = end
+    # بدون LRM لتجنب ظهوره كرمز مرئي في قارئات PDF
     duration_ar = f"({dur_s} الى {dur_e}) {ar_day_word} {days}"
 
     # ── التواريخ الهجرية للعمود الأول (المستطيل الأول) ────────────
