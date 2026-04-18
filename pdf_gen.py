@@ -693,8 +693,8 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
         except Exception:
             pass
 
-    # ─── QR Code ───────────────────────────────────────────────
-    if qr_img:
+    # ─── QR Code (مُعطَّل) ─────────────────────────────────────
+    if False and qr_img:
         try:
             buf = io.BytesIO()
             qr_img.save(buf, 'PNG')
@@ -860,7 +860,7 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
     overlay_tmp = os.path.join(TEMP_DIR, f"overlay_{uid}.pdf")
 
     try:
-        qr_img = make_qr_image(website_url)
+        qr_img = None  # QR Code مُعطَّل
         _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_tmp)
 
         template_reader = PdfReader(template_path)
