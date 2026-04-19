@@ -1341,11 +1341,17 @@ async def ask_patient_data(update, context):
     specialty = context.user_data.get("selected_doctor_specialty", "—")
     context.user_data["state"] = "collecting_data"
     context.user_data["order_data"] = {}
-    fields = "\n".join([f"- {f['label']}: {f['example']}" for f in ORDER_FIELDS])
+    lines = []
+    for f in ORDER_FIELDS:
+        if f["key"] in OPTIONAL_FIELDS:
+            lines.append(f"- {f['label']}: *(اختياري)*")
+        else:
+            lines.append(f"- {f['label']}: ")
+    fields = "\n".join(lines)
     await update.message.reply_text(
-        f"✅ *{hospital}*\n👨‍⚕️ {doctor} — {specialty}\n\n"
-        f"أرسل بيانات المريض:\n\n"
-        f"📋 *مثال شامل:*\n{fields}",
+        f"\u2705 *{hospital}*\n\U0001f468\u200d\u2695\ufe0f {doctor} \u2014 {specialty}\n\n"
+        f"\u0623\u0631\u0633\u0644 \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0645\u0631\u064a\u0636:\n\n"
+        f"\U0001f4cb *\u0627\u0646\u0633\u062e \u0627\u0644\u0642\u0627\u0644\u0628 \u0648\u0623\u0643\u0645\u0644 \u0627\u0644\u0628\u064a\u0627\u0646\u0627\u062a:*\n{fields}",
         parse_mode="Markdown", reply_markup=back_keyboard()
     )
 
