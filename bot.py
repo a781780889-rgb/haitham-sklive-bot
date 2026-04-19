@@ -644,6 +644,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text == "📝 إرسال طلب جديد /go":
         context.user_data.clear()
+        user_check = db.get_user(uid)
+        price_check = get_scaffold_price()
+        if user_check and user_check.get("balance", 0) < price_check:
+            # رصيد غير كافٍ → عرض قائمة الشحن مباشرة
+            await show_charge_menu(update, context, uid)
+            return
         context.user_data["state"] = "choose_city"
         await update.message.reply_text(
             "🏥 *اختر المدينة أو ابحث عن المستشفى:*",
@@ -1163,7 +1169,8 @@ async def show_charge_menu(update, context, uid):
         f"━━━━━━━━━━━━━━━━━━\n"
         f"📦 *الباقات المتاحة:*\n\n{pkg_lines}\n\n"
         f"━━━━━━━━━━━━━━━━━━\n"
-        f"اختر الباقة التي تناسبك:",
+        f"اختر الباقة التي تناسبك:\n"
+        f"للتواصل: هيثم العقلاني واتس: `781780889`",
         parse_mode="Markdown", reply_markup=packages_keyboard()
     )
     context.user_data["state"] = "charge_select_package"
