@@ -327,6 +327,25 @@ def safe_int(v, d=1):
         return int(m.group()) if m else d
 
 
+# ══════════════════════════════════════════════════════════════
+# تحويل الأرقام العربية/الفارسية إلى أرقام غربية (إنجليزية)
+# Arabic-Indic & Extended Arabic-Indic → Western digits
+# ══════════════════════════════════════════════════════════════
+_AR_DIGITS = str.maketrans(
+    '٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹',
+    '01234567890123456789'
+)
+
+def to_western_nums(text):
+    """
+    يحوّل الأرقام العربية-الهندية (٠-٩) والفارسية (۰-۹)
+    إلى أرقام غربية (0-9) في أي نص.
+    """
+    if not text:
+        return text
+    return str(text).translate(_AR_DIGITS)
+
+
 def calc_dates(s, days, ex=None):
     for fmt in ["%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%d/%m/%y"]:
         try:
@@ -685,7 +704,7 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
         value = field_values.get(slot_id)
         if not value:
             continue
-        text_str = str(value).strip()
+        text_str = to_western_nums(str(value).strip())
         if not text_str:
             continue
 
