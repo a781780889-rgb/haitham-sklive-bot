@@ -2037,6 +2037,9 @@ async def handle_logos(update, context, text, uid):
             else:
                 context.user_data["logo_hospital"] = matched["name"]
                 context.user_data["state"] = "admin_logo_upload"
+                # اسم المستشفى طويل جداً للـ callback_data (حد 64 بايت)
+                # نخزنه في user_data ونستخدم مفتاح قصير
+                context.user_data["logo_target"] = matched["name"]
                 await update.message.reply_text(
                     f"✅ المستشفى: *{matched['name']}*\n\n"
                     f"اختر طريقة إضافة الشعار:",
@@ -2044,11 +2047,11 @@ async def handle_logos(update, context, text, uid):
                     reply_markup=InlineKeyboardMarkup([
                         [InlineKeyboardButton(
                             "🔍 بحث عن الشعار في جوجل",
-                            callback_data=f"search_logo:{matched['name']}"
+                            callback_data="search_logo_curr"
                         )],
                         [InlineKeyboardButton(
                             "📤 رفع صورة يدوياً",
-                            callback_data=f"manual_logo:{matched['name']}"
+                            callback_data="manual_logo_curr"
                         )],
                     ])
                 )
@@ -3111,8 +3114,16 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await generate_and_send_pdf(update, context, uid)
 
     # ── بحث عن شعار المستشفى
-    elif data.startswith("search_logo:"):
-        hospital_name = data[len("search_logo:"):]
+    elif data == "search_logo_curr" or data.startswith("search_logo:"):
+        if data == "search_logo_curr":
+            hospital_name = context.user_data.get("logo_target", "")
+        else:
+            hospital_name = data[len("search_logo:"):]
+
+        if not hospital_name:
+            await query.answer("❌ انتهت الجلسة، اختر المستشفى مجدداً", show_alert=True)
+            return
+
         context.user_data["logo_hospital"] = hospital_name
         context.user_data["state"] = "admin_logo_upload"
 
@@ -3221,8 +3232,16 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             )
 
     # ── رفع الشعار يدوياً (بعد الاختيار من القائمة)
-    elif data.startswith("manual_logo:"):
-        hospital_name = data[len("manual_logo:"):]
+    elif data == "manual_logo_curr" or data.startswith("manual_logo:"):
+        if data == "manual_logo_curr":
+            hospital_name = context.user_data.get("logo_target", "")
+        else:
+            hospital_name = data[len("manual_logo:"):]
+
+        if not hospital_name:
+            await query.answer("❌ انتهت الجلسة، اختر المستشفى مجدداً", show_alert=True)
+            return
+
         context.user_data["logo_hospital"] = hospital_name
         context.user_data["state"] = "admin_logo_upload"
         await query.message.reply_text(
