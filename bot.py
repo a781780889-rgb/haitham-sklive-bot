@@ -1664,14 +1664,30 @@ async def handle_admin_router(update, context, text, uid, name):
             await update.message.reply_text("🖼️ *شعارات المستشفيات*", parse_mode="Markdown", reply_markup=logos_keyboard())
         elif text == "🏥 إدارة المستشفيات":
             context.user_data["state"] = "admin_hospitals"
-            await show_hospitals_admin(update)
+            try:
+                await show_hospitals_admin(update)
+            except Exception as e:
+                logger.error(f"خطأ إدارة المستشفيات: {e}")
+                await update.message.reply_text(
+                    "🏥 *إدارة المستشفيات*\n\nاختر العملية:",
+                    parse_mode="Markdown",
+                    reply_markup=ReplyKeyboardMarkup([
+                        [KeyboardButton("➕ إضافة مستشفى جديد")],
+                        [KeyboardButton("📋 عرض جميع المستشفيات")],
+                        [KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")],
+                    ], resize_keyboard=True)
+                )
         elif text == "👨‍⚕️ إدارة الأطباء":
             context.user_data["state"] = "admin_doctors"
-            hospitals = db.get_all_hospitals()
-            await update.message.reply_text(
-                "👨‍⚕️ *إدارة الأطباء*\n\nاختر المستشفى:",
-                parse_mode="Markdown", reply_markup=doctors_admin_keyboard(hospitals)
-            )
+            try:
+                hospitals = db.get_all_hospitals()
+                await update.message.reply_text(
+                    "👨‍⚕️ *إدارة الأطباء*\n\nاختر المستشفى:",
+                    parse_mode="Markdown", reply_markup=doctors_admin_keyboard(hospitals)
+                )
+            except Exception as e:
+                logger.error(f"خطأ إدارة الأطباء: {e}")
+                await update.message.reply_text("👨‍⚕️ *إدارة الأطباء*\n\nاختر المستشفى:", parse_mode="Markdown", reply_markup=doctors_admin_keyboard([]))
         elif text == "👥 المستخدمين":
             context.user_data["state"] = "admin_users"
             await update.message.reply_text("👥 *إدارة المستخدمين*", parse_mode="Markdown", reply_markup=users_admin_keyboard())
@@ -2094,7 +2110,7 @@ async def show_hospitals_admin(update):
     for h in hospitals:
         status = "✅" if h.get("status") == "active" else "⏸"
         logo   = "🖼" if h.get("logo_path") and os.path.exists(h.get("logo_path", "")) else "  "
-        lines.append(f"{status}{logo} {h['name']} — {h['city']} ({h.get('hospital_type','')})")
+        lines.append(f"{status}{logo} {md_escape(h['name'])} — {md_escape(h['city'])} ({md_escape(h.get('hospital_type',''))})")
     txt = "\n".join(lines) if lines else "لا توجد مستشفيات"
     await update.message.reply_text(
         f"🏥 *المستشفيات ({len(hospitals)}):*\n\n{txt}\n\nاضغط ➕ لإضافة مستشفى جديد:",

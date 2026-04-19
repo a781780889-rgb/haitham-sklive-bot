@@ -879,7 +879,8 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
     lic_num   = license_number or gen_license_number()
 
     # الوقت والتاريخ
-    _time_str = str(issue_time or "").strip() or issue_dt.strftime("%I:%M %p")
+    _time_str = str(issue_time or "").strip()
+    _time_str = _time_str if (_time_str and "اختياري" not in _time_str) else issue_dt.strftime("%I:%M %p")
 
     # صيغة التاريخ: Thursday, 26 March 2026
     weekday_date = format_weekday_date(issue_dt)
