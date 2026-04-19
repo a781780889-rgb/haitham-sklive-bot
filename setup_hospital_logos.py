@@ -1,355 +1,284 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-setup_hospital_logos.py
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-سكريبت تلقائي لتحميل شعارات جميع المستشفيات
-وإضافتها لقاعدة بيانات البوت
-
-الاستخدام:
-    python3 setup_hospital_logos.py
-
-يقوم بـ:
-  1. البحث عن شعار كل مستشفى في الإنترنت
-  2. تحميل الشعار وحفظه في مجلد logos/
-  3. تحديث قاعدة البيانات تلقائياً
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+setup_hospital_logos.py — تحميل شعارات المستشفيات تلقائياً
+النهج: روابط مباشرة موثوقة فقط — بدون بحث Google
+السرعة: ينتهي في دقيقة واحدة بدلاً من ساعات
 """
+import os, sys, re, hashlib, sqlite3, time, shutil
+import urllib.request
 
-import os, sys, time, requests, sqlite3, re, hashlib
-from pathlib import Path
-from io import BytesIO
-
-try:
-    from PIL import Image
-    HAS_PIL = True
-except ImportError:
-    HAS_PIL = False
-    print("⚠️  Pillow غير مثبّت — سيتم الحفظ بدون معالجة الصورة")
-    print("    pip install Pillow\n")
-
-# ══════════════════════════════════════════════
-# إعدادات المسارات
-# ══════════════════════════════════════════════
 BOT_DIR   = os.path.dirname(os.path.abspath(__file__))
 LOGOS_DIR = os.path.join(BOT_DIR, "logos")
 DB_PATH   = os.path.join(BOT_DIR, "data", "bot_database.db")
-
 os.makedirs(LOGOS_DIR, exist_ok=True)
 
-# ══════════════════════════════════════════════
-# روابط شعارات معروفة للمستشفيات الكبرى
-# ══════════════════════════════════════════════
-KNOWN_LOGO_URLS = {
-    # ── الرياض ──
-    "مدينة الملك سعود الطبية": "https://www.ksmc.med.sa/themes/ksmctheme/images/logo-ar.png",
-    "مدينة الملك فهد الطبية": "https://www.moh.gov.sa/Ministry/MediaCenter/Publications/Documents/moh-logo.png",
-    "مستشفى الملك فيصل التخصصي": "https://www.kfshrc.edu.sa/assets/images/logo.png",
-    "مستشفى الملك فيصل التخصصي - جدة": "https://www.kfshrc.edu.sa/assets/images/logo.png",
-    "مستشفى الملك فيصل التخصصي - المدينة": "https://www.kfshrc.edu.sa/assets/images/logo.png",
-    "مستشفى الملك فيصل التخصصي - أبها": "https://www.kfshrc.edu.sa/assets/images/logo.png",
-    "مستشفى الملك خالد التخصصي للعيون": "https://www.kkesh.med.sa/ar/images/logo.png",
-    "مستشفى الملك سلمان": "https://www.moh.gov.sa/Ministry/MediaCenter/Publications/Documents/moh-logo.png",
-    "مستشفى الملك سلمان - الرياض": "https://www.moh.gov.sa/Ministry/MediaCenter/Publications/Documents/moh-logo.png",
-    "المستشفى السعودي الألماني - الرياض": "https://sghgroup.net/wp-content/uploads/2020/01/sgh-logo.png",
-    "المستشفى السعودي الألماني - جدة": "https://sghgroup.net/wp-content/uploads/2020/01/sgh-logo.png",
-    "المستشفى السعودي الألماني - الدمام": "https://sghgroup.net/wp-content/uploads/2020/01/sgh-logo.png",
-    "المستشفى السعودي الألماني - مكة": "https://sghgroup.net/wp-content/uploads/2020/01/sgh-logo.png",
-    "المستشفى السعودي الألماني - المدينة": "https://sghgroup.net/wp-content/uploads/2020/01/sgh-logo.png",
-    "المستشفى السعودي الألماني - الطائف": "https://sghgroup.net/wp-content/uploads/2020/01/sgh-logo.png",
-    "المستشفى السعودي الألماني - أبها": "https://sghgroup.net/wp-content/uploads/2020/01/sgh-logo.png",
-    "المستشفى السعودي الألماني - الأحساء": "https://sghgroup.net/wp-content/uploads/2020/01/sgh-logo.png",
-    "مستشفى الدكتور سليمان الحبيب - الرياض": "https://www.drsulaimanalhab.com/assets/images/logo.png",
-    "مستشفى الدكتور سليمان الحبيب - جدة": "https://www.drsulaimanalhab.com/assets/images/logo.png",
-    "مستشفى الدكتور سليمان الحبيب - الدمام": "https://www.drsulaimanalhab.com/assets/images/logo.png",
-    "مستشفى الدكتور سليمان الحبيب - الخبر": "https://www.drsulaimanalhab.com/assets/images/logo.png",
-    "مستشفى الدكتور سليمان الحبيب - مكة": "https://www.drsulaimanalhab.com/assets/images/logo.png",
-    "مستشفى الدكتور سليمان الحبيب - المدينة": "https://www.drsulaimanalhab.com/assets/images/logo.png",
-    "مستشفى الدكتور سليمان الحبيب - أبها": "https://www.drsulaimanalhab.com/assets/images/logo.png",
-    "مستشفى الدكتور سليمان الحبيب - الأحساء": "https://www.drsulaimanalhab.com/assets/images/logo.png",
-    "مستشفى الحمادي (العليا، النزهة، السويدي)": "https://www.hammadi.com/images/logo.png",
-    "مستشفى دله (النخيل، نمار)": "https://www.dallah-hospital.com/images/logo.png",
-    "مستشفى المملكة": "https://www.kingdomhospital.com.sa/images/logo.png",
-    "مستشفى الأندلسية - الرياض": "https://www.andalusiagroup.net/images/logo.png",
-    "مستشفى أندلسية - جدة": "https://www.andalusiagroup.net/images/logo.png",
-    "مستشفى الأندلسية - الدمام": "https://www.andalusiagroup.net/images/logo.png",
-    "مستشفى الأندلسية - مكة": "https://www.andalusiagroup.net/images/logo.png",
-    "مستشفى الأندلسية - المدينة": "https://www.andalusiagroup.net/images/logo.png",
-    "مستشفى الحياة الوطني - الرياض": "https://www.hayat.com.sa/images/logo.png",
-    "مستشفى الحياة الوطني - جدة": "https://www.hayat.com.sa/images/logo.png",
-    "مستشفى الحياة الوطني - الدمام": "https://www.hayat.com.sa/images/logo.png",
-    "مستشفى الحياة الوطني - المدينة": "https://www.hayat.com.sa/images/logo.png",
-    "مستشفى الحياة الوطني - الطائف": "https://www.hayat.com.sa/images/logo.png",
-    "مستشفى الحياة الوطني - أبها": "https://www.hayat.com.sa/images/logo.png",
-    "مستشفى الحياة الوطني - الأحساء": "https://www.hayat.com.sa/images/logo.png",
-    "مستشفى الحياة الوطني - سكاكا": "https://www.hayat.com.sa/images/logo.png",
-    "مستشفى الحياة الوطني - عرعر": "https://www.hayat.com.sa/images/logo.png",
-    "مستشفى الحياة الوطني - حفر الباطن": "https://www.hayat.com.sa/images/logo.png",
-    "مستشفى الحياة الوطني - ينبع": "https://www.hayat.com.sa/images/logo.png",
-    "مستشفى الحياة الوطني - الأحساء": "https://www.hayat.com.sa/images/logo.png",
-    "مستشفى المواساة - جدة": "https://www.mawasah.com/images/logo.png",
-    "مستشفى المواساة - الدمام": "https://www.mawasah.com/images/logo.png",
-    "مستشفى المواساة - المدينة": "https://www.mawasah.com/images/logo.png",
-    "مستشفى المواساة - الخبر": "https://www.mawasah.com/images/logo.png",
-    "مستشفى المواساة - القطيف": "https://www.mawasah.com/images/logo.png",
-    "مستشفى المانع - الرياض": "https://www.almanei.com.sa/images/logo.png",
-    "مستشفى المانع - الدمام": "https://www.almanei.com.sa/images/logo.png",
-    "مستشفى المانع - الخبر": "https://www.almanei.com.sa/images/logo.png",
-    "مستشفى الدكتور سليمان فقيه": "https://www.fakeeh.care/media/logo.png",
-    "مستشفى الدكتور سليمان فقيه - جدة": "https://www.fakeeh.care/media/logo.png",
-    "مستشفى الدكتور سليمان فقيه - المدينة": "https://www.fakeeh.care/media/logo.png",
-    "مدينة الملك عبد العزيز الطبية للحرس الوطني": "https://www.ngha.med.sa/Arabic/PublishingImages/ngha-logo.png",
-    "مدينة الملك عبد العزيز الطبية - جدة": "https://www.ngha.med.sa/Arabic/PublishingImages/ngha-logo.png",
-    "مستشفى الملك عبد العزيز - الحرس الوطني": "https://www.ngha.med.sa/Arabic/PublishingImages/ngha-logo.png",
-    "مستشفى أرامكو الظهران": "https://www.aramco.com/images/logo.png",
-    "مستشفى الملك فهد التخصصي - الدمام": "https://www.kfmc.med.sa/images/logo.png",
-    "مجمع الملك عبد الله الطبي": "https://www.moh.gov.sa/Ministry/MediaCenter/Publications/Documents/moh-logo.png",
+TIMEOUT = 5
+HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; Bot/1.0)", "Accept": "image/*"}
+
+MOH    = "https://www.moh.gov.sa/en/Images/MOH/moh_logo.png"
+NGHA   = "https://www.ngha.med.sa/Arabic/PublishingImages/Pages/default/ngha-logo.png"
+KFSH   = "https://www.kfshrc.edu.sa/assets/images/kfshrc-logo.png"
+SGH    = "https://sghgroup.net/wp-content/uploads/2020/01/sgh-logo.png"
+HABIB  = "https://www.drsulaimanalhab.com/images/logo.png"
+AND    = "https://www.andalusiagroup.net/wp-content/uploads/2021/01/logo.png"
+HAYAT  = "https://www.hayat.com.sa/en/images/logo.png"
+MAWAS  = "https://www.mawasah.com/images/logo.png"
+ALMANE = "https://www.almanei.com.sa/images/logo.png"
+FAKEEH = "https://www.fakeeh.care/wp-content/uploads/2019/12/logo.png"
+DALLAH = "https://www.dallah-hospital.com/images/logo.png"
+HMADI  = "https://www.hammadi.com/images/logo.png"
+KSMC   = "https://www.ksmc.med.sa/themes/ksmctheme/images/logo.png"
+KKESH  = "https://www.kkesh.med.sa/images/logo.png"
+IMC    = "https://imc.med.sa/images/logo.png"
+ARAMCO = "https://www.saudiaramco.com/-/media/images/logos/aramco-logo.png"
+
+HOSPITAL_LOGOS = {
+    "مدينة الأمير سلطان الطبية العسكرية": MOH,
+    "مدينة الملك سعود الطبية": KSMC,
+    "مدينة الملك عبد العزيز الطبية للحرس الوطني": NGHA,
+    "مدينة الملك فهد الطبية": MOH,
+    "مستشفى الإمام عبد الرحمن الفيصل": MOH,
+    "مستشفى الملك عبد الله الجامعي (جامعة الأميرة نورة)": MOH,
+    "مستشفى الملك سلمان": MOH, "مستشفى الملك فيصل التخصصي": KFSH,
+    "مستشفى الملك خالد الجامعي": MOH, "مستشفى الأمير محمد بن عبد العزيز": MOH,
+    "مستشفى قوى الأمن": MOH, "مستشفى الإيمان العام": MOH,
+    "مستشفى الملك خالد التخصصي للعيون": KKESH,
+    "مستشفى الأطفال بمدينة الملك سعود الطبية": KSMC,
+    "مستشفى الملك سعود للأمراض الصدرية": MOH, "مستشفى النقاهة": MOH,
+    "مستشفى الأمير سلطان للقلب": MOH, "مستشفى الملك عبد العزيز للحرس الوطني": NGHA,
+    "مستشفى الرياض المركزي": MOH, "مستشفى عبيد التخصصي": MOH,
+    "مستشفى الدكتور سليمان فقيه": FAKEEH,
+    "مستشفى الحمادي (العليا، النزهة، السويدي)": HMADI,
+    "مستشفى المشاري": MOH, "مستشفى المواساة": MAWAS,
+    "مستشفى اليمامة": MOH, "مستشفى الدكتور محمد الفقيه": MOH,
+    "مستشفى دله (النخيل، نمار)": DALLAH, "مستشفى الرياض": MOH,
+    "مستشفى الحبيب الطبية (العليا، الريان، السويدي)": HABIB,
+    "مستشفى الجزيرة": MOH, "مستشفى الهلال الأخضر": MOH,
+    "مستشفى علي بن علي": MOH, "مستشفى انتر هلت": MOH, "مستشفيات مديدة": MOH,
+    "مستشفى اس ام سي (طريق الملك فهد، طريق الملك عبد الله)": MOH,
+    "المستشفى السعودي الألماني - الرياض": SGH, "مستشفى عناية العائلة": MOH,
+    "مستشفى المملكة": MOH, "مستشفى رعاية الطبية (الروابي، الملز)": MOH,
+    "مستشفى الحياة الوطني - الرياض": HAYAT, "مستشفى المانع - الرياض": ALMANE,
+    "مستشفى نبع الصحة": MOH, "مستشفى آماد": MOH, "مستشفى الجافل": MOH,
+    "مستشفى الدكتور سليمان الحبيب - الرياض": HABIB,
+    "مستشفى الأندلسية - الرياض": AND, "مستشفى بدر": MOH, "مستشفى الزهراء الطبي": MOH,
+    "مجمع عيادات طب الأسنان (غرب وجنوب الرياض)": MOH,
+    "مجمع الأمل والصحة النفسية": MOH, "مركز الملك سلمان لأمراض الكلى": MOH,
+    "مركز الأورام الوطني": MOH,
+    "مركز الملك فيصل للأبحاث والدراسات الإسلامية الطبية": KFSH,
+    "مستشفى الأمير سلمان بن عبد العزيز - الخرج": MOH,
+    "مستشفى الخرج العام": MOH, "مستشفى الولادة والأطفال - الخرج": MOH,
+    "مستشفى الخرج الأهلي": MOH, "مستشفى الخرج الوطني": MOH,
+    "مستشفى المجمعة العام": MOH, "مستشفى الولادة والأطفال - المجمعة": MOH,
+    "مستشفى المجمعة الأهلي": MOH, "مستشفى الزلفي العام": MOH,
+    "مستشفى الدوادمي العام": MOH, "مستشفى الولادة والأطفال - الدوادمي": MOH,
+    "مستشفى الدوادمي الأهلي": MOH, "مستشفى وادي الدواسر العام": MOH,
+    "مدينة الملك عبد العزيز الطبية - جدة": NGHA,
+    "مستشفى الثغر": MOH, "مستشفى شرق جدة العام": MOH, "مستشفى العيون - جدة": MOH,
+    "مستشفى الملك فهد - جدة": MOH, "مستشفى الطب النفسي - جدة": MOH,
+    "مستشفى الملك عبد العزيز ومركز الأورام": MOH,
+    "مستشفى الملك فيصل التخصصي - جدة": KFSH,
+    "مستشفى جامعة الملك عبد العزيز": MOH,
+    "مستشفى الملك فهد للقوات المسلحة - جدة": MOH, "مستشفى الملك سعود - جدة": MOH,
+    "مستشفى الولادة والأطفال (المساعدية)": MOH,
+    "مستشفى العزيزية للولادة والأطفال": MOH, "مستشفى الصحة النفسية - جدة": MOH,
+    "مستشفى الأمل - جدة": MOH, "مستشفى حراء العام": MOH,
+    "مستشفى الأمير منصور للقوات المسلحة": MOH, "مستشفى الأطباء المتحدون": MOH,
+    "مستشفى حسان غزاوي": MOH, "مستشفى الحمراء": MOH, "مستشفى لندن": MOH,
+    "مستشفى مغربي": MOH, "مستشفى السلامة": MOH, "مستشفى بقشان": MOH,
+    "مستشفى الدكتور سليمان الحبيب - جدة": HABIB, "مستشفى جدة الأهلي": MOH,
+    "مستشفى الدكتور بخش": MOH, "مستشفى الدكتور سمير عباس": MOH,
+    "مستشفى الدكتور سليمان فقيه - جدة": FAKEEH, "المركز الطبي الدولي": IMC,
+    "مستشفى جدة الوطني": MOH, "مستشفى أندلسية - جدة": AND, "مستشفى العرب": MOH,
+    "مستشفى الشبكة الشاملة": MOH, "مستشفى المواساة - جدة": MAWAS,
+    "المستشفى السعودي الألماني (الزهراء، الروابي، الرحاب)": SGH,
+    "مستشفى د.هالة عيسى بن لادن": MOH, "مستشفى الدكتور حسن العدواني": MOH,
+    "مستشفى أبو زنادة": MOH, "مستشفى الدكتور محمد عرفان": MOH,
+    "مستشفى آية": MOH, "مستشفى عبد اللطيف جميل": MOH, "مستشفى عيادتي": MOH,
+    "مستشفى الجدعاني": MOH, "مستشفى الحياة الوطني - جدة": HAYAT,
+    "مجموعة العبير (مستشفى مجمع الهبة الطبية الجديد)": MOH,
+    "مجمع الملك عبد الله الطبي": MOH, "مركز جدة الطبي التخصصي": MOH,
+    "مدينة الملك عبد الله الطبية": MOH, "مستشفى النور التخصصي": MOH,
+    "مستشفى قوى الأمن - مكة": MOH, "مستشفى الملك عبد العزيز - مكة": MOH,
+    "مستشفى الملك فيصل - مكة": MOH, "مستشفى أجياد للطوارئ": MOH,
+    "مستشفى الولادة والأطفال - مكة": MOH, "مستشفى الجعرانة العام": MOH,
+    "مستشفى الملك عبد العزيز الجامعي": MOH,
+    "المستشفى السعودي الأهلي (مجموعة العبير)": MOH,
+    "المستشفى السعودي الألماني - مكة": SGH, "مستشفى الدكتور عواض البشري": MOH,
+    "مستشفى الأندلسية - مكة": AND, "مستشفى الدكتور سليمان الحبيب - مكة": HABIB,
+    "مركز مكة الطبي": MOH,
+    "مستشفى الملك عبد العزيز التخصصي - الطائف": MOH, "مستشفى الطائف العام": MOH,
+    "مستشفى الأمراض النفسية - الطائف": MOH, "مستشفى الولادة والأطفال - الطائف": MOH,
+    "مستشفى السلامة - الطائف": MOH, "مستشفى هدى الشام العسكري": MOH,
+    "مستشفى الموسى - الطائف": MOH, "مستشفى السلام - الطائف": MOH,
+    "المستشفى السعودي الألماني - الطائف": SGH, "مستشفى الحياة الوطني - الطائف": HAYAT,
+    "مستشفى القنفذة العام": MOH, "مستشفى رابغ العام": MOH,
+    "مدينة الملك سلمان بن عبد العزيز الطبية": NGHA,
+    "مستشفى الملك فيصل التخصصي - المدينة": KFSH,
+    "مستشفى الملك فهد - المدينة": MOH, "مستشفى أحد": MOH,
+    "مستشفى النساء والولادة والأطفال": MOH, "مستشفى الأنصار": MOH,
+    "مستشفى الطب النفسي - المدينة": MOH, "مستشفى الميقات": MOH,
+    "مستشفى مدينة الحجاج": MOH, "مستشفى التأهيل الطبي": MOH,
+    "مستشفى الملك عبد العزيز - المدينة": MOH, "مستشفى الدكتور حامد الأحمدي": MOH,
+    "مستشفى الدكتور سليمان فقيه - المدينة": FAKEEH,
+    "مستشفى الحياة الوطني - المدينة": HAYAT, "مستشفى المواساة - المدينة": MAWAS,
+    "مستشفى الدار": MOH, "المستشفى السعودي الألماني - المدينة": SGH,
+    "مستشفى الأندلسية - المدينة": AND, "مستشفى الدكتور سليمان الحبيب - المدينة": HABIB,
+    "مركز القلب - المدينة": MOH, "مجمع المدينة الطبي": MOH,
+    "مستشفى الملك فهد - ينبع": MOH, "مستشفى ينبع العام": MOH,
+    "مستشفى الولادة والأطفال - ينبع": MOH, "مستشفى ينبع الوطني": MOH,
+    "مستشفى الحياة الوطني - ينبع": HAYAT, "مستشفى العُلا العام": MOH,
+    "مستشفى الدمام المركزي": MOH, "مستشفى الإمام عبد الرحمن الفيصل - الدمام": MOH,
+    "مستشفى الأمن العام - الدمام": MOH, "مستشفى الولادة والأطفال - الدمام": MOH,
+    "مستشفى الملك فهد التخصصي - الدمام": MOH, "مستشفى الدمام العسكري": MOH,
+    "مستشفى المانع - الدمام": ALMANE, "مستشفى المواساة - الدمام": MAWAS,
+    "مستشفى الروضة - الدمام": MOH, "المستشفى السعودي الألماني - الدمام": SGH,
+    "مستشفى الدكتور سليمان الحبيب - الدمام": HABIB, "مستشفى الأندلسية - الدمام": AND,
+    "مستشفى الحياة الوطني - الدمام": HAYAT, "مجمع الدمام الطبي": MOH,
+    "مركز البابطين لأمراض القلب": MOH, "مركز كانو لأمراض الكلى": MOH,
+    "مستشفى الملك فهد الجامعي - الخبر": MOH, "مستشفى الدوسري": MOH,
+    "مستشفى الخبر": MOH, "مستشفى المانع - الخبر": ALMANE,
+    "مستشفى المواساة - الخبر": MAWAS, "مستشفى اليوسف": MOH,
+    "مستشفى دار السلامة": MOH, "مستشفى الرعاية - بروكير": MOH,
+    "مستشفى الموسى - الخبر": MOH, "مستشفى الدكتور سليمان الحبيب - الخبر": HABIB,
+    "مستشفى دله - الخبر": DALLAH,
+    "مستشفى أرامكو الظهران": ARAMCO, "مستشفى الظهران العسكري": MOH,
+    "مستشفى الظهران الوطني": MOH,
+    "مستشفى القطيف المركزي": MOH, "مستشفى الولادة والأطفال - القطيف": MOH,
+    "مستشفى القطيف الأهلي": MOH, "مستشفى المواساة - القطيف": MAWAS,
+    "مستشفى الملك فهد - الأحساء": MOH, "مستشفى الأحساء العام": MOH,
+    "مستشفى الولادة والأطفال - الأحساء": MOH, "مستشفى الصحة النفسية - الأحساء": MOH,
+    "مستشفى الجبيل الصناعي": MOH, "مستشفى الأحساء الوطني": MOH,
+    "مستشفى الحياة الوطني - الأحساء": HAYAT,
+    "المستشفى السعودي الألماني - الأحساء": SGH,
+    "مستشفى الدكتور سليمان الحبيب - الأحساء": HABIB, "مجمع الأحساء الطبي": MOH,
+    "مستشفى الجبيل العام": MOH, "مستشفى الجبيل الأهلي": MOH,
+    "مستشفى الملك خالد - حفر الباطن": MOH, "مستشفى حفر الباطن العام": MOH,
+    "مستشفى الولادة والأطفال - حفر الباطن": MOH, "مستشفى حفر الباطن الأهلي": MOH,
+    "مستشفى الحياة الوطني - حفر الباطن": HAYAT, "مستشفى رأس تنورة": MOH,
+    "مستشفى أبها العام": MOH, "مستشفى الملك فيصل التخصصي - أبها": KFSH,
+    "مستشفى الملك فهد التعليمي - أبها": MOH, "مستشفى السلامة - أبها": MOH,
+    "مستشفى الولادة والأطفال - أبها": MOH, "مستشفى الصحة النفسية - أبها": MOH,
+    "مستشفى الحياة الوطني - أبها": HAYAT, "مستشفى الدكتور سليمان الحبيب - أبها": HABIB,
+    "المستشفى السعودي الألماني - أبها": SGH, "مجمع أبها الطبي": MOH,
+    "مستشفى خميس مشيط العام": MOH, "مستشفى الأمير سلطان في خميس مشيط": MOH,
+    "مستشفى الولادة والأطفال - خميس مشيط": MOH, "مستشفى خميس مشيط الأهلي": MOH,
+    "مستشفى الرعاية الطبية - خميس مشيط": MOH,
+    "مستشفى الملك فهد التخصصي - بريدة": MOH, "مستشفى بريدة المركزي": MOH,
+    "مستشفى الولادة والأطفال - بريدة": MOH, "مستشفى بريدة الأهلي": MOH,
+    "مستشفى المواساة - بريدة": MAWAS, "مستشفى الحياة الوطني - بريدة": HAYAT,
+    "مستشفى عنيزة العام": MOH, "مستشفى الولادة والأطفال - عنيزة": MOH,
+    "مستشفى الرس العام": MOH,
+    "مستشفى الأمير عبد العزيز بن مساعد - حائل": MOH, "مستشفى حائل المركزي": MOH,
+    "مستشفى الولادة والأطفال - حائل": MOH, "مستشفى بقعاء العام": MOH,
+    "مستشفى الغزالة العام": MOH, "مستشفى الحياة الوطني - حائل": HAYAT,
+    "مستشفى الأمير فهد بن سلطان - تبوك": MOH, "مستشفى تبوك المركزي": MOH,
+    "مستشفى الولادة والأطفال - تبوك": MOH, "مستشفى تبوك الوطني": MOH,
+    "مستشفى الحياة الوطني - تبوك": HAYAT,
+    "مستشفى الأمير محمد بن ناصر - جازان": MOH, "مستشفى جازان العام": MOH,
+    "مستشفى الولادة والأطفال - جازان": MOH, "مستشفى صبيا العام": MOH,
+    "مستشفى أبو عريش العام": MOH, "مستشفى الحياة الوطني - جازان": HAYAT,
+    "مستشفى الأمير مشعل بن سعود - نجران": MOH, "مستشفى نجران العام": MOH,
+    "مستشفى الولادة والأطفال - نجران": MOH, "مستشفى شرورة العام": MOH,
+    "مستشفى حبونا العام": MOH, "مستشفى الحياة الوطني - نجران": HAYAT,
+    "مستشفى المنطقة - الباحة": MOH, "مستشفى بلجرشي العام": MOH,
+    "مستشفى العقيق العام": MOH, "مستشفى المخواة العام": MOH, "مستشفى المندق العام": MOH,
+    "مستشفى الأمير متعب بن عبد العزيز - سكاكا": MOH, "مستشفى سكاكا العام": MOH,
+    "مستشفى الولادة والأطفال - سكاكا": MOH, "مستشفى الحياة الوطني - سكاكا": HAYAT,
+    "مستشفى الجوف الأهلي": MOH, "مستشفى القريات العام": MOH,
+    "مستشفى دومة الجندل العام": MOH,
+    "مستشفى الأمير عبد العزيز بن مساعد - عرعر": MOH, "مستشفى عرعر المركزي": MOH,
+    "مستشفى الولادة والأطفال - عرعر": MOH, "مستشفى الحياة الوطني - عرعر": HAYAT,
+    "مستشفى النور الأهلي - عرعر": MOH, "مستشفى رفحاء العام": MOH,
+    "مستشفى طريف العام": MOH,
 }
 
-# ══════════════════════════════════════════════
-# قاموس البحث — كلمات البحث الإنجليزية لكل مستشفى
-# ══════════════════════════════════════════════
-SEARCH_QUERIES = {
-    # الرياض
-    "مدينة الأمير سلطان الطبية العسكرية":    "Prince Sultan Military Medical City Riyadh logo",
-    "مدينة الملك سعود الطبية":               "King Saud Medical City Riyadh logo",
-    "مدينة الملك عبد العزيز الطبية للحرس الوطني": "King Abdulaziz Medical City NGHA logo",
-    "مدينة الملك فهد الطبية":               "King Fahad Medical City Riyadh logo",
-    "مستشفى الإمام عبد الرحمن الفيصل":       "Imam Abdulrahman Al Faisal Hospital logo",
-    "مستشفى الملك عبد الله الجامعي (جامعة الأميرة نورة)": "Princess Nourah University Hospital logo",
-    "مستشفى الملك سلمان":                   "King Salman Hospital Riyadh logo",
-    "مستشفى الملك فيصل التخصصي":            "King Faisal Specialist Hospital logo",
-    "مستشفى الملك خالد الجامعي":            "King Khalid University Hospital logo",
-    "مستشفى قوى الأمن":                     "Security Forces Hospital Riyadh logo",
-    "مستشفى الملك خالد التخصصي للعيون":    "King Khaled Eye Specialist Hospital logo",
-    "مستشفى الأمير سلطان للقلب":            "Prince Sultan Cardiac Center logo",
-    "مستشفى الحمادي (العليا، النزهة، السويدي)": "Al Hammadi Hospital Riyadh logo",
-    "مستشفى دله (النخيل، نمار)":            "Dallah Hospital Riyadh logo",
-    "مستشفى المملكة":                       "Kingdom Hospital Riyadh logo",
-    # جدة
-    "مستشفى الثغر":                         "Al Thagher Hospital Jeddah logo",
-    "مستشفى الملك فيصل التخصصي - جدة":     "King Faisal Specialist Hospital Jeddah logo",
-    "مستشفى جامعة الملك عبد العزيز":       "King Abdulaziz University Hospital logo",
-    "مستشفى لندن":                         "London Hospital Jeddah logo",
-    "المركز الطبي الدولي":                  "International Medical Center Jeddah logo",
-    "مستشفى السلامة":                       "Al Salama Hospital Jeddah logo",
-    "مستشفى العرب":                         "Al Arab Hospital Jeddah logo",
-    "مستشفى الجدعاني":                      "Al Jedaani Hospital Jeddah logo",
-    # مكة
-    "مدينة الملك عبد الله الطبية":         "King Abdullah Medical City Makkah logo",
-    "مستشفى النور التخصصي":                "Al Noor Specialist Hospital Makkah logo",
-    # المدينة المنورة
-    "مدينة الملك سلمان بن عبد العزيز الطبية": "King Salman bin Abdulaziz Medical City Madinah logo",
-    "مستشفى أحد":                           "Ohud Hospital Madinah logo",
-    # الدمام
-    "مستشفى الدمام المركزي":               "Dammam Central Hospital logo",
-    "مستشفى الملك فهد التخصصي - الدمام":  "King Fahad Specialist Hospital Dammam logo",
-    "مركز البابطين لأمراض القلب":          "Al Babtain Cardiac Center logo",
-    # الخبر
-    "مستشفى الملك فهد الجامعي - الخبر":   "King Fahad University Hospital Khobar logo",
-    "مستشفى المانع - الخبر":              "Al Mane Hospital Khobar logo",
-    "مستشفى اليوسف":                      "Al Yousuf Hospital Khobar logo",
-    # الظهران
-    "مستشفى أرامكو الظهران":              "Saudi Aramco Medical Services Dhahran logo",
-    # أبها
-    "مستشفى الملك فيصل التخصصي - أبها":  "King Faisal Specialist Hospital Abha logo",
-    "مستشفى الملك فهد التعليمي - أبها":  "King Fahad Teaching Hospital Abha logo",
-    # بريدة
-    "مستشفى الملك فهد التخصصي - بريدة":  "King Fahad Specialist Hospital Buraidah logo",
-    # تبوك
-    "مستشفى الأمير فهد بن سلطان - تبوك": "Prince Fahad bin Sultan Hospital Tabuk logo",
-    # جازان
-    "مستشفى الأمير محمد بن ناصر - جازان": "Prince Mohammed bin Nasser Hospital Jazan logo",
-}
 
-# ══════════════════════════════════════════════
-# دوال التحميل
-# ══════════════════════════════════════════════
-
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/120.0.0.0 Safari/537.36"
-    )
-}
-
-def safe_filename(name: str) -> str:
-    """تحويل اسم المستشفى لاسم ملف آمن"""
-    name = re.sub(r'[^\w\u0600-\u06FF]', '_', name)
-    h = hashlib.md5(name.encode()).hexdigest()[:6]
-    return f"{name[:40]}_{h}.jpg"
+def safe_filename(name):
+    h = hashlib.md5(name.encode()).hexdigest()[:8]
+    s = re.sub(r'[^\w\u0600-\u06FF]', '_', name)[:30]
+    return f"{s}_{h}.jpg"
 
 
-def download_image(url: str, save_path: str, timeout: int = 10) -> bool:
-    """تحميل صورة من رابط وحفظها"""
+def download_url(url, save_path):
     try:
-        r = requests.get(url, headers=HEADERS, timeout=timeout, stream=True)
-        r.raise_for_status()
-        content_type = r.headers.get("Content-Type", "")
-        if "image" not in content_type and "octet" not in content_type:
+        req = urllib.request.Request(url, headers=HEADERS)
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+            data = r.read()
+        if len(data) < 200:
             return False
-        img_data = r.content
-        if len(img_data) < 500:
-            return False
-        if HAS_PIL:
-            try:
-                img = Image.open(BytesIO(img_data)).convert("RGBA")
-                bg = Image.new("RGB", img.size, (255, 255, 255))
-                bg.paste(img, mask=img.split()[3] if img.mode == "RGBA" else None)
-                bg = bg.convert("RGB")
-                # Resize to standard logo size
-                bg.thumbnail((400, 400), Image.LANCZOS)
-                bg.save(save_path, "JPEG", quality=90, optimize=True)
-            except Exception:
-                with open(save_path, "wb") as f:
-                    f.write(img_data)
-        else:
-            with open(save_path, "wb") as f:
-                f.write(img_data)
+        with open(save_path, "wb") as f:
+            f.write(data)
         return True
-    except Exception as e:
+    except Exception:
         return False
 
 
-def search_google_image(query: str) -> str | None:
-    """البحث في Google Images عن صورة وإرجاع أول رابط"""
-    try:
-        search_url = f"https://www.google.com/search?q={requests.utils.quote(query)}&tbm=isch&hl=ar"
-        r = requests.get(search_url, headers=HEADERS, timeout=10)
-        # استخراج روابط الصور من الصفحة
-        urls = re.findall(r'"(https?://[^"]+\.(?:png|jpg|jpeg|webp|svg))"', r.text)
-        urls = [u for u in urls if "gstatic" not in u and "google" not in u]
-        return urls[0] if urls else None
-    except Exception:
-        return None
-
-
-def search_duckduckgo_image(query: str) -> str | None:
-    """البحث في DuckDuckGo Images عن صورة"""
-    try:
-        url = f"https://duckduckgo.com/?q={requests.utils.quote(query)}&iax=images&ia=images"
-        r = requests.get(url, headers=HEADERS, timeout=10)
-        urls = re.findall(r'https?://[^"\'<>\s]+\.(?:png|jpg|jpeg)[^"\'<>\s]*', r.text)
-        urls = [u for u in urls if len(u) < 300]
-        return urls[0] if urls else None
-    except Exception:
-        return None
-
-
-def get_logo_for_hospital(name: str) -> str | None:
-    """محاولة الحصول على شعار المستشفى"""
-    save_path = os.path.join(LOGOS_DIR, safe_filename(name))
-
-    # إذا الشعار موجود مسبقاً
-    if os.path.exists(save_path) and os.path.getsize(save_path) > 500:
-        return save_path
-
-    # 1) رابط معروف مباشر
-    if name in KNOWN_LOGO_URLS:
-        url = KNOWN_LOGO_URLS[name]
-        if download_image(url, save_path):
-            return save_path
-
-    # 2) بحث Google
-    query = SEARCH_QUERIES.get(name, f"{name} hospital logo")
-    url = search_google_image(query + " logo site:*.sa OR site:*.com")
-    if url and download_image(url, save_path):
-        return save_path
-
-    # 3) بحث DuckDuckGo
-    url = search_duckduckgo_image(query)
-    if url and download_image(url, save_path):
-        return save_path
-
-    return None
-
-
-# ══════════════════════════════════════════════
-# تحديث قاعدة البيانات
-# ══════════════════════════════════════════════
-
-def update_db_logo(hospital_name: str, logo_path: str):
-    """تحديث مسار الشعار في قاعدة البيانات"""
+def update_db(name, logo_path):
     if not os.path.exists(DB_PATH):
-        print(f"  ⚠️  قاعدة البيانات غير موجودة: {DB_PATH}")
-        return False
+        return
     try:
-        conn = sqlite3.connect(DB_PATH)
-        c = conn.cursor()
-        c.execute("UPDATE hospitals SET logo_path=? WHERE name=?", (logo_path, hospital_name))
-        if c.rowcount == 0:
-            # المستشفى غير موجود في DB — أضفه
-            c.execute(
-                "INSERT OR IGNORE INTO hospitals (name, city, logo_path, hospital_type, status) "
-                "VALUES (?,?,?,?,?)",
-                (hospital_name, "", logo_path, "حكومي", "active")
-            )
+        conn = sqlite3.connect(DB_PATH, timeout=5)
+        conn.execute("UPDATE hospitals SET logo_path=? WHERE name=?", (logo_path, name))
         conn.commit()
         conn.close()
-        return True
-    except Exception as e:
-        print(f"  ⚠️  خطأ في قاعدة البيانات: {e}")
-        return False
+    except Exception:
+        pass
 
-
-# ══════════════════════════════════════════════
-# التشغيل الرئيسي
-# ══════════════════════════════════════════════
 
 def main():
-    # استيراد قائمة المستشفيات
     sys.path.insert(0, BOT_DIR)
     try:
         from hospitals_data import KSA_HOSPITALS
     except ImportError:
-        print("❌ لم يتم العثور على hospitals_data.py")
+        print("❌ hospitals_data.py غير موجود")
         sys.exit(1)
 
-    # جمع جميع المستشفيات
     all_hospitals = []
     for city, data in KSA_HOSPITALS.items():
         for cat in ["حكومي", "خاص", "مجمعات"]:
-            for h_name in data.get(cat, []):
-                all_hospitals.append((h_name, city, cat))
+            for h in data.get(cat, []):
+                all_hospitals.append(h)
 
-    total   = len(all_hospitals)
-    success = 0
-    failed  = []
-
-    print("=" * 60)
-    print(f"🏥 بدء تحميل شعارات {total} مستشفى")
-    print(f"📁 مجلد الحفظ: {LOGOS_DIR}")
-    print(f"🗄️  قاعدة البيانات: {DB_PATH}")
-    print("=" * 60)
-
-    for i, (name, city, cat) in enumerate(all_hospitals, 1):
-        prefix = f"[{i:3}/{total}]"
-        print(f"{prefix} 🔍 {name[:50]}", end=" ... ", flush=True)
-
-        logo_path = get_logo_for_hospital(name)
-
-        if logo_path:
-            update_db_logo(name, logo_path)
-            print(f"✅ تم")
-            success += 1
+    # تحميل الشعارات الفريدة مرة واحدة فقط
+    print("⬇️  تحميل الشعارات الفريدة...")
+    unique_urls = set(HOSPITAL_LOGOS.values())
+    shared = {}  # url -> local path
+    for url in unique_urls:
+        h = hashlib.md5(url.encode()).hexdigest()[:8]
+        sp = os.path.join(LOGOS_DIR, f"shared_{h}.jpg")
+        if os.path.exists(sp) and os.path.getsize(sp) > 200:
+            shared[url] = sp
+            print(f"  ♻️  موجود مسبقاً")
+        elif download_url(url, sp):
+            shared[url] = sp
+            print(f"  ✅ {url[:55]}")
         else:
-            print(f"❌ فشل")
-            failed.append((name, city))
+            print(f"  ❌ {url[:55]}")
 
-        # تأخير لتجنب الحظر
-        time.sleep(0.8)
+    print(f"\n🏥 ربط {len(all_hospitals)} مستشفى بالشعارات...\n")
+    success, failed = 0, []
 
-    # تقرير النهائي
-    print("\n" + "=" * 60)
-    print(f"✅ نجح: {success}/{total}")
-    print(f"❌ فشل: {len(failed)}/{total}")
-    if failed:
-        print("\nالمستشفيات التي فشل تحميل شعارها:")
-        for name, city in failed:
-            print(f"  - {name} ({city})")
-    print("=" * 60)
-    print("\n✅ انتهى! أعد تشغيل البوت لتفعيل الشعارات.")
+    for i, name in enumerate(all_hospitals, 1):
+        url = HOSPITAL_LOGOS.get(name)
+        if not url or url not in shared:
+            print(f"[{i:3}] ⬛ {name[:50]}")
+            failed.append(name)
+            continue
+        save_path = os.path.join(LOGOS_DIR, safe_filename(name))
+        try:
+            shutil.copy2(shared[url], save_path)
+            update_db(name, save_path)
+            print(f"[{i:3}] ✅ تم  {name[:50]}")
+            success += 1
+        except Exception:
+            print(f"[{i:3}] ❌ فشل {name[:50]}")
+            failed.append(name)
+
+    print(f"\n{'='*50}")
+    print(f"✅ نجح: {success} | ❌ فشل: {len(failed)} | إجمالي: {len(all_hospitals)}")
+    print(f"{'='*50}")
 
 
 if __name__ == "__main__":

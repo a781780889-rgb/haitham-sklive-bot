@@ -1921,20 +1921,33 @@ async def handle_logos(update, context, text, uid):
         def _run_logo_download():
             import asyncio
             script = os.path.join(os.path.dirname(__file__), "setup_hospital_logos.py")
-            result = subprocess.run(
-                [_sys.executable, script],
-                capture_output=True, text=True, timeout=600
-            )
-            output = result.stdout or ""
+            try:
+                result = subprocess.run(
+                    [_sys.executable, script],
+                    capture_output=True, text=True,
+                    timeout=120  # حد أقصى دقيقتان
+                )
+                output = result.stdout or ""
+            except subprocess.TimeoutExpired:
+                output = ""
+                asyncio.run_coroutine_threadsafe(
+                    update.message.reply_text(
+                        "⚠️ *انتهت مهلة التحميل (دقيقتان)*\n"
+                        "جزء من الشعارات تم تحميله. أعد المحاولة.",
+                        parse_mode="Markdown", reply_markup=logos_keyboard()
+                    ),
+                    context.application.loop
+                )
+                return
             success_count = output.count("✅ تم")
-            fail_count    = output.count("❌ فشل")
+            fail_count    = output.count("❌ فشل") + output.count("⬛")
             total_h       = success_count + fail_count
             summary = (
                 f"✅ *انتهى تحميل الشعارات!*\n\n"
                 f"🏥 إجمالي: *{total_h}*\n"
                 f"✅ نجح: *{success_count}*\n"
                 f"❌ فشل: *{fail_count}*\n\n"
-                f"💡 أعد تشغيل البوت لتفعيل الشعارات."
+                f"💡 الشعارات جاهزة في الإجازات المرضية."
             )
             asyncio.run_coroutine_threadsafe(
                 update.message.reply_text(summary, parse_mode="Markdown", reply_markup=logos_keyboard()),
