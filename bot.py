@@ -1681,9 +1681,18 @@ async def handle_admin_router(update, context, text, uid, name):
             context.user_data["state"] = "admin_doctors"
             try:
                 hospitals = db.get_all_hospitals()
+                # بناء أزرار تفاعلية inline للمستشفيات
+                inline_rows = []
+                for h in hospitals:
+                    inline_rows.append([InlineKeyboardButton(
+                        f"🏥 {h['name']}",
+                        callback_data=f"admin_doc_hosp:{h['id']}:{h['name'][:30]}"
+                    )])
+                inline_rows.append([InlineKeyboardButton("🗺 تصفح بالمنطقة", callback_data="admin_doc_browse")])
                 await update.message.reply_text(
                     "👨‍⚕️ *إدارة الأطباء*\n\nاختر المستشفى:",
-                    parse_mode="Markdown", reply_markup=doctors_admin_keyboard(hospitals)
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup(inline_rows) if inline_rows else doctors_admin_keyboard(hospitals)
                 )
             except Exception as e:
                 logger.error(f"خطأ إدارة الأطباء: {e}")
@@ -2106,20 +2115,62 @@ async def handle_logos(update, context, text, uid):
 
 async def show_hospitals_admin(update):
     hospitals = db.get_all_hospitals()
+    hosp_keyboard = ReplyKeyboardMarkup([
+        [KeyboardButton("➕ إضافة مستشفى جديد")],
+        [KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")],
+    ], resize_keyboard=True)
+
+    if not hospitals:
+        await update.message.reply_text(
+            "🏥 *المستشفيات (0):*\n\nلا توجد مستشفيات\n\nاضغط ➕ لإضافة مستشفى جديد:",
+            parse_mode="Markdown", reply_markup=hosp_keyboard
+        )
+        return
+
+    # بناء السطور وتقسيمها إلى رسائل صغيرة (حد 3500 حرف)
     lines = []
     for h in hospitals:
         status = "✅" if h.get("status") == "active" else "⏸"
-        logo   = "🖼" if h.get("logo_path") and os.path.exists(h.get("logo_path", "")) else "  "
+        logo   = "🖼" if h.get("logo_path") and os.path.exists(h.get("logo_path", "")) else ""
         lines.append(f"{status}{logo} {md_escape(h['name'])} — {md_escape(h['city'])} ({md_escape(h.get('hospital_type',''))})")
-    txt = "\n".join(lines) if lines else "لا توجد مستشفيات"
+
+    # إرسال العنوان أولاً
     await update.message.reply_text(
-        f"🏥 *المستشفيات ({len(hospitals)}):*\n\n{txt}\n\nاضغط ➕ لإضافة مستشفى جديد:",
-        parse_mode="Markdown",
-        reply_markup=ReplyKeyboardMarkup([
-            [KeyboardButton("➕ إضافة مستشفى جديد")],
-            [KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")],
-        ], resize_keyboard=True)
+        f"🏥 *المستشفيات ({len(hospitals)}):*",
+        parse_mode="Markdown"
     )
+
+    # تقسيم القائمة إلى أجزاء ≤ 3500 حرف
+    chunk, chunk_len = [], 0
+    chunks = []
+    for line in lines:
+        if chunk_len + len(line) + 1 > 3500:
+            chunks.append(chunk)
+            chunk, chunk_len = [], 0
+        chunk.append(line)
+        chunk_len += len(line) + 1
+    if chunk:
+        chunks.append(chunk)
+
+    for i, ch in enumerate(chunks):
+        txt = "\n".join(ch)
+        kb = hosp_keyboard if i == len(chunks) - 1 else None
+        try:
+            await update.message.reply_text(
+                txt, parse_mode="Markdown",
+                reply_markup=kb
+            )
+        except Exception:
+            # fallback: بدون Markdown
+            await update.message.reply_text(
+                txt.replace("*","").replace("_","").replace("`","").replace("\\",""),
+                reply_markup=kb
+            )
+    if len(chunks) == 0:
+        await update.message.reply_text(
+            "اضغط ➕ لإضافة مستشفى جديد:",
+            reply_markup=hosp_keyboard
+        )
 
 async def handle_admin_hospitals(update, context, text, uid):
     state = context.user_data.get("state")
@@ -3154,6 +3205,38 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     elif data == "confirm_order":
         await generate_and_send_pdf(update, context, uid)
+
+    # ── إدارة الأطباء: اختيار مستشفى بزر تفاعلي ──
+    elif data.startswith("admin_doc_hosp:"):
+        parts = data.split(":", 2)
+        if len(parts) >= 2:
+            hosp_id = int(parts[1])
+            hospitals_all = db.get_all_hospitals()
+            matched = next((h for h in hospitals_all if h["id"] == hosp_id), None)
+            if matched:
+                context.user_data["doctor_hospital_id"]   = matched["id"]
+                context.user_data["doctor_hospital_name"] = matched["name"]
+                context.user_data["state"] = "admin_doctor_add_name"
+                doctors = db.get_doctors_by_hospital_name(matched["name"], active_only=False)
+                doc_txt = "\n".join([
+                    f"{'✅' if d.get('status')=='active' else '⏸'} د.{md_escape(d['name'])} — {md_escape(d['specialty'])} ({d.get('orders_count',0)} طلب)"
+                    for d in doctors
+                ]) or "لا يوجد أطباء"
+                await query.message.reply_text(
+                    f"🏥 *{md_escape(matched['name'])}*\n\n"
+                    f"📋 *الأطباء الحاليون ({len(doctors)}):*\n{doc_txt}\n\n"
+                    f"✏️ أرسل اسم الطبيب الجديد أو اضغط رجوع:",
+                    parse_mode="Markdown", reply_markup=back_keyboard()
+                )
+            else:
+                await query.answer("❌ لم يُعثر على المستشفى", show_alert=True)
+
+    elif data == "admin_doc_browse":
+        context.user_data["state"] = "admin_doc_browse_region"
+        await query.message.reply_text(
+            "🗺 *اختر المنطقة:*",
+            parse_mode="Markdown", reply_markup=logo_city_regions_keyboard()
+        )
 
     # ── بحث عن شعار المستشفى
     elif data == "search_logo_curr" or data.startswith("search_logo:"):
