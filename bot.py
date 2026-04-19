@@ -119,10 +119,18 @@ def _norm(text):
     return text.lower().strip()
 
 def _label_matches(label, keywords):
-    n = _norm(label)
+    # إزالة العلامات بين القوسين مثل (مهم) قبل المقارنة
+    label_clean = re.sub(r'\(.*?\)', '', label).strip()
+    n = _norm(label_clean)
+    n_orig = _norm(label)
     for kw in sorted(keywords, key=len, reverse=True):
-        nkw = _norm(kw)
-        if n == nkw or n.startswith(nkw):
+        # إزالة العلامات من الكلمة المفتاحية أيضاً
+        kw_clean = re.sub(r'\(.*?\)', '', kw).strip()
+        nkw = _norm(kw_clean)
+        nkw_orig = _norm(kw)
+        if n == nkw or n_orig == nkw_orig:
+            return True
+        if n.startswith(nkw) or n_orig.startswith(nkw_orig):
             return True
     return False
 
@@ -155,31 +163,32 @@ def calculate_end_date(start_str: str, days: int) -> str:
 # ══════════════════════════════════════════════
 
 ORDER_FIELDS = [
-    {"key": "full_name",        "label": "الاسم",                      "example": "هيثم عبده قائد احمد"},
-    {"key": "id_number",        "label": "رقم الهوية أو الإقامة",      "example": "1234535456"},
-    {"key": "birth_year",       "label": "تاريخ الميلاد",               "example": "1995"},
-    {"key": "phone",            "label": "رقم الجوال",                  "example": "0555555555"},
-    {"key": "workplace",        "label": "جهة العمل",                   "example": "جامعة الأميرة نورا"},
-    {"key": "nationality",      "label": "الجنسية",                     "example": "سعودي"},
-    {"key": "city",             "label": "المدينة التابعة لجهة العمل",   "example": "الرياض"},
-    {"key": "excuse_date",      "label": "تاريخ الإجازة",               "example": "14/1/2026"},
-    {"key": "days_count",       "label": "عدد الأيام",                  "example": "5"},
-    {"key": "issue_time",       "label": "وقت الإصدار",                 "example": "PM 10:40"},
-    {"key": "issue_date_input", "label": "تاريخ الإصدار",               "example": "17/3/2026"},
+    {"key": "full_name",        "label": "الاسم",                                "example": "هيثم عبده قائد احمد"},
+    {"key": "id_number",        "label": "رقم الهوية (مهم)",                     "example": "1234535456"},
+    {"key": "birth_year",       "label": "تاريخ الميلاد",                        "example": "1995"},
+    {"key": "phone",            "label": "رقم الجوال",                           "example": "0555555555"},
+    {"key": "workplace",        "label": "جهة العمل(مهم)",                       "example": "جامعة الأميرة نورا"},
+    {"key": "nationality",      "label": "الجنسية",                              "example": "سعودي"},
+    {"key": "city",             "label": "المدينة التابعة لجهة العمل (مهم)",     "example": "الرياض"},
+    {"key": "excuse_date",      "label": "تاريخ الاجازة",                        "example": "14/1/2026"},
+    {"key": "days_count",       "label": "عدد الايام",                           "example": "5"},
+    {"key": "issue_time",       "label": "وقت الإصدار",                          "example": "PM 10:40"},
+    {"key": "issue_date_input", "label": "تاريخ الإصدار",                        "example": "17/3/2026"},
 ]
 OPTIONAL_FIELDS = {"birth_year", "phone", "issue_time", "issue_date_input"}
+HIDDEN_FIELDS   = {"issue_time", "issue_date_input"}  # لا تظهر في القالب المرسل للمستخدم
 
 def parse_free_text_order(text: str) -> dict:
     mapping = {
         "full_name":        ["الاسم الكامل", "الاسم"],
-        "id_number":        ["رقم الهوية أو الإقامة", "رقم الهوية", "رقم الاقامة", "الهوية"],
+        "id_number":        ["رقم الهوية (مهم)", "رقم الهوية أو الإقامة", "رقم الهوية", "رقم الاقامة", "الهوية الوطنية", "الهوية"],
         "birth_year":       ["تاريخ الميلاد", "الميلاد", "سنة الميلاد"],
-        "phone":            ["رقم الجوال", "الجوال", "رقم الهاتف"],
-        "workplace":        ["جهة العمل", "العمل"],
-        "nationality":      ["الجنسية"],
-        "city":             ["المدينة التابع لها", "المدينة"],
-        "excuse_date":      ["تاريخ العذر", "العذر", "تاريخ الاجازة", "تاريخ الإجازة"],
-        "days_count":       ["عدد الأيام المطلوبة", "عدد الأيام", "الأيام", "الايام"],
+        "phone":            ["رقم الجوال", "الجوال", "رقم الهاتف", "الهاتف"],
+        "workplace":        ["جهة العمل(مهم)", "جهة العمل (مهم)", "جهة العمل", "العمل", "جهه العمل"],
+        "nationality":      ["الجنسية", "الجنسيه"],
+        "city":             ["المدينة التابعة لجهة العمل (مهم)", "المدينة التابعة لجهة العمل", "المدينة التابعة", "المدينة التابع لها", "المدينة"],
+        "excuse_date":      ["تاريخ الاجازة", "تاريخ الإجازة", "تاريخ العذر", "العذر", "الاجازة"],
+        "days_count":       ["عدد الايام", "عدد الأيام المطلوبة", "عدد الأيام", "الأيام", "الايام"],
         "issue_time":       ["وقت الإصدار", "وقت الاصدار", "الوقت"],
         "issue_date_input": ["تاريخ الإصدار", "تاريخ الاصدار"],
         "exit_date":        ["تاريخ الخروج", "الخروج"],
@@ -1369,10 +1378,9 @@ async def ask_patient_data(update, context):
     context.user_data["order_data"] = {}
     lines = []
     for f in ORDER_FIELDS:
-        if f["key"] in OPTIONAL_FIELDS:
-            lines.append(f"- {f['label']}: *(اختياري)*")
-        else:
-            lines.append(f"- {f['label']}: ")
+        if f["key"] in HIDDEN_FIELDS:
+            continue  # لا تُظهر هذه الحقول في القالب
+        lines.append(f"- {f['label']}: ")
     fields = "\n".join(lines)
     await update.message.reply_text(
         f"\u2705 *{hospital}*\n\U0001f468\u200d\u2695\ufe0f {doctor} \u2014 {specialty}\n\n"
