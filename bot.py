@@ -366,7 +366,8 @@ def hospital_type_browse_keyboard(city: str):
 PAGE_SIZE = 25  # عدد المستشفيات في كل صفحة
 
 def static_hospitals_keyboard(hospital_names: list, page: int = 0):
-    """لوحة مفاتيح مستشفيات مع ترقيم الصفحات"""
+    """لوحة مفاتيح مستشفيات مع ترقيم الصفحات
+    hospital_names: قائمة من (اسم_المستشفى, اسم_المدينة) أو أسماء نصية فقط"""
     total = len(hospital_names)
     total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
     page = max(0, min(page, total_pages - 1))
@@ -375,8 +376,13 @@ def static_hospitals_keyboard(hospital_names: list, page: int = 0):
     page_items = hospital_names[start:end]
 
     rows = [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]]
-    for name in page_items:
-        rows.append([KeyboardButton(f"🏥 {name}")])
+    for item in page_items:
+        if isinstance(item, tuple):
+            hname, city = item
+            label = f"🏥 {hname} - {city}" if city else f"🏥 {hname}"
+        else:
+            label = f"🏥 {item}"
+        rows.append([KeyboardButton(label)])
     # أزرار التنقل بين الصفحات
     nav = []
     if page > 0:
@@ -388,20 +394,22 @@ def static_hospitals_keyboard(hospital_names: list, page: int = 0):
     return ReplyKeyboardMarkup(rows, resize_keyboard=True)
 
 def get_all_hospitals_list():
-    """جمع كل المستشفيات من CITY_HOSPITALS + قاعدة البيانات"""
+    """جمع كل المستشفيات من CITY_HOSPITALS + قاعدة البيانات
+    يُعيد قائمة من (اسم_المستشفى, اسم_المدينة)"""
     seen = set()
     all_list = []
+    # مستشفيات KSA_HOSPITALS مع اسم المدينة
     for city, types in CITY_HOSPITALS.items():
         for h_type, hlist in types.items():
             if not isinstance(hlist, list):
                 continue
             for hname in hlist:
-                # ✅ فلترة: تجاهل الأسماء القصيرة جداً (حروف فردية)
                 if len(str(hname).strip()) < 3:
                     continue
                 if hname not in seen:
                     seen.add(hname)
-                    all_list.append(hname)
+                    all_list.append((hname, city))
+    # مستشفيات قاعدة البيانات مع اسم المدينة
     db_hospitals = db.get_all_hospitals(active_only=True)
     for h in db_hospitals:
         name = h["name"].strip()
@@ -409,7 +417,8 @@ def get_all_hospitals_list():
             continue
         if name not in seen:
             seen.add(name)
-            all_list.append(name)
+            city = h.get("city", "").strip() if h.get("city") else ""
+            all_list.append((name, city))
     return all_list
 
 def doctors_keyboard(doctors: list):
