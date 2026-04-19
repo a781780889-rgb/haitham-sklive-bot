@@ -892,9 +892,9 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
         'national_id':          id_number,
 
         # مدة الإجازة — أبيض اللون
-        # العمود الأول (يسار) → هجري | العمود الثاني (يمين) → ميلادي
+        # العمود الأول (يسار) → هجري | العمود الثاني (يمين) → هجري
         'leave_duration_en':    duration_hijri,
-        'leave_duration_ar':    duration_ar,
+        'leave_duration_ar':    duration_hijri,
 
         # عمود إنجليزي — التواريخ بالهجري، الأسماء بـ ALL CAPS
         'admission_date_en':    hijri_start,
@@ -904,9 +904,9 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
         'practitioner_name_en': doc_en_upper,              # ALL CAPS مطابق للأصلي
         'position_en':          spec_en or (specialty or ""),
 
-        # عمود عربي
-        'admission_date_ar':    start,
-        'discharge_date_ar':    discharge,
+        # عمود عربي — التواريخ بالهجري
+        'admission_date_ar':    hijri_start,
+        'discharge_date_ar':    hijri_discharge,
         'name_ar':              full_name,
         'nationality_ar':       nationality,
         'employer_ar':          workplace,
