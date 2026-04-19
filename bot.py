@@ -3110,190 +3110,49 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif data == "confirm_order":
         await generate_and_send_pdf(update, context, uid)
 
-    # ── بحث عن شعار المستشفى في جوجل
+    # ── بحث عن شعار المستشفى
     elif data.startswith("search_logo:"):
         hospital_name = data[len("search_logo:"):]
         context.user_data["logo_hospital"] = hospital_name
         context.user_data["state"] = "admin_logo_upload"
-        search_msg = await query.message.reply_text(
-            f"🔍 *جاري البحث عن شعار:*\n{hospital_name}\n\n⏳ جرب عدة محركات بحث...",
-            parse_mode="Markdown"
-        )
 
-        import urllib.request as _ureq
-        import urllib.parse  as _uparse
-        import re            as _re
-        import json          as _json
-        import ssl           as _ssl
+        import urllib.parse as _uparse
 
-        _ctx = _ssl.create_default_context()
-        _ctx.check_hostname = False
-        _ctx.verify_mode = _ssl.CERT_NONE
-
-        UAS = [
-            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_6) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
-        ]
-
-        def _fetch(url, timeout=10, referer=None, accept="text/html,application/xhtml+xml,*/*"):
-            import random
-            hdrs = {
-                "User-Agent": random.choice(UAS),
-                "Accept-Language": "ar,en-US;q=0.9,en;q=0.8",
-                "Accept": accept,
-                "Accept-Encoding": "gzip, deflate",
-                "Connection": "keep-alive",
-            }
-            if referer:
-                hdrs["Referer"] = referer
-            req = _ureq.Request(url, headers=hdrs)
-            with _ureq.urlopen(req, timeout=timeout, context=_ctx) as r:
-                raw = r.read()
-                # فك gzip إن لزم
-                if r.headers.get("Content-Encoding") == "gzip":
-                    import gzip
-                    raw = gzip.decompress(raw)
-                return raw.decode("utf-8", errors="ignore")
-
-        # ── 1) Qwant JSON API (الأكثر موثوقية للسيرفرات) ──
-        def _qwant(q):
-            try:
-                url = ("https://api.qwant.com/v3/search/images"
-                       "?count=10&q={}&t=images&safesearch=1&locale=en_US&offset=0"
-                       "&device=desktop").format(_uparse.quote(q))
-                html = _fetch(url, timeout=12, accept="application/json")
-                data = _json.loads(html)
-                items = data.get("data", {}).get("result", {}).get("items", [])
-                urls = [item.get("media") or item.get("thumbnail") for item in items]
-                return [u for u in urls if u and u.startswith("http")][:6]
-            except Exception as e:
-                return []
-
-        # ── 2) Yandex Images ──
-        def _yandex(q):
-            try:
-                url = "https://yandex.com/images/search?text={}&nomisspell=1".format(
-                    _uparse.quote(q))
-                html = _fetch(url, timeout=12)
-                # استخراج روابط من JSON المضمّن
-                urls = _re.findall(r'"origUrl"\s*:\s*"([^"]+)"', html)
-                urls += _re.findall(r'"img_href"\s*:\s*"([^"]+)"', html)
-                urls = [u.replace("\\/", "/").replace("\\u002F", "/") for u in urls]
-                urls = [u for u in urls if u.startswith("http") and
-                        any(ext in u.lower() for ext in [".jpg",".jpeg",".png",".webp"])]
-                return list(dict.fromkeys(urls))[:6]
-            except Exception:
-                return []
-
-        # ── 3) Bing Images ──
-        def _bing(q):
-            try:
-                url = "https://www.bing.com/images/search?q={}&form=HDRSC2&first=1".format(
-                    _uparse.quote(q))
-                html = _fetch(url, timeout=12)
-                urls = _re.findall(r'"murl"\s*:\s*"(https?://[^"]+?\.(?:jpg|jpeg|png|webp))"', html)
-                return list(dict.fromkeys(urls))[:6]
-            except Exception:
-                return []
-
-        # ── 4) DuckDuckGo ──
-        def _ddg(q):
-            try:
-                init_html = _fetch(
-                    "https://duckduckgo.com/?q={}&iax=images&ia=images".format(_uparse.quote(q)),
-                    timeout=10)
-                m = _re.search(r'vqd=["\']?([\d-]+)', init_html)
-                if not m:
-                    return []
-                vqd = m.group(1)
-                api = "https://duckduckgo.com/i.js?l=us-en&o=json&q={}&vqd={}".format(
-                    _uparse.quote(q), vqd)
-                data = _json.loads(_fetch(api, timeout=10,
-                                          referer="https://duckduckgo.com/",
-                                          accept="application/json"))
-                return [r["image"] for r in data.get("results", [])[:6]]
-            except Exception:
-                return []
-
-        # ── 5) Google fallback ──
-        def _google(q):
-            try:
-                html = _fetch(
-                    "https://www.google.com/search?q={}&tbm=isch&hl=ar&num=20".format(_uparse.quote(q)),
-                    timeout=12)
-                urls = _re.findall(r'\[(?:"|\\")(https?://[^"\\]+?\.(?:jpg|jpeg|png))', html)
-                urls += _re.findall(r'"ou"\s*:\s*"([^"]+)"', html)
-                urls = [u for u in urls if "gstatic" not in u and len(u) < 400]
-                return list(dict.fromkeys(urls))[:6]
-            except Exception:
-                return []
-
-        query_ar = f"شعار {hospital_name} logo"
-        query_en_map = {"مستشفى":"hospital","مدينة":"city","مركز":"center",
-                        "الملك":"King","الأمير":"Prince","الدكتور":"Dr"}
+        # روابط بحث مباشرة لمحركات البحث الرئيسية
+        q_ar = _uparse.quote(f"شعار {hospital_name}")
+        q_en_map = {"مستشفى":"hospital","مدينة":"city","مركز":"center",
+                    "الملك":"King","الأمير":"Prince","الدكتور":"Dr"}
         en_q = hospital_name
-        for ar, en in query_en_map.items():
+        for ar, en in q_en_map.items():
             en_q = en_q.replace(ar, en)
-        query_en = f"{en_q} logo Saudi Arabia"
+        q_en = _uparse.quote(f"{en_q} hospital logo Saudi Arabia")
 
-        # تجربة المحركات بالترتيب مع تتبع النتائج
-        attempts = []
-        engines = [
-            ("Qwant (AR)",   lambda: _qwant(query_ar)),
-            ("Qwant (EN)",   lambda: _qwant(query_en)),
-            ("Yandex",       lambda: _yandex(query_ar)),
-            ("Bing (AR)",    lambda: _bing(query_ar)),
-            ("Bing (EN)",    lambda: _bing(query_en)),
-            ("DuckDuckGo",   lambda: _ddg(query_ar)),
-            ("Google (EN)",  lambda: _google(query_en)),
-        ]
+        google_ar = f"https://www.google.com/search?q={q_ar}&tbm=isch"
+        google_en = f"https://www.google.com/search?q={q_en}&tbm=isch"
+        bing_ar   = f"https://www.bing.com/images/search?q={q_ar}"
+        yandex_ar = f"https://yandex.com/images/search?text={q_ar}"
 
-        imgs = []
-        working_engine = None
-        for name, fn in engines:
-            try:
-                result = fn()
-                attempts.append(f"{name}: {len(result)} نتيجة")
-                if result:
-                    imgs = result
-                    working_engine = name
-                    break
-            except Exception as e:
-                attempts.append(f"{name}: خطأ")
-
-        if imgs:
-            buttons = []
-            for i, img_url in enumerate(imgs[:6], 1):
-                context.user_data[f"logo_url_{i}"] = img_url
-                buttons.append([InlineKeyboardButton(
-                    f"🖼 صورة {i}",
-                    callback_data=f"dl_logo:{i}:{hospital_name}"
-                )])
-            buttons.append([InlineKeyboardButton("❌ إلغاء", callback_data="cancel_logo_search")])
-            await query.message.reply_text(
-                f"✅ *وُجد {len(imgs)} نتيجة*\n"
-                f"🔧 المصدر: `{working_engine}`\n"
-                f"🏥 *{hospital_name}*\n\n"
-                f"اضغط على الصورة لتحميلها وحفظها:",
-                parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup(buttons)
-            )
-        else:
-            # أعط رابط جوجل ليفتحه + تفاصيل المحاولات
-            google_url = "https://www.google.com/search?q={}&tbm=isch".format(
-                _uparse.quote(f"شعار {hospital_name}"))
-            debug = "\n".join(f"• {a}" for a in attempts)
-            await query.message.reply_text(
-                f"⚠️ فشلت جميع محركات البحث:\n\n`{debug}`\n\n"
-                f"💡 السبب الأكثر احتمالاً: السيرفر يحجب الاتصال بمحركات البحث.\n\n"
-                f"الحل: افتح جوجل من الزر، احفظ الصورة، ثم ارفعها:",
-                parse_mode="Markdown",
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔎 افتح بحث جوجل", url=google_url)],
-                    [InlineKeyboardButton("📤 أرسل صورة يدوياً", callback_data=f"manual_logo:{hospital_name}")],
-                ])
-            )
+        await query.message.reply_text(
+            f"🔍 *البحث عن شعار:*\n🏥 `{hospital_name}`\n\n"
+            f"📌 *الطريقة (دقيقة واحدة):*\n"
+            f"1️⃣ اضغط أي محرك بحث بالأسفل\n"
+            f"2️⃣ ابحث واختر الشعار\n"
+            f"3️⃣ *اضغط مطولاً* على الصورة → *\"حفظ الصورة\"*\n"
+            f"4️⃣ ارجع لهذه المحادثة → *أرسل الصورة*\n"
+            f"5️⃣ ✅ البوت يحفظها تلقائياً!",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔎 جوجل (عربي)", url=google_ar),
+                 InlineKeyboardButton("🔎 Google (EN)", url=google_en)],
+                [InlineKeyboardButton("🔎 Bing",   url=bing_ar),
+                 InlineKeyboardButton("🔎 Yandex", url=yandex_ar)],
+                [InlineKeyboardButton("❌ إلغاء", callback_data="cancel_logo_search")],
+            ])
+        )
+        await query.message.reply_text(
+            "⬇️ *أرسل صورة الشعار الآن* (PNG/JPG):",
+            parse_mode="Markdown", reply_markup=back_keyboard()
+        )
 
     # ── معاينة صورة من نتائج البحث وتحميلها
     elif data.startswith("dl_logo:"):
