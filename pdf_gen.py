@@ -649,6 +649,38 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
     x_scale = page_w / 842.0
     y_scale = page_h / 1190.0
 
+    # عرض الخلية التقريبي لكل حقل (لضبط حجم الخط تلقائياً)
+    # القيم مستخرجة من قالب صحة الرسمي
+    MAX_WIDTHS = {
+        'name_en':              230,
+        'name_ar':               230,
+        'practitioner_name_en':  230,
+        'practitioner_name_ar':  230,
+        'employer_ar':           230,
+        'nationality_en':        230,
+        'nationality_ar':        230,
+        'position_en':           230,
+        'position_ar':           230,
+        'hospital_name_en':      220,
+        'hospital_name_ar':      220,
+    }
+
+    def _fit_font_size(text, font, base_size, max_width):
+        """تقليص حجم الخط تلقائياً ليلائم عرض الخلية"""
+        if max_width <= 0:
+            return base_size
+        try:
+            w = pdfmetrics.stringWidth(text, font, base_size)
+        except Exception:
+            return base_size
+        if w <= max_width:
+            return base_size
+        # تصغير تدريجي حتى يلائم (حد أدنى 8pt)
+        size = base_size
+        while size > 8 and pdfmetrics.stringWidth(text, font, size) > max_width:
+            size -= 0.5
+        return size
+
     for slot_id, slot in DRAW_SLOTS.items():
         value = field_values.get(slot_id)
         if not value:
@@ -669,8 +701,12 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
         if _has_arabic(text_str):
             # ── نص عربي ─────────────────────────────────────
             font = AR_BOLD if is_bold else AR_REG
-            c.setFont(font, font_size)
             shaped = shape_arabic(text_str)
+            # تقليص تلقائي إن كان النص طويلاً
+            max_w = MAX_WIDTHS.get(slot_id, 0) * x_scale
+            if max_w > 0:
+                font_size = _fit_font_size(shaped, font, font_size, max_w)
+            c.setFont(font, font_size)
             if align == 'left':
                 c.drawString(x, rl_y, shaped)
             elif align == 'right':
@@ -680,6 +716,10 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
         else:
             # ── نص إنجليزي ──────────────────────────────────
             font = EN_BOLD if is_bold else EN_REG
+            # تقليص تلقائي إن كان النص طويلاً
+            max_w = MAX_WIDTHS.get(slot_id, 0) * x_scale
+            if max_w > 0:
+                font_size = _fit_font_size(text_str, font, font_size, max_w)
             c.setFont(font, font_size)
             if align == 'left':
                 c.drawString(x, rl_y, text_str)
