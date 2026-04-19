@@ -657,6 +657,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_charge_menu(update, context, uid)
         return
 
+    if text == "🎫 شحن برصيد كود":
+        context.user_data["state"] = "voucher_enter_code"
+        await update.message.reply_text(
+            "🎫 *شحن الرصيد بكود*\n\nأرسل الكود:",
+            parse_mode="Markdown", reply_markup=back_keyboard()
+        )
+        return
+
     if state == "charge_select_package":
         await handle_charge_package(update, context, text, uid)
         return
@@ -1174,6 +1182,15 @@ async def handle_charge_package(update, context, text, uid):
                 parse_mode="Markdown", reply_markup=payment_methods_keyboard()
             )
             return
+    # ── شحن برصيد بكود ──
+    if text == "🎫 شحن برصيد كود":
+        context.user_data["state"] = "voucher_enter_code"
+        await update.message.reply_text(
+            "🎫 *شحن الرصيد بكود*\n\nأرسل الكود:",
+            parse_mode="Markdown", reply_markup=back_keyboard()
+        )
+        return
+
     if text == "📋 سجل معاملاتي":
         txs = db.get_user_transactions(uid)
         if not txs:
