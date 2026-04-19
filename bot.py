@@ -2023,8 +2023,19 @@ async def handle_logos(update, context, text, uid):
                 context.user_data["logo_hospital"] = matched["name"]
                 context.user_data["state"] = "admin_logo_upload"
                 await update.message.reply_text(
-                    f"✅ المستشفى: *{matched['name']}*\n\n📤 أرسل صورة الشعار (PNG أو JPG):",
-                    parse_mode="Markdown", reply_markup=back_keyboard()
+                    f"✅ المستشفى: *{matched['name']}*\n\n"
+                    f"اختر طريقة إضافة الشعار:",
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton(
+                            "🔍 بحث عن الشعار في جوجل",
+                            callback_data=f"search_logo:{matched['name']}"
+                        )],
+                        [InlineKeyboardButton(
+                            "📤 رفع صورة يدوياً",
+                            callback_data=f"manual_logo:{matched['name']}"
+                        )],
+                    ])
                 )
         else:
             await update.message.reply_text("❌ لم يُتعرف على المستشفى.", reply_markup=hospitals_select_keyboard(hospitals_all))
@@ -3083,6 +3094,162 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     elif data == "confirm_order":
         await generate_and_send_pdf(update, context, uid)
+
+    # ── بحث عن شعار المستشفى في جوجل
+    elif data.startswith("search_logo:"):
+        hospital_name = data[len("search_logo:"):]
+        context.user_data["logo_hospital"] = hospital_name
+        context.user_data["state"] = "admin_logo_upload"
+        await query.message.reply_text(
+            f"🔍 *جاري البحث عن شعار:*\n{hospital_name}...",
+            parse_mode="Markdown"
+        )
+        import urllib.request as _ureq, urllib.parse as _uparse, re as _re, json as _json
+
+        def _google_image_search(q):
+            """بحث جوجل صور وإرجاع أول 6 روابط صور"""
+            url = "https://www.google.com/search?q={}&tbm=isch&hl=ar&num=10".format(
+                _uparse.quote(q)
+            )
+            hdrs = {
+                "User-Agent": "Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 "
+                              "(KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36",
+                "Accept-Language": "ar,en;q=0.9",
+            }
+            try:
+                req = _ureq.Request(url, headers=hdrs)
+                with _ureq.urlopen(req, timeout=10) as r:
+                    html = r.read().decode("utf-8", errors="ignore")
+                # استخراج روابط الصور من HTML
+                imgs = _re.findall(r'"(https?://[^"]+\.(?:jpg|jpeg|png|webp))"', html)
+                imgs = [u for u in imgs if "gstatic" not in u and len(u) < 300]
+                return list(dict.fromkeys(imgs))[:6]
+            except Exception:
+                return []
+
+        search_query = f"شعار {hospital_name} مستشفى logo"
+        imgs = _google_image_search(search_query)
+
+        if not imgs:
+            # محاولة ثانية بالإنجليزية
+            en_map = {
+                "مستشفى": "hospital", "مدينة": "city", "مركز": "center",
+                "الملك": "King", "الأمير": "Prince", "الدكتور": "Dr",
+            }
+            en_q = hospital_name
+            for ar, en in en_map.items():
+                en_q = en_q.replace(ar, en)
+            imgs = _google_image_search(f"{en_q} logo Saudi Arabia")
+
+        if imgs:
+            # عرض النتائج كأزرار inline
+            buttons = []
+            for i, img_url in enumerate(imgs[:6], 1):
+                # اختصار الرابط للـ callback_data (حد 64 بايت)
+                short = f"dl_logo:{i}:{hospital_name}"
+                # نحفظ الروابط في user_data
+                context.user_data[f"logo_url_{i}"] = img_url
+                buttons.append([InlineKeyboardButton(
+                    f"🖼 صورة {i}",
+                    callback_data=short
+                )])
+            buttons.append([InlineKeyboardButton("❌ إلغاء", callback_data="cancel_logo_search")])
+
+            await query.message.reply_text(
+                f"🔍 *نتائج البحث عن شعار:*\n*{hospital_name}*\n\n"
+                f"وُجد {len(imgs)} نتيجة — اضغط على الصورة لمعاينتها واختيارها:",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup(buttons)
+            )
+        else:
+            await query.message.reply_text(
+                f"❌ لم يُعثر على شعار في جوجل.\n\n📤 أرسل صورة الشعار يدوياً:",
+                reply_markup=back_keyboard()
+            )
+
+    # ── معاينة صورة من نتائج البحث وتحميلها
+    elif data.startswith("dl_logo:"):
+        parts = data.split(":", 2)
+        idx = int(parts[1])
+        hospital_name = context.user_data.get("logo_hospital", "")
+        img_url = context.user_data.get(f"logo_url_{idx}", "")
+
+        if not img_url:
+            await query.answer("❌ انتهت الجلسة، ابدأ من جديد", show_alert=True)
+            return
+
+        await query.answer("⏳ جاري تحميل الصورة...")
+        await query.message.reply_text(f"⬇️ جاري تحميل صورة {idx}...")
+
+        import urllib.request as _ureq, hashlib as _hash, re as _re
+        try:
+            from PIL import Image as _Img
+            from io import BytesIO as _Bio
+            _hdrs = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                              "AppleWebKit/537.36 Chrome/120.0 Safari/537.36",
+                "Accept": "image/*,*/*"
+            }
+            req = _ureq.Request(img_url, headers=_hdrs)
+            with _ureq.urlopen(req, timeout=10) as r:
+                raw = r.read()
+            if len(raw) < 500:
+                raise ValueError("الصورة صغيرة جداً")
+
+            # معالجة الصورة وحفظها
+            img = _Img.open(_Bio(raw)).convert("RGBA")
+            bg  = _Img.new("RGB", img.size, (255, 255, 255))
+            bg.paste(img, mask=img.split()[3] if img.mode == "RGBA" else None)
+            bg.thumbnail((500, 500), _Img.LANCZOS)
+
+            h = _hash.md5(hospital_name.encode()).hexdigest()[:8]
+            s = _re.sub(r'[^\w\u0600-\u06FF]', '_', hospital_name)[:35]
+            save_path = os.path.join(LOGOS_DIR, f"{s}_{h}.jpg")
+            bg.save(save_path, "JPEG", quality=92)
+
+            db.set_hospital_logo(hospital_name, save_path)
+
+            # إرسال الصورة للمراجعة
+            with open(save_path, "rb") as img_f:
+                await query.message.reply_photo(
+                    photo=img_f,
+                    caption=f"✅ *تم حفظ شعار:*\n{hospital_name}\n\n"
+                            f"سيُستخدم تلقائياً في الإجازات الطبية. ✅",
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup([[
+                        InlineKeyboardButton("🔄 تغيير الشعار", callback_data=f"search_logo:{hospital_name}"),
+                        InlineKeyboardButton("✅ قبول", callback_data="cancel_logo_search"),
+                    ]])
+                )
+            context.user_data["state"] = "admin_logos"
+
+        except Exception as e:
+            await query.message.reply_text(
+                f"❌ فشل تحميل الصورة {idx}.\n"
+                f"جرّب صورة أخرى أو ارفع يدوياً.",
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔄 إعادة البحث", callback_data=f"search_logo:{hospital_name}"),
+                    InlineKeyboardButton("📤 رفع يدوي", callback_data=f"manual_logo:{hospital_name}"),
+                ]])
+            )
+
+    # ── رفع الشعار يدوياً (بعد الاختيار من القائمة)
+    elif data.startswith("manual_logo:"):
+        hospital_name = data[len("manual_logo:"):]
+        context.user_data["logo_hospital"] = hospital_name
+        context.user_data["state"] = "admin_logo_upload"
+        await query.message.reply_text(
+            f"📤 *أرسل صورة شعار:*\n{hospital_name}\n\n(PNG أو JPG):",
+            parse_mode="Markdown", reply_markup=back_keyboard()
+        )
+
+    # ── إلغاء بحث الشعار
+    elif data == "cancel_logo_search":
+        context.user_data["state"] = "admin_logos"
+        await query.message.reply_text(
+            "✅ تمّ. العودة لإدارة الشعارات.",
+            reply_markup=logos_keyboard()
+        )
 
     elif data == "cancel_order":
         context.user_data.clear()
