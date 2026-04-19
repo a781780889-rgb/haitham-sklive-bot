@@ -81,6 +81,23 @@ def md_escape(text: str) -> str:
         text = str(text).replace(ch, f"\\{ch}")
     return text
 
+# ══════════════════════════════════════════════
+# تحويل الأرقام العربية/الفارسية إلى أرقام غربية
+# ══════════════════════════════════════════════
+_AR_DIGITS = str.maketrans(
+    '٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹',
+    '01234567890123456789'
+)
+
+def to_western_nums(text):
+    """
+    يحوّل الأرقام العربية-الهندية (٠-٩) والفارسية (۰-۹)
+    إلى أرقام غربية (0-9) في أي نص.
+    """
+    if not text:
+        return text
+    return str(text).translate(_AR_DIGITS)
+
 def get_scaffold_price():
     return float(db.get_setting("scaffold_price", "5.0"))
 
@@ -180,8 +197,11 @@ def parse_free_text_order(text: str) -> dict:
         for key, labels in mapping.items():
             if _label_matches(label, labels):
                 if key == "days_count":
+                    value = to_western_nums(value)
                     m = re.search(r'\d+', value)
                     value = m.group() if m else value
+                else:
+                    value = to_western_nums(value)
                 result[key] = value
                 break
     return result
@@ -988,7 +1008,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if state == "ask_exit_date":
         od = context.user_data.get("order_data", {})
-        od["exit_date"] = text
+        od["exit_date"] = to_western_nums(text)
         context.user_data["order_data"] = od
         context.user_data["state"] = "confirm_order"
         await update.message.reply_text(
@@ -1321,11 +1341,17 @@ async def ask_patient_data(update, context):
     specialty = context.user_data.get("selected_doctor_specialty", "—")
     context.user_data["state"] = "collecting_data"
     context.user_data["order_data"] = {}
-    fields = "\n".join([f"- {f['label']}: {f['example']}" for f in ORDER_FIELDS])
+    lines = []
+    for f in ORDER_FIELDS:
+        if f["key"] in OPTIONAL_FIELDS:
+            lines.append(f"- {f['label']}: *(اختياري)*")
+        else:
+            lines.append(f"- {f['label']}: ")
+    fields = "\n".join(lines)
     await update.message.reply_text(
-        f"✅ *{hospital}*\n👨‍⚕️ {doctor} — {specialty}\n\n"
-        f"أرسل بيانات المريض:\n\n"
-        f"📋 *مثال شامل:*\n{fields}",
+        f"\u2705 *{hospital}*\n\U0001f468\u200d\u2695\ufe0f {doctor} \u2014 {specialty}\n\n"
+        f"\u0623\u0631\u0633\u0644 \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0645\u0631\u064a\u0636:\n\n"
+        f"\U0001f4cb *\u0627\u0646\u0633\u062e \u0627\u0644\u0642\u0627\u0644\u0628 \u0648\u0623\u0643\u0645\u0644 \u0627\u0644\u0628\u064a\u0627\u0646\u0627\u062a:*\n{fields}",
         parse_mode="Markdown", reply_markup=back_keyboard()
     )
 
