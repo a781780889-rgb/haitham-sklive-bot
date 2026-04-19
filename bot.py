@@ -1843,9 +1843,24 @@ async def handle_logos(update, context, text, uid):
     if text == "➕ رفع شعار مستشفى":
         context.user_data["state"] = "admin_logo_select_hospital"
         context.user_data["logo_action"] = "upload"
+
+        # إذا DB فارغة نستخدم KSA_HOSPITALS مباشرة
+        if not hospitals_all:
+            all_names = []
+            for city_data in CITY_HOSPITALS.values():
+                for cat in ["حكومي", "خاص", "مجمعات"]:
+                    all_names.extend(city_data.get(cat, []))
+            # بناء keyboard من الأسماء مباشرة
+            rows = [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]]
+            for name in sorted(set(all_names)):
+                rows.append([KeyboardButton(f"⬜ {name}")])
+            kb = ReplyKeyboardMarkup(rows, resize_keyboard=True)
+        else:
+            kb = hospitals_select_keyboard(hospitals_all)
+
         await update.message.reply_text(
             "🏥 *اختر المستشفى لرفع شعاره:*\n\n✅ = لديه شعار  |  ⬜ = بدون شعار",
-            parse_mode="Markdown", reply_markup=hospitals_select_keyboard(hospitals_all)
+            parse_mode="Markdown", reply_markup=kb
         )
 
     # ── رفع شعار — تصفح بالمنطقة والمدينة (الطريقة الجديدة)
@@ -3104,67 +3119,141 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             f"🔍 *جاري البحث عن شعار:*\n{hospital_name}...",
             parse_mode="Markdown"
         )
-        import urllib.request as _ureq, urllib.parse as _uparse, re as _re, json as _json
 
-        def _google_image_search(q):
-            """بحث جوجل صور وإرجاع أول 6 روابط صور"""
-            url = "https://www.google.com/search?q={}&tbm=isch&hl=ar&num=10".format(
-                _uparse.quote(q)
-            )
+        import urllib.request as _ureq
+        import urllib.parse  as _uparse
+        import re            as _re
+        import json          as _json
+
+        def _fetch(url, timeout=8):
             hdrs = {
-                "User-Agent": "Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 "
-                              "(KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36",
+                "User-Agent": (
+                    "Mozilla/5.0 (Linux; Android 13; Pixel 7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.6099.144 Mobile Safari/537.36"
+                ),
                 "Accept-Language": "ar,en;q=0.9",
+                "Accept": "text/html,application/xhtml+xml,*/*",
+                "Referer": "https://www.google.com/",
             }
+            req = _ureq.Request(url, headers=hdrs)
+            with _ureq.urlopen(req, timeout=timeout) as r:
+                return r.read().decode("utf-8", errors="ignore")
+
+        def _extract_img_urls(html):
+            """استخراج روابط الصور من HTML"""
+            patterns = [
+                r'https?://[^"\'\s<>]+\.(?:jpg|jpeg|png|webp)(?:\?[^"\'\s<>]*)?',
+                r'"(https?://[^"]+\.(?:jpg|jpeg|png))"',
+                r"'(https?://[^']+\.(?:jpg|jpeg|png))'",
+            ]
+            urls = []
+            for p in patterns:
+                urls += _re.findall(p, html)
+            # تنظيف وفلترة
+            clean = []
+            for u in urls:
+                u = u.strip()
+                if any(bad in u for bad in ["gstatic","google","favicon","sprite","blank","pixel"]):
+                    continue
+                if len(u) > 300 or len(u) < 20:
+                    continue
+                clean.append(u)
+            return list(dict.fromkeys(clean))[:8]
+
+        def _duckduckgo_images(q):
+            """DuckDuckGo Image Search — أكثر موثوقية من جوجل"""
             try:
-                req = _ureq.Request(url, headers=hdrs)
+                # الخطوة 1: الحصول على vqd token
+                init_url = "https://duckduckgo.com/?q={}&iax=images&ia=images".format(
+                    _uparse.quote(q))
+                html = _fetch(init_url, timeout=10)
+                vqd = _re.search(r'vqd=([\d-]+)', html)
+                if not vqd:
+                    vqd = _re.search(r'"vqd"\s*:\s*"([^"]+)"', html)
+                if not vqd:
+                    return []
+                vqd = vqd.group(1)
+
+                # الخطوة 2: طلب الصور
+                api = (
+                    "https://duckduckgo.com/i.js"
+                    "?l=us-en&o=json&q={}&vqd={}&f=,,,,,&p=1"
+                ).format(_uparse.quote(q), vqd)
+                hdrs = {
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0",
+                    "Referer": "https://duckduckgo.com/",
+                }
+                req = _ureq.Request(api, headers=hdrs)
                 with _ureq.urlopen(req, timeout=10) as r:
-                    html = r.read().decode("utf-8", errors="ignore")
-                # استخراج روابط الصور من HTML
-                imgs = _re.findall(r'"(https?://[^"]+\.(?:jpg|jpeg|png|webp))"', html)
-                imgs = [u for u in imgs if "gstatic" not in u and len(u) < 300]
+                    data = _json.loads(r.read())
+                imgs = [item["image"] for item in data.get("results", [])[:6]]
+                return imgs
+            except Exception:
+                return []
+
+        def _google_images(q):
+            """Google Images fallback"""
+            try:
+                url = "https://www.google.com/search?q={}&tbm=isch&hl=ar".format(
+                    _uparse.quote(q))
+                html = _fetch(url, timeout=10)
+                return _extract_img_urls(html)
+            except Exception:
+                return []
+
+        def _bing_images(q):
+            """Bing Image Search fallback"""
+            try:
+                url = "https://www.bing.com/images/search?q={}&form=HDRSC2".format(
+                    _uparse.quote(q))
+                html = _fetch(url, timeout=10)
+                imgs = _re.findall(r'"murl":"(https?://[^"]+\.(?:jpg|jpeg|png))"', html)
                 return list(dict.fromkeys(imgs))[:6]
             except Exception:
                 return []
 
-        search_query = f"شعار {hospital_name} مستشفى logo"
-        imgs = _google_image_search(search_query)
-
+        # تجربة محركات البحث بالترتيب
+        search_q = f"شعار {hospital_name} مستشفى logo"
+        imgs = _duckduckgo_images(search_q)
         if not imgs:
-            # محاولة ثانية بالإنجليزية
-            en_map = {
-                "مستشفى": "hospital", "مدينة": "city", "مركز": "center",
-                "الملك": "King", "الأمير": "Prince", "الدكتور": "Dr",
-            }
+            imgs = _google_images(search_q)
+        if not imgs:
+            imgs = _bing_images(search_q)
+        # محاولة أخيرة بالإنجليزية
+        if not imgs:
+            en_map = {"مستشفى":"hospital","مدينة":"city","مركز":"center",
+                      "الملك":"King","الأمير":"Prince","الدكتور":"Dr"}
             en_q = hospital_name
             for ar, en in en_map.items():
                 en_q = en_q.replace(ar, en)
-            imgs = _google_image_search(f"{en_q} logo Saudi Arabia")
+            imgs = _duckduckgo_images(f"{en_q} logo")
+            if not imgs:
+                imgs = _bing_images(f"{en_q} hospital logo Saudi Arabia")
 
         if imgs:
-            # عرض النتائج كأزرار inline
             buttons = []
             for i, img_url in enumerate(imgs[:6], 1):
-                # اختصار الرابط للـ callback_data (حد 64 بايت)
-                short = f"dl_logo:{i}:{hospital_name}"
-                # نحفظ الروابط في user_data
                 context.user_data[f"logo_url_{i}"] = img_url
-                buttons.append([InlineKeyboardButton(
-                    f"🖼 صورة {i}",
-                    callback_data=short
-                )])
+                buttons.append([InlineKeyboardButton(f"🖼 صورة {i}", callback_data=f"dl_logo:{i}:{hospital_name}")])
             buttons.append([InlineKeyboardButton("❌ إلغاء", callback_data="cancel_logo_search")])
-
             await query.message.reply_text(
-                f"🔍 *نتائج البحث عن شعار:*\n*{hospital_name}*\n\n"
-                f"وُجد {len(imgs)} نتيجة — اضغط على الصورة لمعاينتها واختيارها:",
+                f"✅ *وُجد {len(imgs)} نتيجة لـ:*\n*{hospital_name}*\n\n"
+                f"اضغط على رقم الصورة لتحميلها مباشرة:",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup(buttons)
             )
         else:
+            # لم يُعثر — أعطِ رابط بحث جوجل ليفتحه المستخدم
+            google_url = "https://www.google.com/search?q={}&tbm=isch".format(
+                _uparse.quote(f"شعار {hospital_name}"))
             await query.message.reply_text(
-                f"❌ لم يُعثر على شعار في جوجل.\n\n📤 أرسل صورة الشعار يدوياً:",
-                reply_markup=back_keyboard()
+                f"⚠️ لم يُعثر على نتائج تلقائياً.\n\n"
+                f"يمكنك البحث يدوياً ثم إرسال الصورة:",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔎 افتح بحث جوجل", url=google_url)],
+                    [InlineKeyboardButton("📤 أرسل صورة يدوياً", callback_data=f"manual_logo:{hospital_name}")],
+                ])
             )
 
     # ── معاينة صورة من نتائج البحث وتحميلها
