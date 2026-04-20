@@ -527,13 +527,14 @@ def to_hijri_duration(days, start_str, end_str):
     """
     يُنتج نص مدة الإجازة بالهجري داخل الشريط الداكن.
     مثال: 1 يوم (16-08-1447 الى 16-08-1447)
-    LRM حول الأقواس يمنع BiDi من إخفائها أو عكسها.
+    LRE/PDF حول كل تاريخ يمنع BiDi من عكسه ويُثبّت الأقواس في موضعها.
     """
     h_start = to_hijri(start_str)
     h_end   = to_hijri(end_str)
     dwe     = "يوم" if days == 1 else "أيام"
-    LRM = '\u200e'   # Left-to-Right Mark — يُثبّت الأقواس في موضعها
-    return f"{days} {dwe} {LRM}({h_start} الى {h_end}){LRM}"
+    LRE = '\u202a'   # Left-to-Right Embedding — يُثبّت التاريخ بترتيبه الصحيح
+    PDF = '\u202c'   # Pop Directional Format — إغلاق نطاق LRE
+    return f"{days} {dwe} ({LRE}{h_start}{PDF} الى {LRE}{h_end}{PDF})"
 
 
 def _jdn_to_gregorian(jdn: int) -> datetime:
