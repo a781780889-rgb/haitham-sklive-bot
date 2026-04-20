@@ -143,11 +143,11 @@ DRAW_SLOTS = {
 
     # ── 🔑 صفوف واسعة (قيمة مشتركة بلا عمود عربي منفصل) ─────
     'leave_id':             {'x': 437.5, 'rl_y': 935.0, 'size': 13.5,
-                             'color': (0.17, 0.24, 0.47)},          # #2c3e77
+                             'color': (0.17255, 0.24314, 0.46667)},          # #2c3e77
     'issue_date':           {'x': 437.5, 'rl_y': 765.7, 'size': 13.5,
-                             'color': (0.17, 0.24, 0.47)},
+                             'color': (0.17255, 0.24314, 0.46667)},
     'national_id':          {'x': 437.5, 'rl_y': 679.1, 'size': 13.5,
-                             'color': (0.17, 0.24, 0.47)},
+                             'color': (0.17255, 0.24314, 0.46667)},
 
     # ── 📅 صف مدة الإجازة — أبيض اللون ─────────────────────────
     'leave_duration_en':    {'x': 318.3, 'rl_y': 891.7, 'size': 13.5,
@@ -157,52 +157,48 @@ DRAW_SLOTS = {
 
     # ── صفوف عادية: عمود إنجليزي ─────────────────────────────
     'admission_date_en':    {'x': 318.3, 'rl_y': 849.7, 'size': 13.5,
-                             'color': (0.17, 0.24, 0.47)},
+                             'color': (0.17255, 0.24314, 0.46667)},
     'discharge_date_en':    {'x': 318.3, 'rl_y': 807.7, 'size': 13.5,
-                             'color': (0.17, 0.24, 0.47)},
+                             'color': (0.17255, 0.24314, 0.46667)},
     'name_en':              {'x': 318.3, 'rl_y': 721.5, 'size': 13.5,
-                             'color': (0.17, 0.24, 0.47)},
+                             'color': (0.17255, 0.24314, 0.46667)},
     'nationality_en':       {'x': 318.3, 'rl_y': 637.1, 'size': 13.5,
-                             'color': (0.17, 0.24, 0.47)},
+                             'color': (0.17255, 0.24314, 0.46667)},
     'practitioner_name_en': {'x': 318.3, 'rl_y': 550.9, 'size': 13.5,
-                             'color': (0.17, 0.24, 0.47)},
+                             'color': (0.17255, 0.24314, 0.46667)},
     'position_en':          {'x': 318.3, 'rl_y': 507.6, 'size': 13.5,
-                             'color': (0.17, 0.24, 0.47)},
+                             'color': (0.17255, 0.24314, 0.46667)},
 
     # ── صفوف عادية: عمود عربي ────────────────────────────────
     'admission_date_ar':    {'x': 556.8, 'rl_y': 849.7, 'size': 13.5,
-                             'color': (0.17, 0.24, 0.47)},
+                             'color': (0.17255, 0.24314, 0.46667)},
     'discharge_date_ar':    {'x': 556.8, 'rl_y': 807.7, 'size': 13.5,
-                             'color': (0.17, 0.24, 0.47)},
+                             'color': (0.17255, 0.24314, 0.46667)},
     'name_ar':              {'x': 556.8, 'rl_y': 721.5, 'size': 13.5,
-                             'color': (0.17, 0.24, 0.47)},
+                             'color': (0.17255, 0.24314, 0.46667)},
     'nationality_ar':       {'x': 556.8, 'rl_y': 637.1, 'size': 13.5,
-                             'color': (0.17, 0.24, 0.47)},
+                             'color': (0.17255, 0.24314, 0.46667)},
     'employer_ar':          {'x': 556.8, 'rl_y': 595.1, 'size': 13.5,
-                             'color': (0.17, 0.24, 0.47)},
+                             'color': (0.17255, 0.24314, 0.46667)},
     'practitioner_name_ar': {'x': 556.8, 'rl_y': 550.9, 'size': 13.5,
-                             'color': (0.17, 0.24, 0.47)},
+                             'color': (0.17255, 0.24314, 0.46667)},
     'position_ar':          {'x': 556.8, 'rl_y': 507.6, 'size': 13.5,
-                             'color': (0.17, 0.24, 0.47)},
+                             'color': (0.17255, 0.24314, 0.46667)},
 
     # ── 🏥 قسم المستشفى (أسفل الشعار — مُوسَّط على cx=632) ─────────
-    # bold=True → Times-Bold للإنجليزي، NotoSansArabic-Bold للعربي
-    'hospital_name_ar':     {'x': 632.0, 'rl_y': 338.0, 'size': 12.8,
-                             'color': (0.0, 0.0, 0.0), 'bold': True},
-    'hospital_name_en':     {'x': 632.0, 'rl_y': 316.0, 'size': 12.8,
-                             'color': (0.0, 0.0, 0.0), 'bold': True},
+    # bold=False → Times-Roman للإنجليزي، NotoSansArabic-Regular للعربي (مطابق المرجع)
+    'hospital_name_ar':     {'x': 632.0, 'rl_y': 338.0, 'size': 13.5,
+                             'color': (0.0, 0.0, 0.0), 'bold': False},
+    'hospital_name_en':     {'x': 632.0, 'rl_y': 316.0, 'size': 13.5,
+                             'color': (0.0, 0.0, 0.0), 'bold': False},
 
-    # رقم الترخيص: التسمية (يمين) ثم الرقم (يسار) على نفس السطر
-    'license_label':        {'x': 690.0, 'rl_y': 292.0, 'size': 12.8,
-                             'color': (0.0, 0.0, 0.0), 'bold': True},  # ": رقم الترخيص"
-    'license_number':       {'x': 600.0, 'rl_y': 292.0, 'size': 12.8,
-                             'color': (0.0, 0.0, 0.0), 'bold': True},  # الأرقام فقط
+    # رقم الترخيص: محذوف — غير موجود في المرجع
 
     # ── 🕐 الوقت والتاريخ (يسار أسفل الصفحة) محاذاة يسار ────────
     'issue_time':           {'x': 38.0,  'rl_y': 229.1, 'size': 12.8,
-                             'color': (0.0, 0.0, 0.0), 'align': 'left', 'bold': True},
+                             'color': (0.0, 0.0, 0.0), 'align': 'left', 'bold': False},
     'issue_weekday_date':   {'x': 38.0,  'rl_y': 201.7, 'size': 12.8,
-                             'color': (0.0, 0.0, 0.0), 'align': 'left', 'bold': True},
+                             'color': (0.0, 0.0, 0.0), 'align': 'left', 'bold': False},
 }
 
 # ── شعار المستشفى (إحداثيات ReportLab) ─────────────────────────
@@ -210,17 +206,18 @@ DRAW_SLOTS = {
 # الشعار يجب أن يكون تحت الجدول: rl_y + height < 488
 #   rl_y=360  →  أعلى الشعار = 360+110 = 470  (تحت الجدول بهامش 18pt)
 LOGO_SLOT = {
-    'x':      577,      # يسار الشعار — مطابق للأصلي (bbox x=576.9)
-    'rl_y':   351,      # أسفل الشعار (RL) — مطابق للأصلي (1190 - 839.2 ≈ 351)
-    'width':  112.5,    # مطابق للأصلي تماماً
-    'height': 112.5,    # مطابق للأصلي تماماً
+    'x':      577.3,    # يسار الشعار — مطابق للمرجع (x0=577.3)
+    'rl_y':   352.9,    # أسفل الشعار (RL) = 1190 - 837.1 = 352.9
+    'width':  112.9,    # عرض مطابق للمرجع — مستطيل لا مربع
+    'height': 103.3,    # ارتفاع مطابق للمرجع
 }
 
 # ── QR Code ─────────────────────────────────────────────────────
 QR_SLOT = {
-    'x':    71,
-    'rl_y': 230,
-    'size': 100,
+    'x':      172.2,   # x0 مطابق للمرجع
+    'rl_y':   359.6,   # RL = 1190 - 830.4 = 359.6
+    'width':  108.2,   # عرض مطابق للمرجع — مستطيل لا مربع
+    'height': 101.6,   # ارتفاع مطابق للمرجع
 }
 
 
@@ -432,12 +429,13 @@ def to_hijri(date_str):
 def to_hijri_duration(days, start_str, end_str):
     """
     يُنتج نص مدة الإجازة بالهجري داخل الشريط الداكن.
-    مثال: 5 أيام ( 25-07-1447 الى 29-07-1447 )
+    مثال: 1 يوم (16-08-1447 الى 16-08-1447)
+    بدون مسافات داخل الأقواس — مطابق المرجع
     """
     h_start = to_hijri(start_str)
     h_end   = to_hijri(end_str)
     dwe     = "يوم" if days == 1 else "أيام"
-    return f"{days} {dwe} ( {h_start} الى {h_end} )"
+    return f"{days} {dwe} ({h_start} الى {h_end})"
 
 
 def gen_leave_id(_):
@@ -466,6 +464,7 @@ def format_weekday_date(dt=None):
 
 _NAT_MAP = {
     "سعودي": "Saudi Arabia",    "سعودية": "Saudi Arabia",
+    "سعوديه": "Saudi Arabia",
     "يمني":  "Yemeni",          "مصري":   "Egyptian",
     "سوداني":"Sudanese",        "اردني":  "Jordanian",
     "سوري":  "Syrian",          "لبناني": "Lebanese",
@@ -481,6 +480,35 @@ _NAT_MAP = {
     "ايراني":"Iranian",         "تركي":   "Turkish",
     "امريكي":"American",        "بريطاني":"British",
 }
+
+# تصحيح إملاء الجنسية العربية لتطابق المرجع
+_NAT_AR_FIX = {
+    "سعودي":  "السعودية",
+    "سعودية": "السعودية",
+    "سعوديه": "السعودية",
+    "يمني":   "اليمنية",
+    "مصري":   "المصرية",
+    "سوداني": "السودانية",
+    "اردني":  "الأردنية",
+    "سوري":   "السورية",
+    "لبناني": "اللبنانية",
+    "عراقي":  "العراقية",
+    "كويتي":  "الكويتية",
+    "اماراتي":"الإماراتية",
+    "قطري":   "القطرية",
+    "بحريني": "البحرينية",
+    "عماني":  "العُمانية",
+    "باكستاني":"الباكستانية",
+    "هندي":   "الهندية",
+}
+
+def normalize_nat_ar(text):
+    """تصحيح إملاء الجنسية العربية"""
+    t = str(text).strip()
+    for ar, fixed in _NAT_AR_FIX.items():
+        if ar in t:
+            return fixed
+    return t
 
 _TITLE_MAP = {
     "دكتور":"Doctor",            "دكتورة":"Doctor",
@@ -889,7 +917,7 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
     field_values = {
         # صفوف واسعة
         'leave_id':             leave_id,
-        'issue_date':           today_str,
+        'issue_date':           start,          # تاريخ الإجازة — مطابق المرجع (لا تاريخ اليوم)
         'national_id':          id_number,
 
         # مدة الإجازة — أبيض اللون
@@ -909,7 +937,7 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
         'admission_date_ar':    hijri_start,
         'discharge_date_ar':    hijri_discharge,
         'name_ar':              full_name,
-        'nationality_ar':       nationality,
+        'nationality_ar':       normalize_nat_ar(nationality),
         'employer_ar':          workplace,
         'practitioner_name_ar': doctor    or "",
         'position_ar':          specialty or "",
@@ -917,8 +945,7 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
         # قسم المستشفى
         'hospital_name_ar':     hospital  or "",
         'hospital_name_en':     hosp_en if hosp_en and not any('\u0600' <= c <= '\u06FF' for c in hosp_en) else "",
-        'license_label':        ": رقم الترخيص",
-        'license_number':       lic_num,
+        # رقم الترخيص محذوف — غير موجود في المرجع
 
         # الوقت والتاريخ
         'issue_time':           _time_str,
