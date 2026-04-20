@@ -834,13 +834,40 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
                 preserveAspectRatio=True,
                 mask='auto',
             )
-            # جعل الباركود قابلاً للنقر — يفتح موقع صحة مباشرة
+            # جعل الباركود قابلاً للنقر
             c.linkURL(SEHA_URL, (qx, qy, qx + qw, qy + qh), relative=0)
         except Exception:
             pass
 
-    # ملاحظة: تم حذف نص الرابط الأزرق تحت الباركود (www.seha.sa/...)
-    # الباركود نفسه يحتوي على الرابط ويمكن النقر عليه مباشرة.
+    # ─── رابط التحقق — نص أزرق قابل للنقر ──────────────────────
+    try:
+        link_text = "www.seha.sa/#/inquiries/slenquiry"
+        link_font = EN_REG
+        link_size = 10.5
+        # الموضع تحت الباركود تقريباً — y أسفل منطقة الـ QR
+        lx   = (page_w / 2) * x_scale          # توسيط أفقي
+        ly   = (QR_SLOT['rl_y'] - 28) * y_scale  # أسفل الباركود
+
+        c.setFont(link_font, link_size)
+        c.setFillColorRGB(0.0, 0.27, 0.67)     # أزرق #0045ab
+        tw = pdfmetrics.stringWidth(link_text, link_font, link_size)
+        lx_start = lx - tw / 2
+        c.drawString(lx_start, ly, link_text)
+
+        # تسطير
+        c.setLineWidth(0.5)
+        c.setStrokeColorRGB(0.0, 0.27, 0.67)
+        c.line(lx_start, ly - 1, lx_start + tw, ly - 1)
+
+        # annotation قابل للنقر يغطي النص
+        c.linkURL(
+            SEHA_URL,
+            (lx_start, ly - 2, lx_start + tw, ly + link_size),
+            relative=0
+        )
+        c.setFillColorRGB(0, 0, 0)   # إعادة اللون للأسود
+    except Exception:
+        pass
 
     c.save()
 
@@ -852,7 +879,7 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
 def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
                         output_path=None, logo_path=None, gsl_code=None,
                         license_number=None,
-                        website_url="https://www.seha.sa/#/inquiries/slenquiry",
+                        website_url="https://sehaseinquiresslendquiry.com",
                         template_path=None):
     """
     ينشئ PDF إجازة مرضية بإحداثيات مطابقة لملف صحة المرجعي.
@@ -908,7 +935,6 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
                 pass
 
     # ── مدة الإجازة ────────────────────────────────────────────
-    # English — أقواس حول التواريخ مطلوبة لتمييز نطاق الإجازة
     dwe         = "day" if days == 1 else "days"
     duration_en = f"{days} {dwe} ({start} to {end})"
 
