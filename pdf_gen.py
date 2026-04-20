@@ -227,10 +227,15 @@ QR_SLOT = {
 _fonts_registered    = False
 _noto_regular_ok     = False   # NotoSansArabic-Regular متاح
 _noto_bold_ok        = False   # NotoSansArabic-Bold متاح
+_times_regular_ok    = False   # TimesRoman-Regular من fonts/ متاح
+_times_bold_ok       = False   # TimesRoman-Bold من fonts/ متاح
 
 # مسارات بحث NotoSansArabic — مرتّبة بحسب الأولوية على Ubuntu/DigitalOcean
 _NOTO_SEARCH_PATHS = [
-    # مجلد البوت نفسه (أعلى أولوية — ضع الـ TTF هناك)
+    # مجلد fonts/ داخل البوت (أعلى أولوية)
+    os.path.join(_BASE_DIR, 'fonts', 'NotoSansArabic-Regular.ttf'),
+    os.path.join(_BASE_DIR, 'fonts', 'NotoSansArabic-Bold.ttf'),
+    # مجلد البوت نفسه (الجذر)
     os.path.join(_BASE_DIR, 'NotoSansArabic-Regular.ttf'),
     os.path.join(_BASE_DIR, 'NotoSansArabic-Bold.ttf'),
     # Ubuntu system fonts
@@ -243,13 +248,33 @@ _NOTO_SEARCH_PATHS = [
     '/usr/local/share/fonts/NotoSansArabic-Bold.ttf',
 ]
 
+# مسارات Times Roman من مجلد fonts/
+_TIMES_REGULAR_PATH = os.path.join(_BASE_DIR, 'fonts', 'TimesRoman-Regular.ttf')
+_TIMES_BOLD_PATH    = os.path.join(_BASE_DIR, 'fonts', 'TimesRoman-Bold.ttf')
+
 
 def _register_fonts():
     global _fonts_registered, _noto_regular_ok, _noto_bold_ok
+    global _times_regular_ok, _times_bold_ok
     if _fonts_registered:
         return
 
-    # ── Amiri ────────────────────────────────────────────────
+    # ── TimesRoman من مجلد fonts/ (أولوية قصوى للإنجليزي) ──────
+    if os.path.exists(_TIMES_REGULAR_PATH):
+        try:
+            pdfmetrics.registerFont(TTFont('TimesRomanPro', _TIMES_REGULAR_PATH))
+            _times_regular_ok = True
+        except Exception:
+            pass
+
+    if os.path.exists(_TIMES_BOLD_PATH):
+        try:
+            pdfmetrics.registerFont(TTFont('TimesRomanPro-Bold', _TIMES_BOLD_PATH))
+            _times_bold_ok = True
+        except Exception:
+            pass
+
+    # ── Amiri (fallback للعربي فقط) ─────────────────────────────
     for name, path in [
         ('Amiri',      os.path.join(_BASE_DIR, 'Amiri-Regular.ttf')),
         ('Amiri-Bold', os.path.join(_BASE_DIR, 'Amiri-Bold.ttf')),
@@ -260,7 +285,7 @@ def _register_fonts():
             except Exception:
                 pass
 
-    # ── NotoSansArabic-Regular ───────────────────────────────
+    # ── NotoSansArabic-Regular ───────────────────────────────────
     for path in _NOTO_SEARCH_PATHS:
         if 'Regular' in path and os.path.exists(path):
             try:
@@ -270,7 +295,7 @@ def _register_fonts():
             except Exception:
                 pass
 
-    # ── NotoSansArabic-Bold ──────────────────────────────────
+    # ── NotoSansArabic-Bold ──────────────────────────────────────
     for path in _NOTO_SEARCH_PATHS:
         if 'Bold' in path and os.path.exists(path):
             try:
@@ -677,9 +702,9 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
     c = rl_canvas.Canvas(overlay_path, pagesize=(page_w, page_h))
 
     # ── اختيار الخطوط حسب ما هو متاح ───────────────────────────
-    # إنجليزي: Times-Roman / Times-Bold مدمجان دائماً في ReportLab
-    EN_REG  = 'Times-Roman'
-    EN_BOLD = 'Times-Bold'
+    # إنجليزي: TimesRomanPro من fonts/ إن وُجد، وإلا Times-Roman المدمج
+    EN_REG  = 'TimesRomanPro'      if _times_regular_ok else 'Times-Roman'
+    EN_BOLD = 'TimesRomanPro-Bold' if _times_bold_ok    else 'Times-Bold'
 
     # عربي: NotoSansArabic إذا موجود، وإلا Amiri
     AR_REG  = 'NotoSansArabic-Regular' if _noto_regular_ok else 'Amiri'
