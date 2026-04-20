@@ -526,11 +526,12 @@ def logo_city_hospitals_keyboard(city: str, hospitals_db: list):
             combined.append(h["name"])
     rows = []
     for name in combined:
-        logo_icon = "✅" if name in db_names and any(
+        has_logo = name in db_names and any(
             h.get("logo_path") and os.path.exists(h.get("logo_path", ""))
             for h in hospitals_db if h["name"] == name
-        ) else "⬜"
-        rows.append([KeyboardButton(f"{logo_icon} {name}")])
+        )
+        label = f"✅ {name}" if has_logo else name
+        rows.append([KeyboardButton(label)])
     rows.append([KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")])
     return ReplyKeyboardMarkup(rows, resize_keyboard=True)
 
@@ -554,12 +555,12 @@ async def refresh_city_logo_keyboard(message, context):
     for name in combined:
         db_h     = next((h for h in db_city if h["name"] == name), None)
         has_logo = db_h and db_h.get("logo_path") and os.path.exists(db_h.get("logo_path", ""))
-        icon     = "✅" if has_logo else "⬜"
-        rows.append([KeyboardButton(f"{icon} {name}")])
+        label    = f"✅ {name}" if has_logo else name
+        rows.append([KeyboardButton(label)])
     context.user_data["state"] = "admin_logo_select_hospital"
     await message.reply_text(
         f"🏥 *مستشفيات {city}* ({len(combined)})\n"
-        f"✅ = لديه شعار  |  ⬜ = بدون شعار\n\nاختر المستشفى:",
+        f"✅ = لديه شعار\n\nاختر المستشفى:",
         parse_mode="Markdown",
         reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
     )
@@ -568,8 +569,9 @@ async def refresh_city_logo_keyboard(message, context):
 def hospitals_select_keyboard(hospitals: list):
     keyboard = [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]]
     for h in hospitals:
-        logo_icon = "✅" if h.get("logo_path") and os.path.exists(h.get("logo_path", "")) else "⬜"
-        keyboard.append([KeyboardButton(f"{logo_icon} {h['name']}")])
+        has_logo = h.get("logo_path") and os.path.exists(h.get("logo_path", ""))
+        label = f"✅ {h['name']}" if has_logo else h['name']
+        keyboard.append([KeyboardButton(label)])
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def hospital_add_city_keyboard():
@@ -1978,13 +1980,13 @@ async def handle_logos(update, context, text, uid):
             # بناء keyboard من الأسماء مباشرة
             rows = [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]]
             for name in sorted(set(all_names)):
-                rows.append([KeyboardButton(f"⬜ {name}")])
+                rows.append([KeyboardButton(name)])
             kb = ReplyKeyboardMarkup(rows, resize_keyboard=True)
         else:
             kb = hospitals_select_keyboard(hospitals_all)
 
         await update.message.reply_text(
-            "🏥 *اختر المستشفى لرفع شعاره:*\n\n✅ = لديه شعار  |  ⬜ = بدون شعار",
+            "🏥 *اختر المستشفى لرفع شعاره:*\n\n✅ = لديه شعار",
             parse_mode="Markdown", reply_markup=kb
         )
 
@@ -2039,10 +2041,10 @@ async def handle_logos(update, context, text, uid):
             for name in combined_names:
                 db_h = next((h for h in db_city if h["name"] == name), None)
                 has_logo = db_h and db_h.get("logo_path") and os.path.exists(db_h.get("logo_path", ""))
-                icon = "✅" if has_logo else "⬜"
-                rows.append([KeyboardButton(f"{icon} {name}")])
+                label = f"✅ {name}" if has_logo else name
+                rows.append([KeyboardButton(label)])
             await update.message.reply_text(
-                f"🏥 *مستشفيات {text}* ({len(combined_names)})\n✅ = لديه شعار  |  ⬜ = بدون شعار\n\nاختر المستشفى:",
+                f"🏥 *مستشفيات {text}* ({len(combined_names)})\n✅ = لديه شعار\n\nاختر المستشفى:",
                 parse_mode="Markdown",
                 reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
             )
