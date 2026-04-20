@@ -176,7 +176,7 @@ ORDER_FIELDS = [
     {"key": "issue_date_input", "label": "تاريخ الإصدار",                        "example": "17/3/2026"},
 ]
 OPTIONAL_FIELDS = {"birth_year", "phone", "issue_time", "issue_date_input", "days_count"}
-HIDDEN_FIELDS   = {"issue_time", "issue_date_input"}  # لا تظهر في القالب المرسل للمستخدم
+HIDDEN_FIELDS   = {"issue_time", "issue_date_input", "days_count"}  # لا تظهر في القالب — days_count اختياري افتراضي=1
 
 def parse_free_text_order(text: str) -> dict:
     mapping = {

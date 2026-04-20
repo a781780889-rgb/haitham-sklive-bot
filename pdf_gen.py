@@ -834,7 +834,7 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
                 preserveAspectRatio=True,
                 mask='auto',
             )
-            # جعل الباركود قابلاً للنقر
+            # الباركود قابل للنقر → يفتح رابط صحة مباشرة
             c.linkURL(SEHA_URL, (qx, qy, qx + qw, qy + qh), relative=0)
         except Exception:
             pass
@@ -844,22 +844,24 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
         link_text = "www.seha.sa/#/inquiries/slenquiry"
         link_font = EN_REG
         link_size = 10.5
-        # الموضع تحت الباركود تقريباً — y أسفل منطقة الـ QR
-        lx   = (page_w / 2) * x_scale          # توسيط أفقي
-        ly   = (QR_SLOT['rl_y'] - 28) * y_scale  # أسفل الباركود
+
+        # موضع الرابط: توسيط أفقي، أسفل الباركود بـ 28pt
+        lx_center = 421 * x_scale          # مركز الصفحة (842/2 = 421)
+        ly        = (QR_SLOT['rl_y'] - 28) * y_scale
 
         c.setFont(link_font, link_size)
-        c.setFillColorRGB(0.0, 0.27, 0.67)     # أزرق #0045ab
-        tw = pdfmetrics.stringWidth(link_text, link_font, link_size)
-        lx_start = lx - tw / 2
+        c.setFillColorRGB(0.0, 0.27, 0.67)     # أزرق #0045AB
+        tw       = pdfmetrics.stringWidth(link_text, link_font, link_size)
+        lx_start = lx_center - tw / 2
+
         c.drawString(lx_start, ly, link_text)
 
-        # تسطير
+        # تسطير تحت الرابط
         c.setLineWidth(0.5)
         c.setStrokeColorRGB(0.0, 0.27, 0.67)
         c.line(lx_start, ly - 1, lx_start + tw, ly - 1)
 
-        # annotation قابل للنقر يغطي النص
+        # annotation قابل للنقر يغطي النص كاملاً
         c.linkURL(
             SEHA_URL,
             (lx_start, ly - 2, lx_start + tw, ly + link_size),
@@ -936,7 +938,7 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
 
     # ── مدة الإجازة ────────────────────────────────────────────
     dwe         = "day" if days == 1 else "days"
-    duration_en = f"{days} {dwe} ({start} to {end})"
+    duration_en = f"{days} {dwe} ( {start} to {end} )"
 
     ar_day_word = "يوم" if days == 1 else "أيام"
     dur_s       = start
