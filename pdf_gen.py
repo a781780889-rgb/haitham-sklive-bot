@@ -153,7 +153,8 @@ DRAW_SLOTS = {
     'leave_duration_en':    {'x': 318.3, 'rl_y': 891.7, 'size': 13.5,
                              'color': (1.0, 1.0, 1.0)},             # أبيض
     'leave_duration_ar':    {'x': 556.8, 'rl_y': 891.7, 'size': 13.5,
-                             'color': (1.0, 1.0, 1.0)},             # أبيض
+                             'color': (1.0, 1.0, 1.0),              # أبيض
+                             'preshaped': True},        # نص مُعالج مسبقاً — تجاوز BiDi
 
     # ── صفوف عادية: عمود إنجليزي ─────────────────────────────
     'admission_date_en':    {'x': 318.3, 'rl_y': 849.7, 'size': 13.5,
@@ -525,16 +526,24 @@ def to_hijri(date_str):
 
 def to_hijri_duration(days, start_str, end_str):
     """
-    يُنتج نص مدة الإجازة بالهجري داخل الشريط الداكن.
-    مثال: 1 يوم (16-08-1447 الى 16-08-1447)
-    LRE/PDF حول كل تاريخ يمنع BiDi من عكسه ويُثبّت الأقواس في موضعها.
+    يُنتج نص مدة الإجازة بالهجري داخل الشريط الداكن — مُعالج بصرياً مسبقاً.
+    يتجاوز BiDi كلياً بتشكيل كل كلمة عربية على حدة ثم يبني الجملة يدوياً
+    بالترتيب البصري الصحيح (يسار←يمين) ليُرسم مباشرةً بـ drawCentredString.
+    النتيجة البصرية: (10-09-1447 الى 10-09-1447) يوم 1
     """
     h_start = to_hijri(start_str)
     h_end   = to_hijri(end_str)
     dwe     = "يوم" if days == 1 else "أيام"
-    LRE = '\u202a'   # Left-to-Right Embedding — يُثبّت التاريخ بترتيبه الصحيح
-    PDF = '\u202c'   # Pop Directional Format — إغلاق نطاق LRE
-    return f"{days} {dwe} ({LRE}{h_start}{PDF} الى {LRE}{h_end}{PDF})"
+
+    if _BIDI_OK:
+        # نشكّل كل كلمة عربية منفصلةً لتجنب تشويه BiDi للأقواس
+        shaped_dwe = get_display(arabic_reshaper.reshape(dwe))     # ﻡﻮﻳ / ﻡﺎﻳﺃ
+        shaped_ila = get_display(arabic_reshaper.reshape("الى"))   # ﻰﻟﺍ
+        # الترتيب البصري يسار←يمين كما سيظهر على الصفحة:
+        # ( date  الى  date )  يوم  N
+        return f"({h_start} {shaped_ila} {h_end}) {shaped_dwe} {days}"
+    else:
+        return f"({h_start} الى {h_end}) {dwe} {days}"
 
 
 def _jdn_to_gregorian(jdn: int) -> datetime:
@@ -921,6 +930,21 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
         is_bold   = slot.get('bold', False)
 
         c.setFillColorRGB(*rgb)
+
+        # ── نص مُعالج بصرياً مسبقاً — يُرسم مباشرةً بالخط العربي ──────
+        if slot.get('preshaped'):
+            font = AR_BOLD if is_bold else AR_REG
+            max_w = MAX_WIDTHS.get(slot_id, 0) * x_scale
+            if max_w > 0:
+                font_size = _fit_font_size(text_str, font, font_size, max_w)
+            c.setFont(font, font_size)
+            if align == 'left':
+                c.drawString(x, rl_y, text_str)
+            elif align == 'right':
+                c.drawRightString(x, rl_y, text_str)
+            else:
+                c.drawCentredString(x, rl_y, text_str)
+            continue
 
         if _has_arabic(text_str):
             # ── نص عربي ─────────────────────────────────────
