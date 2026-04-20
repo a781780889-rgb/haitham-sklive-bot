@@ -154,7 +154,7 @@ DRAW_SLOTS = {
                              'color': (1.0, 1.0, 1.0)},             # أبيض
     'leave_duration_ar':    {'x': 556.8, 'rl_y': 891.7, 'size': 13.5,
                              'color': (1.0, 1.0, 1.0),              # أبيض
-                             'preshaped': True},        # نص مُعالج مسبقاً — تجاوز BiDi
+                             'reshape_only': True},   # reshape بلا get_display — viewer يطبّق BiDi مرة واحدة
 
     # ── صفوف عادية: عمود إنجليزي ─────────────────────────────
     'admission_date_en':    {'x': 318.3, 'rl_y': 849.7, 'size': 13.5,
@@ -526,24 +526,17 @@ def to_hijri(date_str):
 
 def to_hijri_duration(days, start_str, end_str):
     """
-    يُنتج نص مدة الإجازة بالهجري داخل الشريط الداكن — مُعالج بصرياً مسبقاً.
-    يتجاوز BiDi كلياً بتشكيل كل كلمة عربية على حدة ثم يبني الجملة يدوياً
-    بالترتيب البصري الصحيح (يسار←يمين) ليُرسم مباشرةً بـ drawCentredString.
-    النتيجة البصرية: (10-09-1447 الى 10-09-1447) يوم 1
+    يُنتج نص مدة الإجازة بالهجري داخل الشريط الداكن.
+    ✅ الحل الصحيح: نُعيد نصاً عادياً بأقواس صريحة.
+    - arabic_reshaper يوصّل الحروف العربية (يوم / الى).
+    - لا نستخدم get_display() — المشاهد (PDF viewer) يطبّق BiDi مرة واحدة
+      فيعكس النص RTL ويعكس الأقواس تلقائياً بشكل صحيح.
+    - تطبيق get_display ثم مشاهد BiDi = عكس مزدوج يُشوّه الأقواس.
     """
     h_start = to_hijri(start_str)
     h_end   = to_hijri(end_str)
     dwe     = "يوم" if days == 1 else "أيام"
-
-    if _BIDI_OK:
-        # نشكّل كل كلمة عربية منفصلةً لتجنب تشويه BiDi للأقواس
-        shaped_dwe = get_display(arabic_reshaper.reshape(dwe))     # ﻡﻮﻳ / ﻡﺎﻳﺃ
-        shaped_ila = get_display(arabic_reshaper.reshape("الى"))   # ﻰﻟﺍ
-        # الترتيب البصري يسار←يمين كما سيظهر على الصفحة:
-        # ( date  الى  date )  يوم  N
-        return f"({h_start} {shaped_ila} {h_end}) {shaped_dwe} {days}"
-    else:
-        return f"({h_start} الى {h_end}) {dwe} {days}"
+    return f"{days} {dwe} ({h_start} الى {h_end})"
 
 
 def _jdn_to_gregorian(jdn: int) -> datetime:
@@ -931,19 +924,27 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
 
         c.setFillColorRGB(*rgb)
 
-        # ── نص مُعالج بصرياً مسبقاً — يُرسم مباشرةً بالخط العربي ──────
-        if slot.get('preshaped'):
+        # ── reshape_only: نوصّل الحروف العربية بلا get_display ──────────
+        # المشاهد يطبّق BiDi مرة واحدة → الأقواس تظهر صحيحة تلقائياً
+        if slot.get('reshape_only'):
             font = AR_BOLD if is_bold else AR_REG
+            if _BIDI_OK:
+                try:
+                    shaped = arabic_reshaper.reshape(text_str)
+                except Exception:
+                    shaped = text_str
+            else:
+                shaped = text_str
             max_w = MAX_WIDTHS.get(slot_id, 0) * x_scale
             if max_w > 0:
-                font_size = _fit_font_size(text_str, font, font_size, max_w)
+                font_size = _fit_font_size(shaped, font, font_size, max_w)
             c.setFont(font, font_size)
             if align == 'left':
-                c.drawString(x, rl_y, text_str)
+                c.drawString(x, rl_y, shaped)
             elif align == 'right':
-                c.drawRightString(x, rl_y, text_str)
+                c.drawRightString(x, rl_y, shaped)
             else:
-                c.drawCentredString(x, rl_y, text_str)
+                c.drawCentredString(x, rl_y, shaped)
             continue
 
         if _has_arabic(text_str):
