@@ -171,12 +171,12 @@ ORDER_FIELDS = [
     {"key": "nationality",      "label": "الجنسية",                              "example": "سعودي"},
     {"key": "city",             "label": "المدينة التابعة لجهة العمل (مهم)",     "example": "الرياض"},
     {"key": "excuse_date",      "label": "تاريخ الاجازة",                        "example": "14/1/2026"},
-    {"key": "days_count",       "label": "عدد الايام",                           "example": "5"},
+    {"key": "days_count",       "label": "عدد الايام (اختياري)",                 "example": "5"},
     {"key": "issue_time",       "label": "وقت الإصدار",                          "example": "PM 10:40"},
     {"key": "issue_date_input", "label": "تاريخ الإصدار",                        "example": "17/3/2026"},
 ]
 OPTIONAL_FIELDS = {"birth_year", "phone", "issue_time", "issue_date_input", "days_count"}
-HIDDEN_FIELDS   = {"issue_time", "issue_date_input", "days_count"}  # لا تظهر في القالب — days_count اختياري افتراضي=1
+HIDDEN_FIELDS   = {"issue_time", "issue_date_input"}  # لا تظهر في القالب المرسل للمستخدم
 
 def parse_free_text_order(text: str) -> dict:
     mapping = {
@@ -188,7 +188,7 @@ def parse_free_text_order(text: str) -> dict:
         "nationality":      ["الجنسية", "الجنسيه"],
         "city":             ["المدينة التابعة لجهة العمل (مهم)", "المدينة التابعة لجهة العمل", "المدينة التابعة", "المدينة التابع لها", "المدينة"],
         "excuse_date":      ["تاريخ الاجازة", "تاريخ الإجازة", "تاريخ العذر", "العذر", "الاجازة"],
-        "days_count":       ["عدد الايام", "عدد الأيام المطلوبة", "عدد الأيام", "الأيام", "الايام"],
+        "days_count":       ["عدد الايام (اختياري)", "عدد الأيام (اختياري)", "عدد الايام", "عدد الأيام المطلوبة", "عدد الأيام", "الأيام", "الايام"],
         "issue_time":       ["وقت الإصدار", "وقت الاصدار", "الوقت"],
         "issue_date_input": ["تاريخ الإصدار", "تاريخ الاصدار"],
         "exit_date":        ["تاريخ الخروج", "الخروج"],
