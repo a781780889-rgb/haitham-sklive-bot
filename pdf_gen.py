@@ -463,6 +463,84 @@ def to_hijri_duration(days, start_str, end_str):
     return f"{days} {dwe} ({h_start} الى {h_end})"
 
 
+def _jdn_to_gregorian(jdn: int) -> datetime:
+    """Julian Day Number → Gregorian datetime"""
+    l = jdn + 68569
+    n = (4 * l) // 146097
+    l = l - (146097 * n + 3) // 4
+    i = (4000 * (l + 1)) // 1461001
+    l = l - (1461 * i) // 4 + 31
+    j = (80 * l) // 2447
+    day = l - (2447 * j) // 80
+    ll = j // 11
+    month = j + 2 - 12 * ll
+    year = 100 * (n - 49) + i + ll
+    return datetime(year, month, day)
+
+
+def hijri_to_gregorian(h_year: int, h_month: int, h_day: int):
+    """
+    يحوّل تاريخ هجري (أم القرى) إلى ميلادي.
+    يُعيد datetime أو None إن كان خارج الجدول.
+    """
+    for jdn_start, hy, hm in _UMM_ALQURA:
+        if hy == h_year and hm == h_month:
+            return _jdn_to_gregorian(jdn_start + h_day - 1)
+    return None
+
+
+# ── أسماء الأشهر الهجرية بالعربي ──────────────────────────────────
+HIJRI_MONTHS_AR = {
+    'محرم': 1,
+    'صفر': 2,
+    'ربيع الأول': 3, 'ربيع الاول': 3, 'ربيع أول': 3,
+    'ربيع الثاني': 4, 'ربيع الاخر': 4, 'ربيع ثاني': 4,
+    'جمادى الأولى': 5, 'جمادى الاولى': 5, 'جمادى أولى': 5,
+    'جمادى الثانية': 6, 'جمادى الثاني': 6, 'جمادى ثانية': 6,
+    'رجب': 7,
+    'شعبان': 8,
+    'رمضان': 9,
+    'شوال': 10,
+    'ذو القعدة': 11, 'ذي القعدة': 11, 'ذو القعده': 11,
+    'ذو الحجة': 12, 'ذي الحجة': 12, 'ذو الحجه': 12,
+}
+
+# ترتيب الأشهر من الأطول للأقصر لضمان أولوية المطابقة الصحيحة
+_HIJRI_MONTHS_SORTED = sorted(HIJRI_MONTHS_AR.items(), key=lambda x: -len(x[0]))
+
+_AR_DIGITS_PDF = str.maketrans(
+    '٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹',
+    '01234567890123456789'
+)
+
+
+def parse_hijri_date_input(text: str, default_year: int = 1447) -> str:
+    """
+    يحلّل تاريخ هجري مكتوب بالعربي ويُعيده بصيغة ميلادية (DD/MM/YYYY).
+    أمثلة مقبولة:
+      "١٠ رمضان"        → يفترض السنة default_year
+      "١٠ رمضان ١٤٤٧"  → سنة صريحة
+      "10 رمضان 1447"   → أرقام غربية
+    يُعيد None إن لم يُعرف.
+    """
+    if not text:
+        return None
+    t = str(text).translate(_AR_DIGITS_PDF).strip()
+    # إزالة الفواصل والنقاط
+    t = re.sub(r'[,،.]', ' ', t)
+    for month_ar, month_num in _HIJRI_MONTHS_SORTED:
+        escaped = re.escape(month_ar.translate(_AR_DIGITS_PDF))
+        pattern = rf'(\d{{1,2}})\s+{escaped}\s*(\d{{4}})?'
+        m = re.search(pattern, t, re.UNICODE)
+        if m:
+            day  = int(m.group(1))
+            year = int(m.group(2)) if m.group(2) else default_year
+            dt = hijri_to_gregorian(year, month_num, day)
+            if dt:
+                return dt.strftime("%d/%m/%Y")
+    return None
+
+
 def gen_leave_id(_):
     return "PSL" + "".join([str(random.randint(0, 9)) for _ in range(11)])
 
@@ -936,7 +1014,7 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
 
     # ── مدة الإجازة ────────────────────────────────────────────
     dwe         = "day" if days == 1 else "days"
-    duration_en = f"{days} {dwe} ({start} to {end})"
+    duration_en = f"{days} {dwe} ({start} to {end})"   # ميلادي (للاستخدام الداخلي)
 
     ar_day_word = "يوم" if days == 1 else "أيام"
     dur_s       = start
@@ -949,6 +1027,10 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
     hijri_end      = to_hijri(end)
     hijri_discharge = to_hijri(discharge)
     duration_hijri  = to_hijri_duration(days, start, end)
+
+    # ── مدة الإجازة بالهجري للعمود الإنجليزي أيضاً ────────────
+    dwe_en = "day" if days == 1 else "days"
+    duration_hijri_en = f"{days} {dwe_en} ({hijri_start} to {hijri_end})"
 
     # ── الترجمة ─────────────────────────────────────────────────
     name_en   = _to_en(full_name)
@@ -981,13 +1063,13 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
         'national_id':          id_number,
 
         # مدة الإجازة — أبيض اللون
-        # العمود الأول (يسار/إنجليزي) → ميلادي | العمود الثاني (يمين/عربي) → هجري
-        'leave_duration_en':    duration_en,
+        # كلا العمودين (إنجليزي وعربي) يعرضان التاريخ الهجري
+        'leave_duration_en':    duration_hijri_en,
         'leave_duration_ar':    duration_hijri,
 
-        # عمود إنجليزي — التواريخ بالميلادي، الأسماء بـ ALL CAPS
-        'admission_date_en':    start,
-        'discharge_date_en':    discharge,
+        # عمود إنجليزي — التواريخ بالهجري الآن، الأسماء بـ ALL CAPS
+        'admission_date_en':    hijri_start,
+        'discharge_date_en':    hijri_discharge,
         'name_en':              name_en_upper,             # ALL CAPS مطابق للأصلي
         'nationality_en':       nat_en_,
         'practitioner_name_en': doc_en_upper,              # ALL CAPS مطابق للأصلي

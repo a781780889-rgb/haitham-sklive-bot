@@ -21,7 +21,7 @@ from telegram.ext import (
 )
 
 import database as db
-from pdf_gen import generate_excuse_pdf
+from pdf_gen import generate_excuse_pdf, parse_hijri_date_input, HIJRI_MONTHS_AR
 
 # ══════════════════════════════════════════════
 # الإعدادات الثابتة
@@ -158,6 +158,27 @@ def calculate_end_date(start_str: str, days: int) -> str:
             pass
     return start_str
 
+
+def normalize_date_input(text: str) -> str:
+    """
+    يُطبّع أي إدخال تاريخ من المستخدم:
+    - يحوّل الأرقام العربية/الفارسية إلى غربية
+    - إن كان التاريخ هجرياً بأسماء الأشهر العربية (مثل "١٠ رمضان ١٤٤٧")
+      يُحوّله إلى ميلادي (DD/MM/YYYY) لأن pdf_gen.py يتوقع ميلادي
+    - وإلا يُعيد النص بعد تحويل الأرقام فقط
+    """
+    if not text:
+        return text
+    # أولاً: تحويل الأرقام
+    normalized = to_western_nums(str(text).strip())
+    # ثانياً: هل يحتوي على اسم شهر هجري؟
+    has_hijri_month = any(m in text for m in HIJRI_MONTHS_AR)
+    if has_hijri_month:
+        greg = parse_hijri_date_input(normalized)
+        if greg:
+            return greg
+    return normalized
+
 # ══════════════════════════════════════════════
 # حقول الطلب
 # ══════════════════════════════════════════════
@@ -209,6 +230,9 @@ def parse_free_text_order(text: str) -> dict:
                     value = to_western_nums(value)
                     m = re.search(r'\d+', value)
                     value = m.group() if m else value
+                elif key in ("excuse_date", "exit_date", "issue_date_input"):
+                    # تطبيع التاريخ: دعم هجري بالأشهر العربية وتحويله لميلادي
+                    value = normalize_date_input(value)
                 else:
                     value = to_western_nums(value)
                 result[key] = value
@@ -1075,7 +1099,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if state == "ask_exit_date":
         od = context.user_data.get("order_data", {})
-        od["exit_date"] = to_western_nums(text)
+        od["exit_date"] = normalize_date_input(text)
         context.user_data["order_data"] = od
         context.user_data["state"] = "confirm_order"
         await update.message.reply_text(
