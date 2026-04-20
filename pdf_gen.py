@@ -368,23 +368,85 @@ def to_western_nums(text):
     return str(text).translate(_AR_DIGITS)
 
 
+# ── أسماء الأشهر الميلادية بالعربي (لتحليل مدخلات المستخدم) ──────────
+_GREGORIAN_MONTHS_AR = {
+    'يناير': 1,   'جانفي': 1,
+    'فبراير': 2,  'فيفري': 2,   'شباط': 2,
+    'مارس': 3,    'آذار': 3,
+    'ابريل': 4,   'أبريل': 4,   'نيسان': 4,   'إبريل': 4,
+    'مايو': 5,    'مايس': 5,    'ايار': 5,
+    'يونيو': 6,   'يونيه': 6,   'حزيران': 6,
+    'يوليو': 7,   'يوليه': 7,   'تموز': 7,
+    'اغسطس': 8,   'أغسطس': 8,   'اوغسطس': 8,  'آب': 8,
+    'سبتمبر': 9,  'ايلول': 9,   'أيلول': 9,
+    'اكتوبر': 10, 'أكتوبر': 10, 'تشرين': 10,
+    'نوفمبر': 11, 'نوفيمبر': 11,'تشرين الثاني': 11,
+    'ديسمبر': 12, 'ديسمبير': 12,'كانون': 12,   'كانون الأول': 12,
+}
+
+# ترتيب من الأطول للأقصر لضمان المطابقة الصحيحة
+_GREG_MONTHS_SORTED = sorted(_GREGORIAN_MONTHS_AR.items(), key=lambda x: -len(x[0]))
+
+
+def _parse_ar_gregorian(text: str, default_year: int = None) -> str:
+    """
+    يحلّل تاريخاً ميلادياً مكتوباً بالأشهر العربية ويُعيده بصيغة DD/MM/YYYY.
+    أمثلة:
+      "9 ابريل"      → "09/04/2026"  (يفترض السنة الحالية)
+      "٩ ابريل"      → "09/04/2026"
+      "9 ابريل 2026" → "09/04/2026"
+    يُعيد None إن لم يُعرف.
+    """
+    if not text:
+        return None
+    t = str(text).translate(_AR_DIGITS).strip()
+    if default_year is None:
+        default_year = datetime.now().year
+
+    for month_ar, month_num in _GREG_MONTHS_SORTED:
+        escaped = re.escape(month_ar)
+        m = re.search(rf'(\d{{1,2}})\s+{escaped}\s*(\d{{4}})?', t, re.UNICODE)
+        if m:
+            day  = int(m.group(1))
+            year = int(m.group(2)) if m.group(2) else default_year
+            try:
+                dt = datetime(year, month_num, day)
+                return dt.strftime("%d/%m/%Y")
+            except ValueError:
+                return None
+    return None
+
+
 def calc_dates(s, days, ex=None):
-    for fmt in ["%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%d/%m/%y"]:
-        try:
-            d  = datetime.strptime(s.strip(), fmt)
-            st = d.strftime("%d-%m-%Y")
-            en = (d + timedelta(days=days - 1)).strftime("%d-%m-%Y")
-            if ex:
-                exc = _clean(ex)
-                for ef in ["%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%d/%m/%y"]:
-                    try:
-                        ex = datetime.strptime(exc.strip(), ef).strftime("%d-%m-%Y")
-                        break
-                    except Exception:
-                        pass
-            return st, en, ex or st
-        except Exception:
-            pass
+    def _try_parse(val):
+        """يحاول تحليل التاريخ بأي صيغة مدعومة — يُعيد datetime أو None"""
+        if not val:
+            return None
+        v = str(val).strip()
+        # ١) صيغ الأرقام المعروفة
+        for fmt in ["%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%d/%m/%y"]:
+            try:
+                return datetime.strptime(v, fmt)
+            except Exception:
+                pass
+        # ٢) أشهر ميلادية بالعربي (مثل "9 ابريل" أو "٩ ابريل 2026")
+        ar_greg = _parse_ar_gregorian(v)
+        if ar_greg:
+            try:
+                return datetime.strptime(ar_greg, "%d/%m/%Y")
+            except Exception:
+                pass
+        return None
+
+    d = _try_parse(s)
+    if d:
+        st = d.strftime("%d-%m-%Y")
+        en = (d + timedelta(days=days - 1)).strftime("%d-%m-%Y")
+        if ex:
+            exc = _clean(ex)
+            dex = _try_parse(exc)
+            ex = dex.strftime("%d-%m-%Y") if dex else ex
+        return st, en, ex or st
     return s, s, ex or s
 
 
@@ -428,27 +490,37 @@ def _jdn2hijri_lib(year, month, day):
 
 def to_hijri(date_str):
     """
-    يحوّل تاريخاً ميلادياً (DD-MM-YYYY) إلى هجري (DD-MM-YYYY).
+    يحوّل تاريخاً ميلادياً إلى هجري (DD-MM-YYYY).
+    يقبل صيغ متعددة بما فيها الأشهر الميلادية بالعربي مثل "9 ابريل".
     يستخدم جدول أم القرى المدمج — لا يحتاج أي مكتبة خارجية.
     """
+    if not date_str:
+        return date_str
+
+    # تطبيع الأرقام أولاً
+    normalized = str(date_str).translate(_AR_DIGITS).strip()
+
+    # محاولة تحليل الصيغ المعروفة
     for fmt in ["%d-%m-%Y", "%d/%m/%Y", "%Y-%m-%d", "%d/%m/%y"]:
         try:
-            dt = datetime.strptime(date_str.strip(), fmt)
+            dt = datetime.strptime(normalized, fmt)
             y, m, d = dt.year, dt.month, dt.day
-
-            # أولاً: جرب المكتبة الخارجية (أكثر دقة للتواريخ خارج الجدول)
             lib_result = _jdn2hijri_lib(y, m, d)
             if lib_result:
                 hy, hm, hd = lib_result
                 return f"{hd:02d}-{hm:02d}-{hy}"
-
-            # ثانياً: استخدم الجدول المدمج
             jdn = _g2jdn(y, m, d)
             hy, hm, hd = _jdn2hijri_builtin(jdn)
             return f"{hd:02d}-{hm:02d}-{hy}"
         except Exception:
             pass
-    return date_str   # fallback: أعد التاريخ كما هو
+
+    # محاولة تحليل أشهر ميلادية بالعربي (مثل "9 ابريل" أو "9 ابريل 2026")
+    ar_greg = _parse_ar_gregorian(normalized)
+    if ar_greg:
+        return to_hijri(ar_greg)
+
+    return date_str   # fallback: أعد كما هو
 
 
 def to_hijri_duration(days, start_str, end_str):

@@ -21,7 +21,13 @@ from telegram.ext import (
 )
 
 import database as db
-from pdf_gen import generate_excuse_pdf, parse_hijri_date_input, HIJRI_MONTHS_AR
+from pdf_gen import (
+    generate_excuse_pdf,
+    parse_hijri_date_input,
+    HIJRI_MONTHS_AR,
+    _parse_ar_gregorian,
+    _GREGORIAN_MONTHS_AR,
+)
 
 # ══════════════════════════════════════════════
 # الإعدادات الثابتة
@@ -164,7 +170,9 @@ def normalize_date_input(text: str) -> str:
     يُطبّع أي إدخال تاريخ من المستخدم:
     - يحوّل الأرقام العربية/الفارسية إلى غربية
     - إن كان التاريخ هجرياً بأسماء الأشهر العربية (مثل "١٠ رمضان ١٤٤٧")
-      يُحوّله إلى ميلادي (DD/MM/YYYY) لأن pdf_gen.py يتوقع ميلادي
+      يُحوّله إلى ميلادي (DD/MM/YYYY)
+    - إن كان التاريخ ميلادياً بأسماء الأشهر العربية (مثل "٩ ابريل")
+      يُحوّله إلى ميلادي (DD/MM/YYYY)
     - وإلا يُعيد النص بعد تحويل الأرقام فقط
     """
     if not text:
@@ -172,9 +180,13 @@ def normalize_date_input(text: str) -> str:
     # أولاً: تحويل الأرقام
     normalized = to_western_nums(str(text).strip())
     # ثانياً: هل يحتوي على اسم شهر هجري؟
-    has_hijri_month = any(m in text for m in HIJRI_MONTHS_AR)
-    if has_hijri_month:
+    if any(m in text for m in HIJRI_MONTHS_AR):
         greg = parse_hijri_date_input(normalized)
+        if greg:
+            return greg
+    # ثالثاً: هل يحتوي على اسم شهر ميلادي بالعربي (مثل "9 ابريل")؟
+    if any(m in text for m in _GREGORIAN_MONTHS_AR):
+        greg = _parse_ar_gregorian(normalized)
         if greg:
             return greg
     return normalized
