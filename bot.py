@@ -534,6 +534,37 @@ def logo_city_hospitals_keyboard(city: str, hospitals_db: list):
     rows.append([KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")])
     return ReplyKeyboardMarkup(rows, resize_keyboard=True)
 
+async def refresh_city_logo_keyboard(message, context):
+    """
+    بعد رفع/حذف شعار، أعد عرض قائمة مستشفيات نفس المدينة
+    مع تحديث أيقونات ✅/⬜ فوراً دون الحاجة للرجوع.
+    يُعيد True إن وُجدت مدينة محفوظة في الجلسة، وإلا False.
+    """
+    city = context.user_data.get("logo_browse_city", "")
+    if not city:
+        return False
+    hospitals_all = db.get_all_hospitals()
+    ksa_list      = get_all_hospitals_for_city_flat(city)
+    db_city       = [h for h in hospitals_all if h.get("city") == city]
+    combined      = list(dict.fromkeys(ksa_list))
+    for h in db_city:
+        if h["name"] not in combined:
+            combined.append(h["name"])
+    rows = [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]]
+    for name in combined:
+        db_h     = next((h for h in db_city if h["name"] == name), None)
+        has_logo = db_h and db_h.get("logo_path") and os.path.exists(db_h.get("logo_path", ""))
+        icon     = "✅" if has_logo else "⬜"
+        rows.append([KeyboardButton(f"{icon} {name}")])
+    context.user_data["state"] = "admin_logo_select_hospital"
+    await message.reply_text(
+        f"🏥 *مستشفيات {city}* ({len(combined)})\n"
+        f"✅ = لديه شعار  |  ⬜ = بدون شعار\n\nاختر المستشفى:",
+        parse_mode="Markdown",
+        reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+    )
+    return True
+
 def hospitals_select_keyboard(hospitals: list):
     keyboard = [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]]
     for h in hospitals:
@@ -2919,12 +2950,19 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         save_path = os.path.join(LOGOS_DIR, f"{int(datetime.now().timestamp())}_{hospital_name.replace(' ','_')}.jpg")
         await file.download_to_drive(save_path)
         db.set_hospital_logo(hospital_name, save_path)
-        context.user_data["state"] = "admin_logos"
+        # رسالة النجاح
         await update.message.reply_text(
             f"✅ *تم رفع شعار {hospital_name} بنجاح!*\n\n"
             f"سيتم استخدامه تلقائياً في الإجازات الطبية.",
-            parse_mode="Markdown", reply_markup=logos_keyboard()
+            parse_mode="Markdown"
         )
+        # ✅ أعد عرض قائمة المدينة مع تحديث الأيقونات فوراً
+        if not await refresh_city_logo_keyboard(update.message, context):
+            context.user_data["state"] = "admin_logos"
+            await update.message.reply_text(
+                "🖼️ *شعارات المستشفيات*",
+                parse_mode="Markdown", reply_markup=logos_keyboard()
+            )
         return
 
     if state == "charge_await_screenshot":
@@ -3419,11 +3457,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     # ── إلغاء بحث الشعار
     elif data == "cancel_logo_search":
-        context.user_data["state"] = "admin_logos"
-        await query.message.reply_text(
-            "✅ تمّ. العودة لإدارة الشعارات.",
-            reply_markup=logos_keyboard()
-        )
+        await query.answer()
+        # ✅ أعد عرض قائمة المدينة مع تحديث الأيقونات فوراً
+        if not await refresh_city_logo_keyboard(query.message, context):
+            context.user_data["state"] = "admin_logos"
+            await query.message.reply_text(
+                "✅ تمّ. العودة لإدارة الشعارات.",
+                reply_markup=logos_keyboard()
+            )
 
     elif data == "cancel_order":
         context.user_data.clear()
