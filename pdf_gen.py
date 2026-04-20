@@ -527,12 +527,13 @@ def to_hijri_duration(days, start_str, end_str):
     """
     يُنتج نص مدة الإجازة بالهجري داخل الشريط الداكن.
     مثال: 1 يوم (16-08-1447 الى 16-08-1447)
-    بدون مسافات داخل الأقواس — مطابق المرجع
+    LRM حول الأقواس يمنع BiDi من إخفائها أو عكسها.
     """
     h_start = to_hijri(start_str)
     h_end   = to_hijri(end_str)
     dwe     = "يوم" if days == 1 else "أيام"
-    return f"{days} {dwe} ({h_start} الى {h_end})"
+    LRM = '\u200e'   # Left-to-Right Mark — يُثبّت الأقواس في موضعها
+    return f"{days} {dwe} {LRM}({h_start} الى {h_end}){LRM}"
 
 
 def _jdn_to_gregorian(jdn: int) -> datetime:
@@ -841,7 +842,7 @@ def _get_page_size(template_path):
 # إنشاء طبقة النصوص والصور
 # ══════════════════════════════════════════════════════════════
 
-def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_path):
+def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_path, website_url="https://sehaseinquiresslendquiry.com"):
     """
     طبقة شفافة تُرسم فوق القالب:
     • نصوص إنجليزية → Times-Roman / Times-Bold  (مدمج في ReportLab)
@@ -965,57 +966,40 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
         except Exception:
             pass
 
-    # ─── QR Code — يشير إلى رابط التحقق من صحة ─────────────────
+    # ─── مستطيل خفيف بدلاً من الباركود ────────────────────────────
+    # (الباركود محذوف — مستطيل بحدود رمادية فاتحة يُشير لمكانه)
     SEHA_URL = "https://www.seha.sa/#/inquiries/slenquiry"
-    if qr_img:
-        try:
-            buf = io.BytesIO()
-            qr_img.save(buf, 'PNG')
-            buf.seek(0)
-            img_reader = ImageReader(buf)
-            qx = QR_SLOT['x']    * x_scale
-            qy = QR_SLOT['rl_y'] * y_scale
-            qw = QR_SLOT['width']  * x_scale
-            qh = QR_SLOT['height'] * y_scale
-            c.drawImage(
-                img_reader,
-                qx, qy,
-                width=qw, height=qh,
-                preserveAspectRatio=True,
-                mask='auto',
-            )
-            # جعل الباركود قابلاً للنقر
-            c.linkURL(SEHA_URL, (qx, qy, qx + qw, qy + qh), relative=0)
-        except Exception:
-            pass
+    qx = QR_SLOT['x']      * x_scale
+    qy = QR_SLOT['rl_y']   * y_scale
+    qw = QR_SLOT['width']  * x_scale
+    qh = QR_SLOT['height'] * y_scale
+    c.setStrokeColorRGB(0.78, 0.78, 0.78)   # رمادي فاتح
+    c.setLineWidth(0.8)
+    c.rect(qx, qy, qw, qh, stroke=1, fill=0)  # مستطيل بدون تعبئة
 
-    # ─── رابط التحقق — نص أزرق قابل للنقر ──────────────────────
+    # ─── annotations قابلة للنقر فوق الروابط المطبوعة في القالب ───
+    # رابط سطر Arabic  "www.seha.sa/#/inquiries/slenquiry" في القالب
+    ar_link_y0 = 333.0 * y_scale
+    ar_link_y1 = 347.0 * y_scale
+    ar_link_x0 = 157.0 * x_scale
+    ar_link_x1 = 300.0 * x_scale
+    c.linkURL(SEHA_URL, (ar_link_x0, ar_link_y0, ar_link_x1, ar_link_y1), relative=0)
+
+    # رابط سطر English "www.seha.sa/#/inquiries/slenquiry" في القالب
+    en_link_y0 = 290.0 * y_scale
+    en_link_y1 = 302.0 * y_scale
+    en_link_x0 = 157.0 * x_scale
+    en_link_x1 = 300.0 * x_scale
+    c.linkURL(SEHA_URL, (en_link_x0, en_link_y0, en_link_x1, en_link_y1), relative=0)
+
+    # رابط "sehaseinquiresslendquiry.com" النص المطبوع في القالب (قابل للنسخ)
     try:
-        link_text = "www.seha.sa/#/inquiries/slenquiry"
-        link_font = EN_REG
-        link_size = 10.5
-        # الموضع تحت الباركود تقريباً — y أسفل منطقة الـ QR
-        lx   = (page_w / 2) * x_scale          # توسيط أفقي
-        ly   = (QR_SLOT['rl_y'] - 28) * y_scale  # أسفل الباركود
-
-        c.setFont(link_font, link_size)
-        c.setFillColorRGB(0.0, 0.27, 0.67)     # أزرق #0045ab
-        tw = pdfmetrics.stringWidth(link_text, link_font, link_size)
-        lx_start = lx - tw / 2
-        c.drawString(lx_start, ly, link_text)
-
-        # تسطير
-        c.setLineWidth(0.5)
-        c.setStrokeColorRGB(0.0, 0.27, 0.67)
-        c.line(lx_start, ly - 1, lx_start + tw, ly - 1)
-
-        # annotation قابل للنقر يغطي النص
-        c.linkURL(
-            SEHA_URL,
-            (lx_start, ly - 2, lx_start + tw, ly + link_size),
-            relative=0
-        )
-        c.setFillColorRGB(0, 0, 0)   # إعادة اللون للأسود
+        _website_url = str(website_url or "https://sehaseinquiresslendquiry.com").strip()
+        site_y0 = 264.0 * y_scale
+        site_y1 = 278.0 * y_scale
+        site_x0 = 142.0 * x_scale
+        site_x1 = 258.0 * x_scale
+        c.linkURL(_website_url, (site_x0, site_y0, site_x1, site_y1), relative=0)
     except Exception:
         pass
 
@@ -1171,9 +1155,8 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
     overlay_tmp = os.path.join(TEMP_DIR, f"overlay_{uid}.pdf")
 
     try:
-        SEHA_VERIFY_URL = "https://www.seha.sa/#/inquiries/slenquiry"
-        qr_img = make_qr_image(SEHA_VERIFY_URL)
-        _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_tmp)
+        _create_overlay(page_w, page_h, field_values, None, logo_path, overlay_tmp,
+                        website_url=website_url)
 
         template_reader = PdfReader(template_path)
         overlay_reader  = PdfReader(overlay_tmp)
