@@ -526,14 +526,15 @@ def to_hijri(date_str):
 def to_hijri_duration(days, start_str, end_str):
     """
     يُنتج نص مدة الإجازة بالهجري داخل الشريط الداكن.
-    مثال: 1 يوم (16-08-1447 الى 16-08-1447)
-    LRM حول الأقواس يمنع BiDi من إخفائها أو عكسها.
+    يُرتَّب النص بصيغة بصرية (من اليسار لليمين) يقرأها القارئ العربي من اليمين
+    كما يلي: "1 يوم (10-09-1447 الى 10-09-1447)"
+    هذا الترتيب يضمن ظهور الأقواس في موضعها الصحيح.
     """
     h_start = to_hijri(start_str)
     h_end   = to_hijri(end_str)
     dwe     = "يوم" if days == 1 else "أيام"
-    LRM = '\u200e'   # Left-to-Right Mark — يُثبّت الأقواس في موضعها
-    return f"{days} {dwe} {LRM}({h_start} الى {h_end}){LRM}"
+    # ترتيب بصري LTR: الأقواس والأرقام أولاً ثم الكلمة العربية
+    return f"({h_start} الى {h_end}) {dwe} {days}"
 
 
 def _jdn_to_gregorian(jdn: int) -> datetime:
@@ -924,7 +925,16 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
         if _has_arabic(text_str):
             # ── نص عربي ─────────────────────────────────────
             font = AR_BOLD if is_bold else AR_REG
-            shaped = shape_arabic(text_str)
+            # حالة خاصة لمدة الإجازة العربية: نستخدم تشكيل الحروف فقط دون
+            # إعادة ترتيب BiDi كي تبقى الأقواس في موضعها الصحيح
+            if slot_id == 'leave_duration_ar':
+                try:
+                    import arabic_reshaper as _ar
+                    shaped = _ar.reshape(text_str)
+                except Exception:
+                    shaped = text_str
+            else:
+                shaped = shape_arabic(text_str)
             # تقليص تلقائي إن كان النص طويلاً
             max_w = MAX_WIDTHS.get(slot_id, 0) * x_scale
             if max_w > 0:
@@ -966,33 +976,62 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
         except Exception:
             pass
 
-    # ─── مستطيل خفيف بدلاً من الباركود ────────────────────────────
-    # (الباركود محذوف — مستطيل بحدود رمادية فاتحة يُشير لمكانه)
+    # ─── الباركود (يُوجِّه للموقع الرسمي لمنصة صحة) ─────────────
     SEHA_URL = "https://www.seha.sa/#/inquiries/slenquiry"
     qx = QR_SLOT['x']      * x_scale
     qy = QR_SLOT['rl_y']   * y_scale
     qw = QR_SLOT['width']  * x_scale
     qh = QR_SLOT['height'] * y_scale
-    c.setStrokeColorRGB(0.78, 0.78, 0.78)   # رمادي فاتح
-    c.setLineWidth(0.8)
-    c.rect(qx, qy, qw, qh, stroke=1, fill=0)  # مستطيل بدون تعبئة
 
-    # ─── annotations قابلة للنقر فوق الروابط المطبوعة في القالب ───
-    # رابط سطر Arabic  "www.seha.sa/#/inquiries/slenquiry" في القالب
-    ar_link_y0 = 333.0 * y_scale
-    ar_link_y1 = 347.0 * y_scale
-    ar_link_x0 = 157.0 * x_scale
-    ar_link_x1 = 300.0 * x_scale
-    c.linkURL(SEHA_URL, (ar_link_x0, ar_link_y0, ar_link_x1, ar_link_y1), relative=0)
+    if qr_img:
+        try:
+            buf = io.BytesIO()
+            qr_img.save(buf, 'PNG')
+            buf.seek(0)
+            img_reader = ImageReader(buf)
+            c.drawImage(
+                img_reader,
+                qx, qy,
+                width=qw, height=qh,
+                preserveAspectRatio=True,
+                mask='auto',
+            )
+            # جعل الباركود نفسه قابلاً للنقر
+            c.linkURL(SEHA_URL, (qx, qy, qx + qw, qy + qh), relative=0)
+        except Exception:
+            pass
 
-    # رابط سطر English "www.seha.sa/#/inquiries/slenquiry" في القالب
-    en_link_y0 = 290.0 * y_scale
-    en_link_y1 = 302.0 * y_scale
-    en_link_x0 = 157.0 * x_scale
-    en_link_x1 = 300.0 * x_scale
-    c.linkURL(SEHA_URL, (en_link_x0, en_link_y0, en_link_x1, en_link_y1), relative=0)
+    # ─── رابط التحقق — نص أزرق قابل للنقر أسفل الباركود ───────────
+    try:
+        link_text = "www.seha.sa/#/inquiries/slenquiry"
+        link_font = EN_REG
+        link_size = 10.5
+        # الموضع: أسفل الباركود، موسَّط أفقياً حوله
+        lx_center = (QR_SLOT['x'] + QR_SLOT['width'] / 2) * x_scale
+        ly        = (QR_SLOT['rl_y'] - 18) * y_scale   # أسفل الباركود مباشرة
 
-    # رابط "sehaseinquiresslendquiry.com" النص المطبوع في القالب (قابل للنسخ)
+        c.setFont(link_font, link_size)
+        c.setFillColorRGB(0.0, 0.27, 0.67)     # أزرق #0045ab
+        tw = pdfmetrics.stringWidth(link_text, link_font, link_size)
+        lx_start = lx_center - tw / 2
+        c.drawString(lx_start, ly, link_text)
+
+        # تسطير بنفس اللون الأزرق
+        c.setLineWidth(0.5)
+        c.setStrokeColorRGB(0.0, 0.27, 0.67)
+        c.line(lx_start, ly - 1, lx_start + tw, ly - 1)
+
+        # annotation قابل للنقر يغطي النص — يفتح نفس رابط الباركود
+        c.linkURL(
+            SEHA_URL,
+            (lx_start, ly - 2, lx_start + tw, ly + link_size),
+            relative=0
+        )
+        c.setFillColorRGB(0, 0, 0)   # إعادة اللون للأسود
+    except Exception:
+        pass
+
+    # ─── annotation على رابط موقع سحة المطبوع في القالب (قابل للنسخ) ─
     try:
         _website_url = str(website_url or "https://sehaseinquiresslendquiry.com").strip()
         site_y0 = 264.0 * y_scale
@@ -1155,7 +1194,9 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
     overlay_tmp = os.path.join(TEMP_DIR, f"overlay_{uid}.pdf")
 
     try:
-        _create_overlay(page_w, page_h, field_values, None, logo_path, overlay_tmp,
+        SEHA_VERIFY_URL = "https://www.seha.sa/#/inquiries/slenquiry"
+        qr_img = make_qr_image(SEHA_VERIFY_URL)
+        _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_tmp,
                         website_url=website_url)
 
         template_reader = PdfReader(template_path)
