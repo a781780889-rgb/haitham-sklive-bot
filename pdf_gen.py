@@ -425,7 +425,7 @@ def calc_dates(s, days, ex=None):
             return None
         v = str(val).strip()
         # ١) صيغ الأرقام المعروفة
-        for fmt in ["%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%d/%m/%y"]:
+        for fmt in ["%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%d/%m/%y", "%Y/%m/%d"]:
             try:
                 return datetime.strptime(v, fmt)
             except Exception:
@@ -502,7 +502,7 @@ def to_hijri(date_str):
     normalized = str(date_str).translate(_AR_DIGITS).strip()
 
     # محاولة تحليل الصيغ المعروفة
-    for fmt in ["%d-%m-%Y", "%d/%m/%Y", "%Y-%m-%d", "%d/%m/%y"]:
+    for fmt in ["%d-%m-%Y", "%d/%m/%Y", "%Y-%m-%d", "%d/%m/%y", "%Y/%m/%d"]:
         try:
             dt = datetime.strptime(normalized, fmt)
             y, m, d = dt.year, dt.month, dt.day
@@ -1096,7 +1096,7 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
 
     # ── مدة الإجازة ────────────────────────────────────────────
     dwe         = "day" if days == 1 else "days"
-    duration_en = f"{days} {dwe} ({start} to {end})"   # ميلادي (للاستخدام الداخلي)
+    duration_en = f"{days} {dwe} ( {start} to {end} )"   # ميلادي — مسافة داخل الأقواس مطابق للمرجع
 
     ar_day_word = "يوم" if days == 1 else "أيام"
     dur_s       = start
