@@ -153,7 +153,8 @@ DRAW_SLOTS = {
     'leave_duration_en':    {'x': 318.3, 'rl_y': 891.7, 'size': 13.5,
                              'color': (1.0, 1.0, 1.0)},             # أبيض
     'leave_duration_ar':    {'x': 556.8, 'rl_y': 891.7, 'size': 13.5,
-                             'color': (1.0, 1.0, 1.0)},             # أبيض — shape_arabic كامل (reshape + get_display)
+                             'color': (1.0, 1.0, 1.0),              # أبيض
+                             'reshape_only': True},  # النص مبني بصرياً مسبقاً — reshape فقط بلا get_display
 
     # ── صفوف عادية: عمود إنجليزي ─────────────────────────────
     'admission_date_en':    {'x': 318.3, 'rl_y': 849.7, 'size': 13.5,
@@ -525,16 +526,28 @@ def to_hijri(date_str):
 
 def to_hijri_duration(days, start_str, end_str):
     """
-    يُنتج نص مدة الإجازة بالهجري.
-    الصيغة: "{أيام} يوم ({بداية هجري} الى {نهاية هجري})"
-    ✅ LRM حول كل تاريخ لمنع BiDi من عكس ترتيب الأرقام (DD-MM-YYYY).
-    يُعالَج بـ shape_arabic() = reshape + get_display → عرض RTL صحيح في PDF.
+    يُنتج النص البصري (visual order) لمدة الإجازة بالهجري جاهزاً للرسم LTR في ReportLab.
+
+    ✅ بناء يدوي بدون BiDi بالكلية:
+       - الكلمات العربية تُشكَّل بـ arabic_reshaper ثم تُعكس (::-1) للترتيب البصري LTR.
+       - التواريخ تبقى كما هي (DD-MM-YYYY) بدون عكس.
+       - لا LRM، لا get_display → لا أسهم، لا عكس للتواريخ.
+
+    الترتيب البصري LTR (يُقرأ RTL من اليمين):
+      ( h_end  الى_معكوس  h_start )  يوم_معكوس  days
+    → القراءة RTL: days يوم ( h_start الى h_end )  ✓
     """
-    LRM     = '\u200e'          # Left-to-Right Mark — يحمي التاريخ من العكس
+    if _BIDI_OK:
+        _dwe_ar  = arabic_reshaper.reshape("يوم" if days == 1 else "أيام")[::-1]
+        _ela_ar  = arabic_reshaper.reshape("الى")[::-1]
+    else:
+        _dwe_ar  = "يوم" if days == 1 else "أيام"
+        _ela_ar  = "الى"
+
     h_start = to_hijri(start_str)
     h_end   = to_hijri(end_str)
-    dwe     = "يوم" if days == 1 else "أيام"
-    return f"{days} {dwe} ({LRM}{h_start}{LRM} الى {LRM}{h_end}{LRM})"
+    # h_end أولاً في البصري كي يُقرأ h_start أولاً بالاتجاه RTL
+    return f"({h_end} {_ela_ar} {h_start}) {_dwe_ar} {days}"
 
 
 def _jdn_to_gregorian(jdn: int) -> datetime:
