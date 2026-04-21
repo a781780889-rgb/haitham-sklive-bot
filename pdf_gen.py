@@ -153,8 +153,7 @@ DRAW_SLOTS = {
     'leave_duration_en':    {'x': 318.3, 'rl_y': 891.7, 'size': 13.5,
                              'color': (1.0, 1.0, 1.0)},             # أبيض
     'leave_duration_ar':    {'x': 556.8, 'rl_y': 891.7, 'size': 13.5,
-                             'color': (1.0, 1.0, 1.0),              # أبيض
-                             'reshape_only': True},   # reshape بلا get_display — viewer يطبّق BiDi مرة واحدة
+                             'color': (1.0, 1.0, 1.0)},             # أبيض — shape_arabic كامل (reshape + get_display)
 
     # ── صفوف عادية: عمود إنجليزي ─────────────────────────────
     'admission_date_en':    {'x': 318.3, 'rl_y': 849.7, 'size': 13.5,
@@ -526,17 +525,16 @@ def to_hijri(date_str):
 
 def to_hijri_duration(days, start_str, end_str):
     """
-    يُنتج نص مدة الإجازة بالهجري داخل الشريط الداكن.
-    ✅ الحل الصحيح: نُعيد نصاً عادياً بأقواس صريحة.
-    - arabic_reshaper يوصّل الحروف العربية (يوم / الى).
-    - لا نستخدم get_display() — المشاهد (PDF viewer) يطبّق BiDi مرة واحدة
-      فيعكس النص RTL ويعكس الأقواس تلقائياً بشكل صحيح.
-    - تطبيق get_display ثم مشاهد BiDi = عكس مزدوج يُشوّه الأقواس.
+    يُنتج نص مدة الإجازة بالهجري.
+    الصيغة: "{أيام} يوم ({بداية هجري} الى {نهاية هجري})"
+    ✅ LRM حول كل تاريخ لمنع BiDi من عكس ترتيب الأرقام (DD-MM-YYYY).
+    يُعالَج بـ shape_arabic() = reshape + get_display → عرض RTL صحيح في PDF.
     """
+    LRM     = '\u200e'          # Left-to-Right Mark — يحمي التاريخ من العكس
     h_start = to_hijri(start_str)
     h_end   = to_hijri(end_str)
     dwe     = "يوم" if days == 1 else "أيام"
-    return f"{days} {dwe} ({h_start} الى {h_end})"
+    return f"{days} {dwe} ({LRM}{h_start}{LRM} الى {LRM}{h_end}{LRM})"
 
 
 def _jdn_to_gregorian(jdn: int) -> datetime:
