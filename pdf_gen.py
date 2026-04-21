@@ -992,16 +992,17 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
         except Exception:
             pass
 
-    # ─── مستطيل خفيف بدلاً من الباركود ────────────────────────────
-    # (الباركود محذوف — مستطيل بحدود رمادية فاتحة يُشير لمكانه)
+    # ─── تغطية منطقة الباركود بمستطيل أبيض ────────────────────────
+    # الباركود موجود في قالب PDF — نرسم مستطيلاً أبيض مليئاً فوقه لإخفائه
     SEHA_URL = "https://www.seha.sa/#/inquiries/slenquiry"
     qx = QR_SLOT['x']      * x_scale
     qy = QR_SLOT['rl_y']   * y_scale
     qw = QR_SLOT['width']  * x_scale
     qh = QR_SLOT['height'] * y_scale
-    c.setStrokeColorRGB(0.78, 0.78, 0.78)   # رمادي فاتح
-    c.setLineWidth(0.8)
-    c.rect(qx, qy, qw, qh, stroke=1, fill=0)  # مستطيل بدون تعبئة
+    c.setFillColorRGB(1, 1, 1)      # أبيض
+    c.setStrokeColorRGB(1, 1, 1)    # بدون حدود مرئية
+    c.setLineWidth(0)
+    c.rect(qx, qy, qw, qh, stroke=0, fill=1)  # مستطيل أبيض يغطي الباركود
 
     # ─── annotations قابلة للنقر فوق الروابط المطبوعة في القالب ───
     # رابط سطر Arabic  "www.seha.sa/#/inquiries/slenquiry" في القالب
