@@ -528,8 +528,11 @@ def to_hijri(date_str):
 def to_hijri_duration(days, start_str, end_str):
     """
     يُنتج نص مدة الإجازة بالهجري داخل الشريط الداكن.
-    ✅ الترتيب مطابق للمرجع (للتوضيح.pdf):
-        (h_start الى h_end) يوم/أيام days
+    ✅ الترتيب المنطقي: {days} {يوم/أيام} ({h_start} الى {h_end})
+
+    العرض البصري بعد BiDi(base_dir='R') للقارئ العربي (RTL):
+        1 يوم (1447-10-21 الى 1447-10-21)
+        3 أيام (1447-11-14 الى 1447-11-16)
 
     - بدون عكس الحروف العربية بـ [::-1].
     - مسار الرسم لاحقاً في reshape_only يطبّق:
@@ -543,7 +546,7 @@ def to_hijri_duration(days, start_str, end_str):
     h_end    = to_hijri(end_str)
     _dwe_ar  = "يوم" if days == 1 else "أيام"
     _ela_ar  = "الى"
-    return f"({h_start} {_ela_ar} {h_end}) {_dwe_ar} {days}"
+    return f"{days} {_dwe_ar} ({h_start} {_ela_ar} {h_end})"
 
 
 def _jdn_to_gregorian(jdn: int) -> datetime:
