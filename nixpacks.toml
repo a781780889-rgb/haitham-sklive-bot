@@ -1,2 +1,8 @@
 [phases.setup]
-nixPkgs = ["cairo", "pango", "gdk-pixbuf", "libffi", "gobject-introspection", "harfbuzz", "fontconfig", "zlib"]
+nixPkgs = ["cairo", "pango", "gdk-pixbuf", "libffi", "gobject-introspection", "harfbuzz", "fontconfig", "zlib", "python311"]
+
+[phases.install]
+cmds = ["pip3 install -r requirements.txt"]
+
+[start]
+cmd = "python3 bot.py"
