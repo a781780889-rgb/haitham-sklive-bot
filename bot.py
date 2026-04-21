@@ -165,6 +165,21 @@ def calculate_end_date(start_str: str, days: int) -> str:
     return start_str
 
 
+def is_valid_date(s: str) -> bool:
+    """
+    يتحقق أن النص يمثّل تاريخاً صحيحاً بأحد الصيغ المقبولة.
+    يُرجع True فقط إذا تمكّن من تحليل التاريخ بنجاح.
+    """
+    if not s or not s.strip():
+        return False
+    for fmt in ["%d/%m/%Y", "%d/%m/%y", "%d-%m-%Y", "%Y-%m-%d"]:
+        try:
+            datetime.strptime(s.strip(), fmt)
+            return True
+        except:
+            pass
+    return False
+
 def normalize_date_input(text: str) -> str:
     """
     يُطبّع أي إدخال تاريخ من المستخدم:
@@ -245,6 +260,9 @@ def parse_free_text_order(text: str) -> dict:
                 elif key in ("excuse_date", "exit_date", "issue_date_input"):
                     # تطبيع التاريخ: دعم هجري بالأشهر العربية وتحويله لميلادي
                     value = normalize_date_input(value)
+                    # ✅ تحقق: إذا لم يكن التاريخ صحيحاً يُحذف تلقائياً
+                    if not is_valid_date(value):
+                        break  # تجاهل هذا الحقل كلياً
                 else:
                     value = to_western_nums(value)
                 result[key] = value
@@ -1111,7 +1129,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if state == "ask_exit_date":
         od = context.user_data.get("order_data", {})
-        od["exit_date"] = normalize_date_input(text)
+        normalized = normalize_date_input(text)
+        # ✅ تحقق من صحة التاريخ — إذا كان غير صحيح يُحذف ويُطلب إعادة الإدخال
+        if not is_valid_date(normalized):
+            await update.message.reply_text(
+                "❌ *التاريخ غير صحيح — يُرجى إدخال تاريخ فقط*\n\n"
+                "📌 مثال: `20/1/2026` أو `20-1-2026`",
+                parse_mode="Markdown", reply_markup=back_keyboard()
+            )
+            return
+        od["exit_date"] = normalized
         context.user_data["order_data"] = od
         context.user_data["state"] = "confirm_order"
         await update.message.reply_text(
