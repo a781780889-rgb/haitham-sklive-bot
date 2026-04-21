@@ -9,3 +9,12 @@ nixPkgs = [
   "fontconfig",
   "zlib"
 ]
+
+[phases.install]
+cmds = [
+  "python3 -m venv /opt/venv",
+  "/opt/venv/bin/pip install -r requirements.txt"
+]
+
+[start]
+cmd = "/opt/venv/bin/python3 bot.py"
