@@ -992,17 +992,19 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
         except Exception:
             pass
 
-    # ─── تغطية منطقة الباركود بمستطيل أبيض ────────────────────────
-    # الباركود موجود في قالب PDF — نرسم مستطيلاً أبيض مليئاً فوقه لإخفائه
+    # ─── تغطية منطقة الباركود والخط المتبقي بمستطيل أبيض موسّع ─────
+    # نوسّع المستطيل يساراً ويميناً وأسفل ليغطي الباركود والخط الأفقي
     SEHA_URL = "https://www.seha.sa/#/inquiries/slenquiry"
-    qx = QR_SLOT['x']      * x_scale
-    qy = QR_SLOT['rl_y']   * y_scale
-    qw = QR_SLOT['width']  * x_scale
-    qh = QR_SLOT['height'] * y_scale
-    c.setFillColorRGB(1, 1, 1)      # أبيض
-    c.setStrokeColorRGB(1, 1, 1)    # بدون حدود مرئية
+    _pad_x  = 30   # هامش أفقي إضافي من كل جانب (بوحدات القالب)
+    _pad_y  = 25   # هامش إضافي لأسفل لتغطية الخط
+    qx = (QR_SLOT['x'] - _pad_x)               * x_scale
+    qy = (QR_SLOT['rl_y'] - _pad_y)            * y_scale
+    qw = (QR_SLOT['width']  + _pad_x * 2)      * x_scale
+    qh = (QR_SLOT['height'] + _pad_y + 5)      * y_scale
+    c.setFillColorRGB(1, 1, 1)
+    c.setStrokeColorRGB(1, 1, 1)
     c.setLineWidth(0)
-    c.rect(qx, qy, qw, qh, stroke=0, fill=1)  # مستطيل أبيض يغطي الباركود
+    c.rect(qx, qy, qw, qh, stroke=0, fill=1)   # مستطيل أبيض يغطي الكل
 
     # ─── annotations قابلة للنقر فوق الروابط المطبوعة في القالب ───
     # رابط سطر Arabic  "www.seha.sa/#/inquiries/slenquiry" في القالب
