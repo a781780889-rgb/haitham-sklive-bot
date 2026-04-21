@@ -7,18 +7,24 @@ hospital_management.py - نظام إدارة المستشفيات والأطبا
 مما يسهّل ربط الشعارات والأطباء وغيرها بكل مستشفى.
 """
 
-import sqlite3
 import logging
 from typing import List, Dict, Optional
 
 from hospitals_data import KSA_HOSPITALS, get_all_hospitals_flat, count_hospitals
 
+# طبقة التوافق SQLite ↔ PostgreSQL (Railway)
+from db_adapter import get_connection, USE_POSTGRES, DB_PATH
+
 logger = logging.getLogger(__name__)
-DB_PATH = "bot_data.db"
+
+
+def _get_conn():
+    """اتصال موحّد بقاعدة البيانات (SQLite أو PostgreSQL)."""
+    return get_connection()
 
 
 def init_hospital_system():
-    conn = sqlite3.connect(DB_PATH)
+    conn = _get_conn()
     cursor = conn.cursor()
 
     cursor.execute('''CREATE TABLE IF NOT EXISTS hospitals (
@@ -137,7 +143,7 @@ def _seed_all_hospitals(cursor, conn):
 
 def add_hospital(name, city=None, region=None, h_type="خاص",
                  phone=None, email=None, address=None, logo_path=None):
-    conn = sqlite3.connect(DB_PATH)
+    conn = _get_conn()
     cursor = conn.cursor()
     cursor.execute(
         "INSERT OR IGNORE INTO hospitals (name, city, region, type, phone, email, address, logo_path) VALUES (?,?,?,?,?,?,?,?)",
@@ -150,8 +156,7 @@ def add_hospital(name, city=None, region=None, h_type="خاص",
 
 
 def get_all_hospitals(city=None, region=None, h_type=None):
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = _get_conn()
     cursor = conn.cursor()
     q = "SELECT * FROM hospitals WHERE is_active = 1"
     p = []
@@ -170,8 +175,7 @@ def get_hospitals_by_city(city):
 
 
 def get_hospital_by_id(hospital_id):
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = _get_conn()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM hospitals WHERE id = ?", (hospital_id,))
     r = cursor.fetchone(); conn.close()
@@ -179,8 +183,7 @@ def get_hospital_by_id(hospital_id):
 
 
 def get_hospital_by_name(name):
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = _get_conn()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM hospitals WHERE name LIKE ? AND is_active=1 LIMIT 1", (f"%{name}%",))
     r = cursor.fetchone(); conn.close()
@@ -188,7 +191,7 @@ def get_hospital_by_name(name):
 
 
 def update_hospital(hospital_id, **kwargs):
-    conn = sqlite3.connect(DB_PATH)
+    conn = _get_conn()
     cursor = conn.cursor()
     allowed = ['name','city','region','type','phone','email','address','logo_path','is_active']
     ups, vals = [], []
@@ -214,7 +217,7 @@ def delete_hospital(hospital_id):
 
 def add_doctor(name, specialty, hospital_id=None, license_number=None,
                phone=None, email=None, signature_path=None):
-    conn = sqlite3.connect(DB_PATH)
+    conn = _get_conn()
     cursor = conn.cursor()
     cursor.execute(
         "INSERT INTO doctors (name, specialty, hospital_id, license_number, phone, email, signature_path) VALUES (?,?,?,?,?,?,?)",
@@ -227,8 +230,7 @@ def add_doctor(name, specialty, hospital_id=None, license_number=None,
 
 
 def get_all_doctors(hospital_id=None, specialty=None):
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = _get_conn()
     cursor = conn.cursor()
     q = "SELECT d.*, h.name as hospital_name, h.city as hospital_city FROM doctors d LEFT JOIN hospitals h ON d.hospital_id = h.id WHERE d.is_active = 1"
     p = []
@@ -250,8 +252,7 @@ def get_doctors_by_specialty(specialty):
 
 
 def get_doctor_by_id(doctor_id):
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = _get_conn()
     cursor = conn.cursor()
     cursor.execute("SELECT d.*, h.name as hospital_name FROM doctors d LEFT JOIN hospitals h ON d.hospital_id=h.id WHERE d.id=?", (doctor_id,))
     r = cursor.fetchone(); conn.close()
@@ -259,7 +260,7 @@ def get_doctor_by_id(doctor_id):
 
 
 def update_doctor(doctor_id, **kwargs):
-    conn = sqlite3.connect(DB_PATH)
+    conn = _get_conn()
     cursor = conn.cursor()
     allowed = ['name','specialty','hospital_id','license_number','phone','email','signature_path','is_active']
     ups, vals = [], []
@@ -280,8 +281,7 @@ def delete_doctor(doctor_id):
 # ── التخصصات ──────────────────────────────────────
 
 def get_all_specialties():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = _get_conn()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM specialties WHERE is_active=1 ORDER BY name_ar")
     result = [dict(r) for r in cursor.fetchall()]
@@ -290,7 +290,7 @@ def get_all_specialties():
 
 
 def add_specialty(name_ar, name_en=None):
-    conn = sqlite3.connect(DB_PATH)
+    conn = _get_conn()
     cursor = conn.cursor()
     cursor.execute("INSERT OR IGNORE INTO specialties (name_ar, name_en) VALUES (?,?)", (name_ar, name_en))
     sid = cursor.lastrowid
@@ -301,7 +301,7 @@ def add_specialty(name_ar, name_en=None):
 # ── الشعارات ──────────────────────────────────────
 
 def add_logo(name, file_path, file_type=None, hospital_id=None, uploaded_by=None):
-    conn = sqlite3.connect(DB_PATH)
+    conn = _get_conn()
     cursor = conn.cursor()
     cursor.execute(
         "INSERT INTO logos (name, file_path, file_type, hospital_id, uploaded_by) VALUES (?,?,?,?,?)",
@@ -316,8 +316,7 @@ def add_logo(name, file_path, file_type=None, hospital_id=None, uploaded_by=None
 
 
 def get_all_logos():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = _get_conn()
     cursor = conn.cursor()
     cursor.execute("""
     SELECT l.*, h.name as hospital_name, h.city as hospital_city
@@ -331,8 +330,7 @@ def get_all_logos():
 
 
 def get_logo_by_hospital(hospital_id):
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = _get_conn()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM logos WHERE hospital_id=? ORDER BY created_at DESC LIMIT 1", (hospital_id,))
     r = cursor.fetchone(); conn.close()
@@ -340,8 +338,7 @@ def get_logo_by_hospital(hospital_id):
 
 
 def get_logo_by_id(logo_id):
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = _get_conn()
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM logos WHERE id=?", (logo_id,))
     r = cursor.fetchone(); conn.close()
@@ -349,7 +346,7 @@ def get_logo_by_id(logo_id):
 
 
 def delete_logo(logo_id):
-    conn = sqlite3.connect(DB_PATH)
+    conn = _get_conn()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM logos WHERE id=?", (logo_id,))
     conn.commit(); conn.close()
@@ -359,7 +356,7 @@ def delete_logo(logo_id):
 # ── إحصائيات ──────────────────────────────────────
 
 def get_system_stats():
-    conn = sqlite3.connect(DB_PATH)
+    conn = _get_conn()
     cursor = conn.cursor()
     stats = {}
     for key, q in [

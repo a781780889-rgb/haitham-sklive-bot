@@ -4,6 +4,8 @@ reportlab>=4.0
 Pillow>=10.0
 python-dotenv>=1.0
 flask>=3.0
+flask-cors>=4.0
 qrcode
 arabic-reshaper>=3.0
 python-bidi>=0.4
+psycopg2-binary>=2.9

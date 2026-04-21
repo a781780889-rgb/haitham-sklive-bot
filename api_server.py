@@ -14,12 +14,13 @@ from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from functools import wraps
-import sqlite3
 import logging
+
+# طبقة التوافق SQLite ↔ PostgreSQL (Railway)
+from db_adapter import get_connection, USE_POSTGRES, DB_PATH
 
 # الإعدادات
 API_SECRET_KEY = os.environ.get('API_SECRET_KEY', secrets.token_urlsafe(32))
-DB_PATH = os.path.join(os.path.dirname(__file__), 'bot_data.db')
 UPLOADS_DIR = os.path.join(os.path.dirname(__file__), 'uploads')
 PDF_STORAGE_DIR = os.path.join(UPLOADS_DIR, 'pdfs')
 
@@ -43,10 +44,8 @@ logger = logging.getLogger(__name__)
 # ══════════════════════════════════════════════════════════════
 
 def get_conn():
-    """الحصول على اتصال بقاعدة البيانات"""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+    """الحصول على اتصال بقاعدة البيانات (SQLite أو PostgreSQL)."""
+    return get_connection()
 
 def init_enhanced_db():
     """إنشاء جداول قاعدة البيانات المحسّنة"""
@@ -99,11 +98,18 @@ def init_enhanced_db():
         )
     """)
     
-    # إنشاء فهارس لتحسين الأداء
-    c.execute("CREATE INDEX IF NOT EXISTS idx_excuse_code ON query_records(excuse_code)")
-    c.execute("CREATE INDEX IF NOT EXISTS idx_id_number ON query_records(id_number)")
-    c.execute("CREATE INDEX IF NOT EXISTS idx_expires_at ON query_records(expires_at)")
-    
+    # إنشاء فهارس لتحسين الأداء (SAVEPOINT لكل فهرس)
+    for idx in [
+        "CREATE INDEX IF NOT EXISTS idx_excuse_code ON query_records(excuse_code)",
+        "CREATE INDEX IF NOT EXISTS idx_id_number   ON query_records(id_number)",
+        "CREATE INDEX IF NOT EXISTS idx_expires_at  ON query_records(expires_at)",
+    ]:
+        try:
+            with conn.savepoint("idx"):
+                c.execute(idx)
+        except Exception:
+            pass
+
     conn.commit()
     conn.close()
     logger.info("تم إنشاء قاعدة البيانات المحسّنة بنجاح")
@@ -514,16 +520,17 @@ if __name__ == '__main__':
     conn = get_conn()
     default_key = "bot_api_key_" + secrets.token_urlsafe(16)
     key_hash = hash_api_key(default_key)
-    
+
     try:
-        conn.execute(
-            "INSERT INTO api_keys (key_hash, name) VALUES (?, ?)",
-            (key_hash, "Default Bot Key")
-        )
+        with conn.savepoint("apikey"):
+            conn.execute(
+                "INSERT INTO api_keys (key_hash, name) VALUES (?, ?)",
+                (key_hash, "Default Bot Key")
+            )
         conn.commit()
         logger.info(f"مفتاح API الافتراضي: {default_key}")
-    except:
-        pass
+    except Exception as e:
+        logger.info(f"مفتاح API الافتراضي موجود مسبقاً ({e})")
     conn.close()
     
     # تشغيل الخادم

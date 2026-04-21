@@ -11,10 +11,12 @@ database.py - قاعدة البيانات (النسخة المُصلحة 2.0)
 ✅ rate limiting لمحاولات تسجيل الدخول
 """
 
-import sqlite3
 import os
 import random
 import logging
+
+# طبقة التوافق SQLite ↔ PostgreSQL (Railway)
+from db_adapter import get_connection, USE_POSTGRES, DB_PATH
 
 # استيراد بيانات الأطباء (يُستخدم في seed_doctors_from_data)
 try:
@@ -24,8 +26,6 @@ except ImportError:
     _DOCTORS_DATA_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
-
-DB_PATH = os.path.join(os.path.dirname(__file__), "bot_data.db")
 
 
 def _get_payment_details():
@@ -37,13 +37,8 @@ def _get_payment_details():
 
 
 def get_conn():
-    conn = sqlite3.connect(DB_PATH, timeout=15)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.execute("PRAGMA synchronous=NORMAL")
-    conn.execute("PRAGMA cache_size=10000")
-    conn.execute("PRAGMA foreign_keys=ON")
-    return conn
+    """يُعيد اتصالاً موحّداً — PostgreSQL إذا كان DATABASE_URL مُعدّاً، وإلا SQLite."""
+    return get_connection()
 
 
 def init_db():
@@ -120,8 +115,12 @@ def init_db():
         "CREATE INDEX IF NOT EXISTS idx_tx_status     ON transactions(status)",
         "CREATE INDEX IF NOT EXISTS idx_hosp_city     ON hospitals(city)",
     ]:
-        try: c.execute(idx)
-        except: pass
+        # SAVEPOINT لكل فهرس — في PostgreSQL الفشل داخل معاملة يُبطلها
+        try:
+            with conn.savepoint("idx"):
+                c.execute(idx)
+        except Exception:
+            pass
 
     # ── ترقيات آمنة ──
     for sql in [
@@ -140,8 +139,12 @@ def init_db():
         "ALTER TABLE orders ADD COLUMN exit_date TEXT",
         "ALTER TABLE pdf_templates ADD COLUMN is_active INTEGER DEFAULT 0",
     ]:
-        try: c.execute(sql)
-        except: pass
+        # SAVEPOINT لكل ALTER — إذا كان العمود موجوداً مسبقاً لن يؤثّر على المعاملة الأم
+        try:
+            with conn.savepoint("alt"):
+                c.execute(sql)
+        except Exception:
+            pass
 
     # ── إعدادات افتراضية ──
     for k, v in [
@@ -316,10 +319,13 @@ def get_setting(key, default=""):
 def set_setting(key, value):
     conn = get_conn()
     try:
-        conn.execute(
-            "INSERT OR REPLACE INTO settings (key,value,updated_at) VALUES (?,?,datetime('now'))",
-            (key, value)
-        )
+        # UPSERT صريح — يعمل في SQLite 3.24+ و PostgreSQL
+        conn.execute("""
+            INSERT INTO settings (key, value, updated_at)
+            VALUES (?, ?, datetime('now'))
+            ON CONFLICT(key) DO UPDATE
+            SET value = excluded.value, updated_at = datetime('now')
+        """, (key, value))
         conn.commit()
     finally:
         conn.close()
@@ -1181,13 +1187,13 @@ def use_voucher(code: str, user_id: int) -> dict:
         amount = row["amount"]
 
         # خصم الكود وإضافة الرصيد — في عملية واحدة
-        conn.execute("""
+        cur = conn.execute("""
             UPDATE voucher_codes
             SET is_used=1, used_by=?, used_at=datetime('now')
             WHERE code=? AND is_used=0
         """, (user_id, code.strip().upper()))
 
-        if conn.execute("SELECT changes()").fetchone()[0] == 0:
+        if cur.rowcount == 0:
             return {"success": False, "error": "الكود تم استخدامه للتو ❌"}
 
         conn.execute(
