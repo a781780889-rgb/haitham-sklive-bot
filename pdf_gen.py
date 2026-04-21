@@ -154,7 +154,8 @@ DRAW_SLOTS = {
                              'color': (1.0, 1.0, 1.0)},             # أبيض
     'leave_duration_ar':    {'x': 556.8, 'rl_y': 891.7, 'size': 13.5,
                              'color': (1.0, 1.0, 1.0),              # أبيض
-                             'reshape_only': True},  # النص مبني بصرياً مسبقاً — reshape فقط بلا get_display
+                             'reshape_only': True,
+                             'font': 'Amiri-Bold'},   # Amiri يحتوي glyphs للأقواس ( ) بينما NotoSansArabic لا يحتوي
 
     # ── صفوف عادية: عمود إنجليزي ─────────────────────────────
     'admission_date_en':    {'x': 318.3, 'rl_y': 849.7, 'size': 13.5,
@@ -526,28 +527,23 @@ def to_hijri(date_str):
 
 def to_hijri_duration(days, start_str, end_str):
     """
-    يُنتج النص البصري (visual order) لمدة الإجازة بالهجري جاهزاً للرسم LTR في ReportLab.
+    يُنتج نص مدة الإجازة بالهجري داخل الشريط الداكن.
+    ✅ الترتيب مطابق للمرجع (للتوضيح.pdf):
+        (h_start الى h_end) يوم/أيام days
 
-    ✅ بناء يدوي بدون BiDi بالكلية:
-       - الكلمات العربية تُشكَّل بـ arabic_reshaper ثم تُعكس (::-1) للترتيب البصري LTR.
-       - التواريخ تبقى كما هي (DD-MM-YYYY) بدون عكس.
-       - لا LRM، لا get_display → لا أسهم، لا عكس للتواريخ.
-
-    الترتيب البصري LTR (يُقرأ RTL من اليمين):
-      ( h_end  الى_معكوس  h_start )  يوم_معكوس  days
-    → القراءة RTL: days يوم ( h_start الى h_end )  ✓
+    - بدون عكس الحروف العربية بـ [::-1].
+    - مسار الرسم لاحقاً في reshape_only يطبّق:
+        1) arabic_reshaper.reshape() لتوصيل الحروف العربية (الى / يوم / أيام).
+        2) get_display(..., base_dir='R') لتحويل الترتيب المنطقي إلى البصري
+           RTL فتنعكس الأقواس المحايدة (mirror pairs) حول التواريخ بشكل سليم.
+    - يُستخدم خط Amiri-Bold لهذا السلوت تحديداً لأن NotoSansArabic لا يحتوي
+      glyphs للأقواس '(' و ')' بينما Amiri يحتويها.
     """
-    if _BIDI_OK:
-        _dwe_ar  = arabic_reshaper.reshape("يوم" if days == 1 else "أيام")[::-1]
-        _ela_ar  = arabic_reshaper.reshape("الى")[::-1]
-    else:
-        _dwe_ar  = "يوم" if days == 1 else "أيام"
-        _ela_ar  = "الى"
-
-    h_start = to_hijri(start_str)
-    h_end   = to_hijri(end_str)
-    # h_end أولاً في البصري كي يُقرأ h_start أولاً بالاتجاه RTL
-    return f"({h_end} {_ela_ar} {h_start}) {_dwe_ar} {days}"
+    h_start  = to_hijri(start_str)
+    h_end    = to_hijri(end_str)
+    _dwe_ar  = "يوم" if days == 1 else "أيام"
+    _ela_ar  = "الى"
+    return f"({h_start} {_ela_ar} {h_end}) {_dwe_ar} {days}"
 
 
 def _jdn_to_gregorian(jdn: int) -> datetime:
@@ -935,13 +931,26 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
 
         c.setFillColorRGB(*rgb)
 
-        # ── reshape_only: نوصّل الحروف العربية بلا get_display ──────────
-        # المشاهد يطبّق BiDi مرة واحدة → الأقواس تظهر صحيحة تلقائياً
+        # ── reshape_only: نوصّل الحروف العربية ونطبّق BiDi بصراحة ──────
+        # ❌ كان يُفترض أن مشاهد PDF يطبّق BiDi بنفسه — لكن هذا غير صحيح؛
+        #    مشاهدات PDF ترسم الحروف بالترتيب الذي وضعه ReportLab بالضبط.
+        # ✅ الحل: reshape لتوصيل الحروف + get_display(base_dir='R') لتحويل
+        #    الترتيب المنطقي إلى الترتيب البصري RTL، فتظهر الأقواس والأرقام
+        #    في أماكنها الصحيحة حول التواريخ الهجرية.
         if slot.get('reshape_only'):
-            font = AR_BOLD if is_bold else AR_REG
+            # السلوت يمكنه تحديد خط مخصّص (مثلاً Amiri الذي يحتوي glyphs
+            # للأقواس الأسكية '(' و ')' بينما NotoSansArabic لا يحتويها).
+            font_override = slot.get('font')
+            if font_override:
+                font = font_override
+            else:
+                font = AR_BOLD if is_bold else AR_REG
             if _BIDI_OK:
                 try:
-                    shaped = arabic_reshaper.reshape(text_str)
+                    reshaped = arabic_reshaper.reshape(text_str)
+                    # base_dir='R' يفرض السياق RTL فتنعكس الأقواس المحايدة
+                    # (mirror pairs) لتُحيط التواريخ بشكل صحيح في العرض.
+                    shaped = get_display(reshaped, base_dir='R')
                 except Exception:
                     shaped = text_str
             else:
