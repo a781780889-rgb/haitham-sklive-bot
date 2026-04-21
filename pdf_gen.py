@@ -992,17 +992,32 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
         except Exception:
             pass
 
-    # ─── تغطية منطقة الباركود بمستطيل أبيض ────────────────────────
-    # الباركود موجود في قالب PDF — نرسم مستطيلاً أبيض مليئاً فوقه لإخفائه
-    SEHA_URL = "https://www.seha.sa/#/inquiries/slenquiry"
+    # ─── رسم باركود QR في موضعه الأصلي ─────────────────────────────
+    SEHA_URL = "https://sehaseinquiresslendquiry.com"
     qx = QR_SLOT['x']      * x_scale
     qy = QR_SLOT['rl_y']   * y_scale
     qw = QR_SLOT['width']  * x_scale
     qh = QR_SLOT['height'] * y_scale
-    c.setFillColorRGB(1, 1, 1)      # أبيض
-    c.setStrokeColorRGB(1, 1, 1)    # بدون حدود مرئية
-    c.setLineWidth(0)
-    c.rect(qx, qy, qw, qh, stroke=0, fill=1)  # مستطيل أبيض يغطي الباركود
+
+    # توليد صورة QR ورسمها مباشرةً على الـ canvas
+    try:
+        import qrcode
+        from reportlab.lib.utils import ImageReader
+        _qr = qrcode.QRCode(version=2, box_size=6, border=1,
+                            error_correction=qrcode.constants.ERROR_CORRECT_M)
+        _qr.add_data(SEHA_URL)
+        _qr.make(fit=True)
+        _qr_img = _qr.make_image(fill_color="black", back_color="white")
+        _buf = io.BytesIO()
+        _qr_img.save(_buf, 'PNG')
+        _buf.seek(0)
+        c.drawImage(ImageReader(_buf), qx, qy, width=qw, height=qh, mask='auto')
+    except Exception:
+        # fallback: مستطيل أبيض إن فشل توليد QR
+        c.setFillColorRGB(1, 1, 1)
+        c.setStrokeColorRGB(1, 1, 1)
+        c.setLineWidth(0)
+        c.rect(qx, qy, qw, qh, stroke=0, fill=1)
 
     # ─── annotations قابلة للنقر فوق الروابط المطبوعة في القالب ───
     # رابط سطر Arabic  "www.seha.sa/#/inquiries/slenquiry" في القالب
