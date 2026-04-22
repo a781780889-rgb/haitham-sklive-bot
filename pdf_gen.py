@@ -194,7 +194,9 @@ DRAW_SLOTS = {
     'hospital_name_en':     {'x': 632.0, 'rl_y': 316.0, 'size': 13.5,
                              'color': (0.0, 0.0, 0.0), 'bold': False},
 
-    # رقم الترخيص: محذوف — غير موجود في المرجع
+    # رقم الترخيص — يظهر للمستشفيات الخاصة فقط (تحت اسم المستشفى الإنجليزي)
+    'license_number':        {'x': 632.0, 'rl_y': 294.0, 'size': 11.0,
+                              'color': (0.0, 0.0, 0.0), 'bold': False},
 
     # ── 🕐 الوقت والتاريخ (يسار أسفل الصفحة) محاذاة يسار ────────
     'issue_time':           {'x': 38.0,  'rl_y': 229.1, 'size': 12.8,
@@ -579,8 +581,27 @@ def gen_leave_id(_):
 
 
 def gen_license_number():
-    """رقم ترخيص عشوائي مكوّن من 11 رقماً غربياً"""
-    return "".join([str(random.randint(0, 9)) for _ in range(11)])
+    """رقم ترخيص عشوائي مكوّن من 16 رقماً غربياً"""
+    return "".join([str(random.randint(0, 9)) for _ in range(16)])
+
+
+def is_private_hospital(hospital_name):
+    """
+    يتحقق إن كان المستشفى خاصاً بمطابقته مع قائمة المستشفيات الخاصة في KSA_HOSPITALS.
+    يُعيد True للخاص، False للحكومي والمجمعات.
+    """
+    if not hospital_name:
+        return False
+    try:
+        from hospitals_data import KSA_HOSPITALS
+        name_lower = str(hospital_name).strip()
+        for city_data in KSA_HOSPITALS.values():
+            for h in city_data.get('خاص', []):
+                if h.strip() == name_lower or name_lower in h or h in name_lower:
+                    return True
+    except Exception:
+        pass
+    return False
 
 
 def format_weekday_date(dt=None):
@@ -1099,8 +1120,9 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
     # اسم المستشفى إنجليزي
     hosp_en   = _to_en(hospital  or "")
 
-    # رقم الترخيص (11 رقم)
-    lic_num   = license_number or gen_license_number()
+    # رقم الترخيص (16 رقم) — للمستشفيات الخاصة فقط
+    _is_private = is_private_hospital(hospital)
+    lic_num     = (license_number or gen_license_number()) if _is_private else None
 
     # الوقت والتاريخ
     _time_str = str(issue_time or "").strip()
@@ -1141,7 +1163,8 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
         # قسم المستشفى
         'hospital_name_ar':     hospital  or "",
         'hospital_name_en':     hosp_en if hosp_en and not any('\u0600' <= c <= '\u06FF' for c in hosp_en) else "",
-        # رقم الترخيص محذوف — غير موجود في المرجع
+        # رقم الترخيص — خاص فقط (None للحكومي فيخفي الحقل)
+        'license_number': f'رقم الترخيص: {lic_num}' if lic_num else None,
 
         # الوقت والتاريخ
         'issue_time':           _time_str,
