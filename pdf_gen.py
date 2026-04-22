@@ -155,7 +155,7 @@ DRAW_SLOTS = {
     'leave_duration_ar':    {'x': 556.8, 'rl_y': 891.7, 'size': 13.5,
                              'color': (1.0, 1.0, 1.0),              # أبيض
                              'reshape_only': True,
-                             'font': 'Amiri-Bold'},   # Amiri يحتوي glyphs للأقواس ( ) بينما NotoSansArabic لا يحتوي
+                             'reshape_only': True},
 
     # ── صفوف عادية: عمود إنجليزي ─────────────────────────────
     'admission_date_en':    {'x': 318.3, 'rl_y': 849.7, 'size': 13.5,
@@ -188,7 +188,7 @@ DRAW_SLOTS = {
                              'color': (0.17255, 0.24314, 0.46667)},
 
     # ── 🏥 قسم المستشفى (أسفل الشعار — مُوسَّط على cx=632) ─────────
-    # bold=False → Times-Roman للإنجليزي، NotoSansArabic-Regular للعربي (مطابق المرجع)
+    # bold=False → Times New Roman للإنجليزي والعربي (مطابق المرجع)
     'hospital_name_ar':     {'x': 632.0, 'rl_y': 338.0, 'size': 13.5,
                              'color': (0.0, 0.0, 0.0), 'bold': False},
     'hospital_name_en':     {'x': 632.0, 'rl_y': 316.0, 'size': 13.5,
@@ -225,85 +225,31 @@ LOGO_SLOT = {
 
 
 # ══════════════════════════════════════════════════════════════
-# تسجيل الخطوط
+# تسجيل الخطوط — Times New Roman فقط
 # ══════════════════════════════════════════════════════════════
-_fonts_registered    = False
-_noto_regular_ok     = False   # NotoSansArabic-Regular متاح
-_noto_bold_ok        = False   # NotoSansArabic-Bold متاح
-_times_regular_ok    = False   # TimesRoman-Regular من fonts/ متاح
-_times_bold_ok       = False   # TimesRoman-Bold من fonts/ متاح
+_fonts_registered = False
+_times_ok         = False   # Times New Roman TTF محمل
 
-# مسارات بحث NotoSansArabic — مرتّبة بحسب الأولوية على Ubuntu/DigitalOcean
-_NOTO_SEARCH_PATHS = [
-    # مجلد fonts/ داخل البوت (أعلى أولوية)
-    os.path.join(_BASE_DIR, 'fonts', 'NotoSansArabic-Regular.ttf'),
-    os.path.join(_BASE_DIR, 'fonts', 'NotoSansArabic-Bold.ttf'),
-    # مجلد البوت نفسه (الجذر)
-    os.path.join(_BASE_DIR, 'NotoSansArabic-Regular.ttf'),
-    os.path.join(_BASE_DIR, 'NotoSansArabic-Bold.ttf'),
-    # Ubuntu system fonts
-    '/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf',
-    '/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf',
-    '/usr/share/fonts/opentype/noto/NotoSansArabic-Regular.otf',
-    '/usr/share/fonts/opentype/noto/NotoSansArabic-Bold.otf',
-    # مسارات بديلة شائعة
-    '/usr/local/share/fonts/NotoSansArabic-Regular.ttf',
-    '/usr/local/share/fonts/NotoSansArabic-Bold.ttf',
+# مسارات بحث ملف times.ttf — كل النصوص عربي + إنجليزي + أرقام
+_TIMES_PATHS = [
+    os.path.join(_BASE_DIR, 'fonts', 'times.ttf'),
+    os.path.join(_BASE_DIR, 'times.ttf'),
+    '/usr/share/fonts/truetype/msttcorefonts/Times_New_Roman.ttf',
+    '/Library/Fonts/Times New Roman.ttf',
+    'C:/Windows/Fonts/times.ttf',
 ]
-
-# مسارات Times Roman من مجلد fonts/
-_TIMES_REGULAR_PATH = os.path.join(_BASE_DIR, 'fonts', 'TimesRoman-Regular.ttf')
-_TIMES_BOLD_PATH    = os.path.join(_BASE_DIR, 'fonts', 'TimesRoman-Bold.ttf')
 
 
 def _register_fonts():
-    global _fonts_registered, _noto_regular_ok, _noto_bold_ok
-    global _times_regular_ok, _times_bold_ok
+    global _fonts_registered, _times_ok
     if _fonts_registered:
         return
 
-    # ── TimesRoman من مجلد fonts/ (أولوية قصوى للإنجليزي) ──────
-    if os.path.exists(_TIMES_REGULAR_PATH):
-        try:
-            pdfmetrics.registerFont(TTFont('TimesRomanPro', _TIMES_REGULAR_PATH))
-            _times_regular_ok = True
-        except Exception:
-            pass
-
-    if os.path.exists(_TIMES_BOLD_PATH):
-        try:
-            pdfmetrics.registerFont(TTFont('TimesRomanPro-Bold', _TIMES_BOLD_PATH))
-            _times_bold_ok = True
-        except Exception:
-            pass
-
-    # ── Amiri (fallback للعربي فقط) ─────────────────────────────
-    for name, path in [
-        ('Amiri',      os.path.join(_BASE_DIR, 'Amiri-Regular.ttf')),
-        ('Amiri-Bold', os.path.join(_BASE_DIR, 'Amiri-Bold.ttf')),
-    ]:
+    for path in _TIMES_PATHS:
         if os.path.exists(path):
             try:
-                pdfmetrics.registerFont(TTFont(name, path))
-            except Exception:
-                pass
-
-    # ── NotoSansArabic-Regular ───────────────────────────────────
-    for path in _NOTO_SEARCH_PATHS:
-        if 'Regular' in path and os.path.exists(path):
-            try:
-                pdfmetrics.registerFont(TTFont('NotoSansArabic-Regular', path))
-                _noto_regular_ok = True
-                break
-            except Exception:
-                pass
-
-    # ── NotoSansArabic-Bold ──────────────────────────────────────
-    for path in _NOTO_SEARCH_PATHS:
-        if 'Bold' in path and os.path.exists(path):
-            try:
-                pdfmetrics.registerFont(TTFont('NotoSansArabic-Bold', path))
-                _noto_bold_ok = True
+                pdfmetrics.registerFont(TTFont('TimesNewRoman', path))
+                _times_ok = True
                 break
             except Exception:
                 pass
@@ -540,8 +486,8 @@ def to_hijri_duration(days, start_str, end_str):
         1) arabic_reshaper.reshape() لتوصيل الحروف العربية (الى / يوم / أيام).
         2) get_display(..., base_dir='R') لتحويل الترتيب المنطقي إلى البصري
            RTL فتنعكس الأقواس المحايدة (mirror pairs) حول التواريخ بشكل سليم.
-    - يُستخدم خط Amiri-Bold لهذا السلوت تحديداً لأن NotoSansArabic لا يحتوي
-      glyphs للأقواس '(' و ')' بينما Amiri يحتويها.
+    - يُستخدم خط Times New Roman لكل النصوص في هذا السلوت.
+
     """
     h_start  = to_hijri(start_str)
     h_end    = to_hijri(end_str)
@@ -860,27 +806,16 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
     """
     طبقة شفافة تُرسم فوق القالب:
     • نصوص إنجليزية → Times-Roman / Times-Bold  (مدمج في ReportLab)
-    • نصوص عربية    → NotoSansArabic-Regular / Bold  (أو Amiri كـ fallback)
+    • جميع النصوص (عربي + إنجليزي + أرقام) → Times New Roman
     • الخط العريض   → للمستشفى + الوقت + التاريخ + رقم الترخيص
     """
     _register_fonts()
     c = rl_canvas.Canvas(overlay_path, pagesize=(page_w, page_h))
 
     # ── اختيار الخطوط حسب ما هو متاح ───────────────────────────
-    # إنجليزي: TimesRomanPro من fonts/ إن وُجد، وإلا Times-Roman المدمج
-    EN_REG  = 'TimesRomanPro'      if _times_regular_ok else 'Times-Roman'
-    EN_BOLD = 'TimesRomanPro-Bold' if _times_bold_ok    else 'Times-Bold'
-
-    # عربي: NotoSansArabic إذا موجود، وإلا Amiri
-    AR_REG  = 'NotoSansArabic-Regular' if _noto_regular_ok else 'Amiri'
-    AR_BOLD = 'NotoSansArabic-Bold'    if _noto_bold_ok    else 'Amiri-Bold'
-
-    # fallback أخير لو حتى Amiri غير موجود
-    try:
-        pdfmetrics.getFont(AR_REG)
-    except Exception:
-        AR_REG  = 'Helvetica'
-        AR_BOLD = 'Helvetica-Bold'
+    # ── Times New Roman لكل النصوص (عربي + إنجليزي + أرقام) ──
+    FONT_REG  = 'TimesNewRoman' if _times_ok else 'Times-Roman'
+    FONT_BOLD = 'TimesNewRoman' if _times_ok else 'Times-Bold'
 
     # معامل تحجيم تلقائي للقوالب بأبعاد مختلفة عن 842×1190
     x_scale = page_w / 842.0
@@ -942,13 +877,7 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
         #    الترتيب المنطقي إلى الترتيب البصري RTL، فتظهر الأقواس والأرقام
         #    في أماكنها الصحيحة حول التواريخ الهجرية.
         if slot.get('reshape_only'):
-            # السلوت يمكنه تحديد خط مخصّص (مثلاً Amiri الذي يحتوي glyphs
-            # للأقواس الأسكية '(' و ')' بينما NotoSansArabic لا يحتويها).
-            font_override = slot.get('font')
-            if font_override:
-                font = font_override
-            else:
-                font = AR_BOLD if is_bold else AR_REG
+            font = FONT_BOLD if is_bold else FONT_REG
             if _BIDI_OK:
                 try:
                     reshaped = arabic_reshaper.reshape(text_str)
@@ -973,7 +902,7 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
 
         if _has_arabic(text_str):
             # ── نص عربي ─────────────────────────────────────
-            font = AR_BOLD if is_bold else AR_REG
+            font = FONT_BOLD if is_bold else FONT_REG
             shaped = shape_arabic(text_str)
             # تقليص تلقائي إن كان النص طويلاً
             max_w = MAX_WIDTHS.get(slot_id, 0) * x_scale
@@ -988,7 +917,7 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
                 c.drawCentredString(x, rl_y, shaped)
         else:
             # ── نص إنجليزي ──────────────────────────────────
-            font = EN_BOLD if is_bold else EN_REG
+            font = FONT_BOLD if is_bold else FONT_REG
             # تقليص تلقائي إن كان النص طويلاً
             max_w = MAX_WIDTHS.get(slot_id, 0) * x_scale
             if max_w > 0:
