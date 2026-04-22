@@ -207,19 +207,20 @@ DRAW_SLOTS = {
 # الجدول ينتهي عند RL ≈ 488 (صف Position)
 # الشعار يجب أن يكون تحت الجدول: rl_y + height < 488
 #   rl_y=360  →  أعلى الشعار = 360+110 = 470  (تحت الجدول بهامش 18pt)
-LOGO_SLOT = {
-    'x':      577.3,    # يسار الشعار — مطابق للمرجع (x0=577.3)
-    'rl_y':   352.9,    # أسفل الشعار (RL) = 1190 - 837.1 = 352.9
-    'width':  112.9,    # عرض مطابق للمرجع — مستطيل لا مربع
-    'height': 103.3,    # ارتفاع مطابق للمرجع
-}
-
-# ── QR Code ─────────────────────────────────────────────────────
 QR_SLOT = {
     'x':      172.2,   # x0 مطابق للمرجع
     'rl_y':   368.0,   # رُفع قليلاً للأعلى عن الموضع الأصلي 359.6
     'width':  108.2,   # عرض مطابق للمرجع
     'height': 101.6,   # ارتفاع مطابق للمرجع
+}
+
+# ── شعار المستشفى (إحداثيات ReportLab) ─────────────────────────
+# الحجم مطابق تماماً لحجم الباركود QR_SLOT (width=108.2, height=101.6)
+LOGO_SLOT = {
+    'x':      577.3,    # يسار الشعار — مطابق للمرجع (x0=577.3)
+    'rl_y':   360.2,    # أسفل الشعار (RL) — مُعدَّل ليتمركز مع الباركود
+    'width':  108.2,    # نفس عرض الباركود QR_SLOT
+    'height': 101.6,    # نفس ارتفاع الباركود QR_SLOT
 }
 
 
@@ -1000,15 +1001,18 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
             else:
                 c.drawCentredString(x, rl_y, text_str)
 
-    # ─── شعار المستشفى ─────────────────────────────────────────
+    # ─── شعار المستشفى — نفس حجم الباركود تماماً ──────────────
     if logo_path and os.path.exists(logo_path):
         try:
+            lx = LOGO_SLOT['x']      * x_scale
+            ly = LOGO_SLOT['rl_y']   * y_scale
+            lw = LOGO_SLOT['width']  * x_scale   # نفس منطق التحجيم كـ QR_SLOT
+            lh = LOGO_SLOT['height'] * y_scale   # نفس منطق التحجيم كـ QR_SLOT
             c.drawImage(
                 logo_path,
-                LOGO_SLOT['x']    * x_scale,
-                LOGO_SLOT['rl_y'] * y_scale,
-                width=LOGO_SLOT['width'],
-                height=LOGO_SLOT['height'],
+                lx, ly,
+                width=lw,
+                height=lh,
                 preserveAspectRatio=True,
                 mask='auto',
             )
