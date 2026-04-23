@@ -1559,7 +1559,10 @@ async def generate_and_send_pdf(update, context, uid):
             output_path   = pdf_path,
             logo_path     = logo_path,
             website_url   = website_url,
-            hospital_type = context.user_data.get("browse_hospital_type", None),
+            hospital_type = (
+                context.user_data.get("browse_hospital_type")      # من جلسة التصفح
+                or (db.get_hospital_by_name(hospital) or {}).get("hospital_type")  # من قاعدة البيانات
+            ),
             template_path = template_path,
         )
 

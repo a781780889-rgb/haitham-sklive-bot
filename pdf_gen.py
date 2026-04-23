@@ -594,10 +594,16 @@ def is_private_hospital(hospital_name):
         return False
     try:
         from hospitals_data import KSA_HOSPITALS
-        name_lower = str(hospital_name).strip()
+        import unicodedata
+        # تطبيع النص: إزالة الفراغات الزائدة وتوحيد الترميز
+        def _norm(t):
+            t = unicodedata.normalize('NFC', str(t))
+            return ' '.join(t.split())  # يزيل أي فراغات متعددة أو خاصة
+        name_norm = _norm(hospital_name)
         for city_data in KSA_HOSPITALS.values():
             for h in city_data.get('خاص', []):
-                if h.strip() == name_lower or name_lower in h or h in name_lower:
+                h_norm = _norm(h)
+                if h_norm == name_norm or name_norm in h_norm or h_norm in name_norm:
                     return True
     except Exception:
         pass
