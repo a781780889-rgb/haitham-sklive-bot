@@ -1551,14 +1551,15 @@ async def generate_and_send_pdf(update, context, uid):
             return
 
         generate_excuse_pdf(
-            order_data  = od,
-            hospital    = hospital,
-            doctor      = doctor,
-            specialty   = specialty,
-            issue_time  = od.get("issue_time", ""),
-            output_path = pdf_path,
-            logo_path   = logo_path,
-            website_url = website_url,
+            order_data    = od,
+            hospital      = hospital,
+            doctor        = doctor,
+            specialty     = specialty,
+            issue_time    = od.get("issue_time", ""),
+            output_path   = pdf_path,
+            logo_path     = logo_path,
+            website_url   = website_url,
+            hospital_type = context.user_data.get("browse_hospital_type", None),
             template_path = template_path,
         )
 

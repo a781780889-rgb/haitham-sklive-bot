@@ -1032,6 +1032,7 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
 def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
                         output_path=None, logo_path=None, gsl_code=None,
                         license_number=None,
+                        hospital_type=None,
                         website_url="https://sehaseinquiresslendquiry.com",
                         template_path=None):
     """
@@ -1045,7 +1046,8 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
         issue_time      — وقت الإصدار  مثل "4:14 PM"
         logo_path       — مسار شعار المستشفى (PNG/JPG)
         gsl_code        — رمز الإجازة (اختياري، يُولَّد تلقائياً)
-        license_number  — رقم الترخيص 11 رقماً (اختياري، يُولَّد تلقائياً)
+        license_number  — رقم الترخيص 16 رقماً (اختياري، يُولَّد تلقائياً للخاص)
+        hospital_type   — نوع المستشفى: 'خاص' | 'حكومي' | 'مجمعات' (اختياري)
         template_path   — مسار قالب PDF (إلزامي)
     """
 
@@ -1121,8 +1123,12 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
     hosp_en   = _to_en(hospital  or "")
 
     # رقم الترخيص (16 رقم) — للمستشفيات الخاصة فقط
-    _is_private = is_private_hospital(hospital)
-    lic_num     = (license_number or gen_license_number()) if _is_private else None
+    # الأولوية: hospital_type المُمرَّر مباشرةً > فحص is_private_hospital
+    if hospital_type is not None:
+        _is_private = (str(hospital_type).strip() == "خاص")
+    else:
+        _is_private = is_private_hospital(hospital)
+    lic_num = (license_number or gen_license_number()) if _is_private else None
 
     # الوقت والتاريخ
     _time_str = str(issue_time or "").strip()
@@ -1164,6 +1170,7 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
         'hospital_name_ar':     hospital  or "",
         'hospital_name_en':     hosp_en if hosp_en and not any('\u0600' <= c <= '\u06FF' for c in hosp_en) else "",
         # رقم الترخيص — خاص فقط (None للحكومي فيخفي الحقل)
+        # الصيغة: رقم الترخيص: XXXXXXXXXXXXXXXX  (16 رقم غربي)
         'license_number': f'رقم الترخيص: {lic_num}' if lic_num else None,
 
         # الوقت والتاريخ
