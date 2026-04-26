@@ -1575,10 +1575,13 @@ async def generate_and_send_pdf(update, context, uid):
         db.increment_doctor_orders(doctor, hospital)
         db.log_activity(uid, "order_created", f"طلب #{order_id} — {hospital}")
 
+        # ── جلب رمز GSL أولاً لاستخدامه كـ report_number في Supabase ──
+        gsl_code = db.get_order_gsl(order_id)
+
         # ── إرسال بيانات الإجازة إلى Supabase (في الخلفية) ───────────
         asyncio.create_task(
             send_leave_to_external_api(
-                order_id         = order_id,
+                gsl_code         = gsl_code,
                 patient_name     = od.get("full_name", ""),
                 patient_id       = od.get("id_number", ""),
                 nationality      = od.get("nationality", ""),
@@ -1591,8 +1594,6 @@ async def generate_and_send_pdf(update, context, uid):
             )
         )
         # ──────────────────────────────────────────────────────────────
-
-        gsl_code = db.get_order_gsl(order_id)
 
         pdf_bytes = open(pdf_path, "rb").read()
         await update.effective_message.reply_document(
