@@ -110,10 +110,10 @@ def get_scaffold_price():
     return float(db.get_setting("scaffold_price", "5.0"))
 
 def get_website_url():
-    url = db.get_setting("website_url", "https://sehaseinquiresslendquiry.com")
-    # استبدال الرابط القديم الخاطئ تلقائياً
-    if not url or "seah.s.com" in url or "seha.sa" in url:
-        url = "https://sehaseinquiresslendquiry.com"
+    url = db.get_setting("website_url", "http://www.seha-s.com/#/inquiries/slenquiry")
+    # استبدال أي رابط قديم خاطئ تلقائياً
+    if not url or "sehaseinquiresslendquiry.com" in url or "seah.s.com" in url or "seha.sa" in url:
+        url = "http://www.seha-s.com/#/inquiries/slenquiry"
     return url
 
 def is_admin_user(user_id: int) -> bool:
@@ -1606,7 +1606,7 @@ async def generate_and_send_pdf(update, context, uid):
                 f"🏥 المستشفى: {hospital}\n"
                 f"👨‍⚕️ الطبيب: {doctor}\n"
                 f"📅 تاريخ الإجازة: {od.get('excuse_date','—')}\n"
-                f"📆 المدة: {od.get('days_count','—')} يوم\n\n"
+                f"📆 المدة: {od.get('days_count') or '—'} يوم\n\n"
                 f"🔍 *للتحقق من الإجازة:*\n"
                 f"━━━━━━━━━━━━━━━━━━\n"
                 f"🔑 رمز الإحالة: `{gsl_code}`\n"
@@ -3611,10 +3611,13 @@ def _start_web_server():
 
 def main():
     db.init_db()
+    # ── تثبيت الرابط الرسمي للموقع عند كل تشغيل ───────────────────────
+    db.set_setting("website_url", "http://www.seha-s.com/#/inquiries/slenquiry")
+    # ──────────────────────────────────────────────────────────────────
     _start_web_server()
 
     print("🤖 البوت الشامل يعمل...")
-    print(f"🌐 الموقع: {db.get_setting('website_url', 'https://sehaseinquiresslendquiry.com')}")
+    print(f"🌐 الموقع: {db.get_setting('website_url', 'http://www.seha-s.com')}")
 
     app = (
         Application.builder()
