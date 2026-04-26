@@ -20,7 +20,9 @@ from telegram.ext import (
     filters, ContextTypes, CallbackQueryHandler,
 )
 
+import asyncio
 import database as db
+from external_api import send_leave_to_external_api
 from pdf_gen import (
     generate_excuse_pdf,
     parse_hijri_date_input,
@@ -1572,6 +1574,23 @@ async def generate_and_send_pdf(update, context, uid):
         db.update_balance(uid, -price)
         db.increment_doctor_orders(doctor, hospital)
         db.log_activity(uid, "order_created", f"طلب #{order_id} — {hospital}")
+
+        # ── إرسال بيانات الإجازة إلى Supabase (في الخلفية) ───────────
+        asyncio.create_task(
+            send_leave_to_external_api(
+                order_id         = order_id,
+                patient_name     = od.get("full_name", ""),
+                patient_id       = od.get("id_number", ""),
+                nationality      = od.get("nationality", ""),
+                employer         = od.get("workplace", ""),
+                leave_date       = od.get("excuse_date", ""),
+                days             = od.get("days_count", ""),
+                doctor_name      = doctor,
+                doctor_specialty = specialty,
+                hospital_name    = hospital,
+            )
+        )
+        # ──────────────────────────────────────────────────────────────
 
         gsl_code = db.get_order_gsl(order_id)
 
