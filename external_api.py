@@ -1,28 +1,34 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-external_api.py - إدراج بيانات الإجازة في قاعدة بيانات صديقك (Supabase / PostgreSQL)
-=======================================================================================
-يستخدم رمز GSL الحقيقي كـ report_number حتى يتطابق مع بحث الموقع.
+external_api.py — مزامنة بيانات الإجازة إلى قاعدة البيانات المشتركة
+═══════════════════════════════════════════════════════════════════════
+✅ النسخة الجديدة: يستخدم وحدة shared_db المشتركة بين البوتين والموقع.
+✅ يحافظ على نفس الواجهة القديمة `send_leave_to_external_api`
+   حتى لا تحتاج لتعديل bot.py.
+
+الإعداد:
+    أضف متغير البيئة SHARED_DATABASE_URL في إعدادات Railway.
+    مثال:
+        SHARED_DATABASE_URL=postgresql://user:pass@host:5432/db
+
+ملاحظة: للتوافق مع النسخة القديمة، يقبل الكود أيضاً:
+    - EXTERNAL_DATABASE_URL
+    - DATABASE_URL  (إذا لم يكن البوت يستخدمها لقاعدته الخاصة)
 """
 
+from __future__ import annotations
+import os
 import logging
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
-import psycopg2
+import shared_db
 
 logger = logging.getLogger(__name__)
 
-# ============================================================
-#         ⚙️  إعدادات قاعدة بيانات صديقك (Supabase)
-# ============================================================
-SUPABASE_DB_URL = (
-    "postgresql://postgres.cpozxkogscwviklsojvj:Mohram7799999!"
-    "@aws-0-eu-west-1.pooler.supabase.com:6543/postgres"
-)
-SUPABASE_TABLE = "reports"
-# ============================================================
+# مصدر هذا البوت في القاعدة المشتركة
+SOURCE_BOT = os.environ.get("BOT_SOURCE_NAME", "bot1")
 
 _executor = ThreadPoolExecutor(max_workers=2)
 
@@ -39,50 +45,25 @@ def _insert_leave_sync(
     doctor_specialty: str,
     hospital_name:    str,
 ) -> bool:
-    """دالة sync تُدرج السجل في Supabase — تُشغَّل في thread منفصل."""
+    """دالة sync تُدرج السجل في قاعدة البيانات المشتركة — تُشغَّل في thread."""
+    if not shared_db.is_enabled():
+        logger.warning("⚠️ SHARED_DATABASE_URL غير مُعدّ — تخطّي مزامنة %s", gsl_code)
+        return False
 
-    sql = f"""
-        INSERT INTO {SUPABASE_TABLE}
-            (report_number, patient_name, patient_id, nationality, employer,
-             leave_date, days, doctor_name, doctor_specialty, hospital_name)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-    """
-    values = (
-        gsl_code,        # report_number = رمز GSL الحقيقي (مثل: GSL56098894651)
-        patient_name,
-        patient_id,
-        nationality,
-        employer,
-        leave_date,
-        days,
-        doctor_name,
-        doctor_specialty,
-        hospital_name,
+    return shared_db.upsert_report(
+        report_number    = gsl_code,
+        source_bot       = SOURCE_BOT,
+        patient_name     = patient_name,
+        patient_id       = patient_id,
+        nationality      = nationality,
+        employer         = employer,
+        leave_date       = leave_date,
+        days             = days,
+        doctor_name      = doctor_name,
+        doctor_specialty = doctor_specialty,
+        hospital_name    = hospital_name,
+        report_type      = "sick_leave",
     )
-
-    conn = None
-    try:
-        conn = psycopg2.connect(SUPABASE_DB_URL, connect_timeout=10, sslmode="require")
-        with conn.cursor() as cur:
-            cur.execute(sql, values)
-        conn.commit()
-        logger.info(
-            "✅ تم إدراج الإجازة في Supabase | report_number=%s | patient=%s",
-            gsl_code, patient_name
-        )
-        return True
-
-    except psycopg2.OperationalError as e:
-        logger.error("❌ فشل الاتصال بـ Supabase: %s", e)
-    except psycopg2.Error as e:
-        logger.error("❌ خطأ في قاعدة البيانات: %s", e)
-    except Exception as e:
-        logger.error("❌ خطأ غير متوقع: %s", e)
-    finally:
-        if conn and not conn.closed:
-            conn.close()
-
-    return False
 
 
 async def send_leave_to_external_api(
@@ -98,10 +79,10 @@ async def send_leave_to_external_api(
     hospital_name:    str,
 ) -> bool:
     """
-    دالة async تُرسل بيانات الإجازة إلى Supabase في thread منفصل.
+    إرسال بيانات الإجازة إلى قاعدة البيانات المشتركة بطريقة non-blocking.
 
     الربط مع حقول البوت:
-        gsl_code         ← gsl_code    (رمز GSL — يُستخدم كـ report_number)
+        gsl_code         ← gsl_code        (يُحفظ كـ report_number)
         patient_name     ← full_name
         patient_id       ← id_number
         nationality      ← nationality
