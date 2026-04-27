@@ -9,3 +9,4 @@ qrcode
 arabic-reshaper>=3.0
 python-bidi>=0.4
 psycopg2-binary>=2.9
+cryptography>=41.0
