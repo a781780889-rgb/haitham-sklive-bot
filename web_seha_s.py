@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-web_seha_s.py — موقع التحقق الموحّد www.seha-s.com
+web_seha_s.py — موقع التحقق الموحّد www.sehasaa.com
 ═══════════════════════════════════════════════════════════════════
-يقرأ من قاعدة البيانات المشتركة `reports` التي يكتب فيها كلا
-البوتين (haitham-sklive + jdjdn). تصميم مطابق لمنصة seha.sa.
+يقرأ من قاعدة البيانات المشتركة `reports`. تصميم احترافي.
 
 التشغيل:
     pip install flask psycopg2-binary
@@ -585,7 +584,7 @@ body {{
       </div>
       <div class="ft-info">
         <div class="ft-row"><span>920002005</span><span>📞</span></div>
-        <div class="ft-row"><span>support@seha.sa</span><span>✉️</span></div>
+        <div class="ft-row"><span>support@sehasaa.com</span><span>✉️</span></div>
         <div class="ft-row"><span>920002005</span><span>💬</span></div>
       </div>
     </div>

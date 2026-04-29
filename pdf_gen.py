@@ -829,7 +829,7 @@ def _get_page_size(template_path):
 # إنشاء طبقة النصوص والصور
 # ══════════════════════════════════════════════════════════════
 
-def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_path, website_url="https://sehaseinquiresslendquiry.com"):
+def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_path, website_url="https://www.sehasaa.com"):
     """
     طبقة شفافة تُرسم فوق القالب:
     • نصوص إنجليزية → Times-Roman / Times-Bold  (مدمج في ReportLab)
@@ -976,7 +976,7 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
             pass
 
     # ─── رسم باركود QR في موضعه الأصلي ─────────────────────────────
-    SEHA_URL = "https://sehaseinquiresslendquiry.com"
+    SEHA_URL = "https://www.sehasaa.com"
     qx = QR_SLOT['x']      * x_scale
     qy = QR_SLOT['rl_y']   * y_scale
     qw = QR_SLOT['width']  * x_scale
@@ -1019,7 +1019,7 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
 
     # رابط "sehaseinquiresslendquiry.com" النص المطبوع في القالب (قابل للنسخ)
     try:
-        _website_url = str(website_url or "https://sehaseinquiresslendquiry.com").strip()
+        _website_url = str(website_url or "https://www.sehasaa.com").strip()
         site_y0 = 264.0 * y_scale
         site_y1 = 278.0 * y_scale
         site_x0 = 142.0 * x_scale
@@ -1039,7 +1039,7 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
                         output_path=None, logo_path=None, gsl_code=None,
                         license_number=None,
                         hospital_type=None,
-                        website_url="https://sehaseinquiresslendquiry.com",
+                        website_url="https://www.sehasaa.com",
                         template_path=None):
     """
     ينشئ PDF إجازة مرضية بإحداثيات مطابقة لملف صحة المرجعي.

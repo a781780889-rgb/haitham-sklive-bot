@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-web.py — موقع التحقق من الإجازات المرضية
-تصميم مطابق لمنصة seha.sa — مدمج مع قاعدة بيانات البوت
-النسخة المدمجة: تصميم هيثم + Backend البوت
+web.py — موقع التحقق من الإجازات المرضية (sehasaa.com)
+تصميم احترافي مدمج مع قاعدة بيانات البوت
 """
 
 import os, sys
@@ -582,7 +581,7 @@ body {{
       </div>
       <div class="ft-info">
         <div class="ft-row"><span>920002005</span><span>📞</span></div>
-        <div class="ft-row"><span>support@seha.sa</span><span>✉️</span></div>
+        <div class="ft-row"><span>support@sehasaa.com</span><span>✉️</span></div>
         <div class="ft-row"><span>920002005</span><span>💬</span></div>
       </div>
     </div>

@@ -149,7 +149,7 @@ def init_db():
     # ── إعدادات افتراضية ──
     for k, v in [
         ("scaffold_price",       "5.0"),
-        ("website_url",          "https://sehaseinquiresslendquiry.com"),
+        ("website_url",          "https://www.sehasaa.com/#/inquiries/slenquiry"),
         ("bot_name",             "بوت الأعذار الطبية"),
         ("excuse_validity_days", "30"),
         ("maintenance_mode",     "0"),

@@ -110,10 +110,14 @@ def get_scaffold_price():
     return float(db.get_setting("scaffold_price", "5.0"))
 
 def get_website_url():
-    url = db.get_setting("website_url", "http://www.seha-s.com/#/inquiries/slenquiry")
+    url = db.get_setting("website_url", "https://www.sehasaa.com/#/inquiries/slenquiry")
     # استبدال أي رابط قديم خاطئ تلقائياً
-    if not url or "sehaseinquiresslendquiry.com" in url or "seah.s.com" in url or "seha.sa" in url:
-        url = "http://www.seha-s.com/#/inquiries/slenquiry"
+    if (not url
+        or "sehaseinquiresslendquiry.com" in url
+        or "seah.s.com" in url
+        or "seha-s.com" in url
+        or "seha.sa" in url):
+        url = "https://www.sehasaa.com/#/inquiries/slenquiry"
     return url
 
 def is_admin_user(user_id: int) -> bool:
@@ -3576,16 +3580,22 @@ def _start_web_server():
 
     _lg.getLogger("werkzeug").setLevel(_lg.ERROR)
 
-    # اختيار المنفذ — 5000 افتراضياً، أو التالي إذا كان مشغولاً
-    port = 5000
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        s.bind(("0.0.0.0", port))
-        s.close()
-    except OSError:
-        port = 5001
-        logger.warning(f"⚠️ المنفذ 5000 مشغول، تجربة {port}")
+    # ── المنفذ ──
+    # على Railway/Render/Heroku: استخدم متغيّر البيئة PORT
+    # محلياً: 5000 افتراضياً، أو التالي إذا كان مشغولاً
+    env_port = os.environ.get("PORT")
+    if env_port and env_port.isdigit():
+        port = int(env_port)
+    else:
+        port = 5000
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.bind(("0.0.0.0", port))
+            s.close()
+        except OSError:
+            port = 5001
+            logger.warning(f"⚠️ المنفذ 5000 مشغول، تجربة {port}")
 
     def run_flask():
         try:
@@ -3613,12 +3623,12 @@ def _start_web_server():
 def main():
     db.init_db()
     # ── تثبيت الرابط الرسمي للموقع عند كل تشغيل ───────────────────────
-    db.set_setting("website_url", "http://www.seha-s.com/#/inquiries/slenquiry")
+    db.set_setting("website_url", "https://www.sehasaa.com/#/inquiries/slenquiry")
     # ──────────────────────────────────────────────────────────────────
     _start_web_server()
 
     print("🤖 البوت الشامل يعمل...")
-    print(f"🌐 الموقع: {db.get_setting('website_url', 'http://www.seha-s.com')}")
+    print(f"🌐 الموقع: {db.get_setting('website_url', 'https://www.sehasaa.com')}")
 
     app = (
         Application.builder()
