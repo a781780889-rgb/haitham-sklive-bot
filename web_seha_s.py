@@ -1,25 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-web_seha_s.py — موقع التحقق الموحّد www.sehasaa.com
-═══════════════════════════════════════════════════════════════════
-يقرأ من قاعدة البيانات المشتركة `reports`. تصميم احترافي.
-
-التشغيل:
-    pip install flask psycopg2-binary
-    export SHARED_DATABASE_URL="postgresql://user:pass@host:5432/db"
-    python web_seha_s.py
-
-أو باستخدام gunicorn:
-    gunicorn -w 2 -b 0.0.0.0:5000 web_seha_s:app
+web_seha_s.py — موقع www.sehasaa.com
+التصميم مطابق 100% لصور seha-s.com الرسمية
 """
 
-import os
-import sys
+import os, sys, base64
 from datetime import datetime
 from flask import Flask, request, jsonify
 
-# نسمح للملف بالعمل من أي مجلد
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _THIS_DIR not in sys.path:
     sys.path.insert(0, _THIS_DIR)
@@ -29,28 +18,29 @@ import shared_db
 app = Flask(__name__)
 
 # ══════════════════════════════════════════════════════════════
-# تسجيل صفحتَي seha-s.com (نموذج + نتيجة الإجازة)
+# تحميل صور التصميم (مرة واحدة عند البدء)
 # ══════════════════════════════════════════════════════════════
-try:
-    from web_seha_s_pages import seha_s_pages
-    app.register_blueprint(seha_s_pages)
-except ImportError as _e:
-    print(f"⚠️ web_seha_s_pages غير موجود: {_e}")
+def _load_img(filename):
+    p = os.path.join(_THIS_DIR, filename)
+    if os.path.exists(p):
+        with open(p, "rb") as f:
+            return "data:image/jpeg;base64," + base64.b64encode(f.read()).decode()
+    return ""
 
+_IMG_FORM   = _load_img("design_form.jpg")
+_IMG_RESULT = _load_img("design_result.jpg")
 
 # ══════════════════════════════════════════════════════════════
 # SVG شعار صحة (checkmark مخطط)
 # ══════════════════════════════════════════════════════════════
-def seha_check_svg(color="#2d5fa6", size=52):
-    uid = str(size)
+def seha_check_svg(color="#2d5fa6", size=44):
+    uid = f"{color}{size}".replace("#","")
     return f"""<svg width="{size}" height="{size}" viewBox="0 0 60 55" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <clipPath id="chk{uid}">
-      <polyline points="4,30 22,48 56,8" stroke="black" stroke-width="13"
-        stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-    </clipPath>
-  </defs>
-  <g clip-path="url(#chk{uid})">
+  <defs><clipPath id="ck{uid}">
+    <polyline points="4,30 22,48 56,8" stroke="black" stroke-width="13"
+      stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </clipPath></defs>
+  <g clip-path="url(#ck{uid})">
     <line x1="-10" y1="56" x2="40"  y2="-4" stroke="{color}" stroke-width="4.2" opacity="0.22"/>
     <line x1="-3"  y1="56" x2="47"  y2="-4" stroke="{color}" stroke-width="4.2" opacity="0.30"/>
     <line x1="4"   y1="56" x2="54"  y2="-4" stroke="{color}" stroke-width="4.2" opacity="0.42"/>
@@ -65,407 +55,212 @@ def seha_check_svg(color="#2d5fa6", size=52):
     stroke-linecap="round" stroke-linejoin="round" fill="none"/>
 </svg>"""
 
+# ══════════════════════════════════════════════════════════════
+# CSS المشترك
+# ══════════════════════════════════════════════════════════════
+_CSS = """
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+body{font-family:'Tajawal',Arial,sans-serif;background:#fff;
+     direction:rtl;color:#222;min-height:100vh;overflow-x:hidden}
+
+/* ── HEADER ── */
+.hdr{background:#fff;padding:12px 20px;display:flex;
+  justify-content:space-between;align-items:center;
+  border-bottom:1px solid #e4e9f0;
+  position:sticky;top:0;z-index:100;
+  box-shadow:0 2px 6px rgba(0,0,0,.05)}
+.hdr-ham{display:flex;flex-direction:column;gap:5px;
+  cursor:pointer;background:none;border:none;padding:4px}
+.hdr-ham span{display:block;width:22px;height:2.5px;
+  background:#3463a8;border-radius:2px}
+.hdr-logo{display:flex;align-items:center;gap:0;direction:ltr}
+.hdr-logo-txt{display:flex;flex-direction:column;
+  align-items:flex-end;line-height:1.1;margin-left:8px}
+.logo-ar{font-size:19px;font-weight:900;color:#1a4f8a;letter-spacing:-.3px}
+.logo-en{font-size:11px;font-weight:600;color:#2d76c9;letter-spacing:.5px;
+  text-align:right}
+.hdr-sep{width:1.5px;height:36px;background:#d0daea;margin:0 8px}
+
+/* ── DESIGN IMAGE SECTION ── */
+.design-img-wrap{
+  position:relative;width:100%;
+  display:flex;justify-content:center;
+  background:#fff;overflow:hidden
+}
+.design-img-wrap img{
+  width:100%;max-width:480px;
+  display:block;object-fit:cover
+}
+/* Overlay شفاف فوق الصورة للـ interactions */
+.design-overlay{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;
+  align-items:center;
+  pointer-events:none
+}
+
+/* ── CONTAINER للمحتوى الحقيقي ── */
+.page-wrap{max-width:540px;margin:0 auto}
+
+/* ── TITLE SECTION ── */
+.title-sec{padding:22px 20px 16px;background:#fff}
+.page-title{font-size:30px;font-weight:900;color:#1a3b6e;
+  font-style:italic;margin-bottom:10px;line-height:1.3}
+.page-desc{font-size:13.5px;color:#5f6878;line-height:1.85}
+
+/* ── FORM ── */
+.form-sec{padding:4px 20px 10px;background:#fff}
+.f-inp{width:100%;padding:14px 16px;
+  border:1.5px solid #d0d8e8;border-radius:8px;
+  font-size:14.5px;font-family:'Tajawal',sans-serif;
+  color:#222;background:#fff;
+  direction:rtl;text-align:right;outline:none;
+  transition:border-color .2s,box-shadow .2s;
+  -webkit-appearance:none;margin-bottom:12px}
+.f-inp::placeholder{color:#a8b2c4;font-size:14px}
+.f-inp:focus{border-color:#2d5fa6;
+  box-shadow:0 0 0 3px rgba(45,95,166,.1)}
+.f-inp.err{border-color:#d63030}
+
+/* ── BUTTONS ── */
+.btn-area{display:flex;flex-direction:column;
+  align-items:center;gap:10px;padding:10px 0 24px}
+.btn-prim{width:175px;padding:13px 0;
+  background:#2d5fa6;color:#fff;border:none;
+  border-radius:8px;font-size:15px;font-weight:700;
+  font-family:'Tajawal',sans-serif;cursor:pointer;
+  transition:background .18s,transform .12s}
+.btn-prim:hover{background:#1c4a8a}
+.btn-prim:active{transform:scale(.97)}
+.btn-prim:disabled{background:#93b4d8;cursor:not-allowed}
+.btn-dark{width:175px;padding:12px 0;
+  background:#1e3c7b;color:#fff;border:none;
+  border-radius:8px;font-size:14px;font-weight:700;
+  font-family:'Tajawal',sans-serif;cursor:pointer;
+  transition:background .18s}
+.btn-dark:hover{background:#152e60}
+
+/* ── PAGES TOGGLE ── */
+.pg{display:none}.pg.on{display:block}
+
+/* ── RESULT CARD ── */
+.res-card{border:1px solid #d8e2ef;border-radius:10px;
+  overflow:hidden;margin:0 20px 20px;background:#fff}
+.res-row{padding:14px 20px;border-bottom:1px solid #edf0f6;text-align:center}
+.res-row:last-child{border-bottom:none}
+.res-lbl{font-size:15px;font-weight:700;color:#1a3b6e;margin-bottom:5px}
+.res-val{font-size:14px;color:#3a3a50;font-weight:400}
+
+/* ── ERROR ── */
+.err-box{margin:0 20px 16px;padding:16px 18px;
+  background:#fff5f5;border:1.5px solid #f5c0c0;
+  border-radius:8px;text-align:center;display:none}
+.err-ttl{font-size:14px;font-weight:700;color:#c62828;margin-bottom:4px}
+.err-sub{font-size:13px;color:#888}
+
+/* ── LOADING ── */
+.loader{display:none;position:fixed;inset:0;
+  background:rgba(255,255,255,.92);z-index:999;
+  justify-content:center;align-items:center;
+  flex-direction:column;gap:14px}
+.loader.on{display:flex}
+.spin{width:46px;height:46px;border:4px solid #d8e8f8;
+  border-top-color:#2d5fa6;border-radius:50%;
+  animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.load-txt{font-size:15px;color:#2d5fa6;font-weight:700;
+  font-family:'Tajawal',sans-serif}
+
+/* ── SIDEBAR ── */
+.sb-ov{display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,.42);z-index:200}
+.sb-ov.on{display:block}
+.sb{position:fixed;top:0;right:-270px;width:260px;height:100%;
+  background:#fff;z-index:201;transition:right .28s;
+  box-shadow:-4px 0 18px rgba(0,0,0,.12);overflow-y:auto}
+.sb.on{right:0}
+.sb-hdr{background:linear-gradient(135deg,#1a3472,#2d5fa6);
+  padding:22px 18px;text-align:center;position:relative}
+.sb-close{position:absolute;top:14px;left:14px;width:28px;height:28px;
+  background:rgba(255,255,255,.2);border:none;border-radius:50%;
+  color:#fff;font-size:16px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center}
+.sb-menu{list-style:none;padding:10px 0}
+.sb-menu li{border-bottom:1px solid #eef2f6}
+.sb-menu li a{display:flex;align-items:center;gap:10px;
+  padding:13px 18px;color:#333;text-decoration:none;
+  font-size:14px;font-weight:500;transition:background .2s}
+.sb-menu li a:hover{background:#eef5fb;color:#2d5fa6}
+
+/* ── FOOTER ── */
+.ftr{background:#2563a8;color:#fff;padding:30px 20px 20px}
+.ftr-logo{display:flex;align-items:center;justify-content:center;
+  gap:0;margin-bottom:18px;padding-bottom:18px;
+  border-bottom:1px solid rgba(255,255,255,.18);direction:ltr}
+.ftr-logo-txt{display:flex;flex-direction:column;
+  align-items:flex-end;line-height:1.1;margin-left:8px}
+.ftr-logo-ar{font-size:20px;font-weight:900;color:#fff}
+.ftr-logo-en{font-size:11px;color:rgba(255,255,255,.75);letter-spacing:.5px}
+.ftr-sep{width:1.5px;height:34px;background:rgba(255,255,255,.25);margin:0 8px}
+.ftr-desc{font-size:13px;color:rgba(255,255,255,.9);
+  line-height:1.9;text-align:center;margin-bottom:24px}
+.ftr-sec-ttl{font-size:16px;font-weight:700;text-align:center;
+  margin-bottom:12px;border-bottom:1px solid rgba(255,255,255,.2);
+  padding-bottom:8px}
+.ftr-links{list-style:none;text-align:center;margin-bottom:22px}
+.ftr-links li{padding:10px 0;font-size:14px;
+  color:rgba(255,255,255,.8);
+  border-bottom:1px solid rgba(255,255,255,.1)}
+.ftr-links li:last-child{border-bottom:none}
+.ftr-ministry{display:flex;justify-content:center;
+  gap:14px;align-items:center;margin:10px 0 14px}
+.ftr-badge{background:rgba(255,255,255,.12);border-radius:8px;
+  padding:6px 10px;font-size:10px;text-align:center;min-width:68px}
+.ftr-badge-ico{font-size:18px;margin-bottom:2px}
+.ftr-contact{display:flex;justify-content:space-between;
+  align-items:center;margin-bottom:6px;direction:ltr}
+.ftr-nums p{font-size:13px;color:rgba(255,255,255,.85);margin-bottom:3px}
+.ftr-nums .em{color:rgba(255,255,255,.65);font-size:11.5px}
+.ftr-icos{display:flex;flex-direction:column;gap:6px;align-items:center}
+.ftr-ico{width:28px;height:28px;border:1px solid rgba(255,255,255,.4);
+  border-radius:50%;display:flex;align-items:center;
+  justify-content:center;font-size:12px}
+.ftr-hours{font-size:12px;opacity:.65;text-align:right;margin-bottom:14px}
+.ftr-social{display:flex;justify-content:center;gap:10px;margin-bottom:16px}
+.soc-ico{width:32px;height:32px;border:1px solid rgba(255,255,255,.4);
+  border-radius:50%;display:flex;align-items:center;
+  justify-content:center;font-size:13px;font-weight:700;cursor:pointer}
+.ftr-copy{font-size:11.5px;opacity:.6;text-align:center;margin-bottom:8px}
+.ftr-btm{display:flex;justify-content:center;gap:14px;
+  font-size:11.5px;opacity:.75}
+.ftr-btm a{color:#fff;text-decoration:none}
+.ftr-btm a:hover{text-decoration:underline}
+
+@media(max-width:420px){.page-title{font-size:26px}}
+@media print{.hdr,.ftr,.loader,.btn-area,.sb,.sb-ov{display:none!important}
+  .res-card{border:1px solid #ccc;box-shadow:none}}
+"""
 
 # ══════════════════════════════════════════════════════════════
-# بناء HTML الموقع الكامل
+# مكوّنات HTML مشتركة
 # ══════════════════════════════════════════════════════════════
-def build_html():
-    check_hdr = seha_check_svg("#2d5fa6", 44)
-    check_ftr = seha_check_svg("white",   48)
-    check_sb  = seha_check_svg("white",   38)
-
-    return f"""<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>الإجازات المرضية - منصة صحة</title>
-<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
-<style>
-*,*::before,*::after {{ margin:0; padding:0; box-sizing:border-box; }}
-html {{ scroll-behavior:smooth; -webkit-text-size-adjust:100%; }}
-body {{
-  font-family:'Tajawal',Arial,sans-serif;
-  background:#f0f4f8;
-  color:#333;
-  min-height:100vh;
-  direction:rtl;
-  overflow-x:hidden;
-}}
-
-/* HEADER */
-.header {{
-  background:#fff; padding:12px 20px;
-  display:flex; justify-content:space-between; align-items:center;
-  border-bottom:1px solid #e0e7ee;
-  box-shadow:0 2px 8px rgba(0,0,0,.06);
-  position:sticky; top:0; z-index:100;
-  direction:ltr;
-}}
-.hamburger {{
-  display:flex; flex-direction:column; gap:5px;
-  cursor:pointer; padding:5px; background:none; border:none;
-}}
-.hamburger span {{
-  display:block; width:22px; height:2.5px;
-  background:#3d6db5; border-radius:2px;
-}}
-.logo-wrap {{ display:flex; align-items:center; gap:0; direction:ltr; }}
-.logo-txt {{
-  display:flex; flex-direction:column;
-  align-items:flex-start; line-height:1.1; margin-right:8px;
-}}
-.logo-ar {{ font-size:19px; font-weight:900; color:#1a5276; letter-spacing:-.3px; }}
-.logo-en {{ font-size:12px; font-weight:600; color:#2980b9; letter-spacing:1px; }}
-.logo-sep {{ width:1.5px; height:36px; background:#ccd8ea; margin:0 8px; }}
-
-/* PAGE CONTAINER */
-.page-container {{ max-width:600px; margin:0 auto; padding-bottom:40px; }}
-
-/* SERVICE TITLE */
-.service-title-section {{
-  background:#fff; padding:22px 20px 18px; text-align:right;
-}}
-.service-title {{
-  font-size:30px; font-weight:900;
-  color:#1a3472; font-style:italic;
-  margin-bottom:10px; line-height:1.3;
-}}
-.service-description {{
-  font-size:13.5px; color:#636978; line-height:1.85;
-}}
-
-/* FORM */
-.form-section {{
-  background:#fff; padding:20px 20px; margin-top:10px;
-}}
-.form-group {{ margin-bottom:12px; }}
-.form-input {{
-  width:100%; padding:14px 16px;
-  border:1.5px solid #d3d9e6; border-radius:8px;
-  font-size:15px; font-family:'Tajawal',sans-serif;
-  color:#222; background:#fff;
-  direction:rtl; text-align:right;
-  outline:none;
-  transition:border-color .2s, box-shadow .2s;
-  -webkit-appearance:none;
-}}
-.form-input::placeholder {{ color:#a8afc0; font-size:14px; }}
-.form-input:focus {{
-  border-color:#2d5fa6;
-  box-shadow:0 0 0 3px rgba(45,95,166,.12);
-}}
-.form-input.error {{ border-color:#d63030; }}
-.error-msg {{
-  color:#e74c3c; font-size:12px;
-  margin-top:5px; display:none;
-}}
-.error-msg.show {{ display:block; }}
-
-/* BUTTONS */
-.btn-area {{
-  display:flex; flex-direction:column;
-  align-items:center; gap:10px; margin-top:20px;
-}}
-.btn-primary {{
-  width:180px; padding:13px 0;
-  background:#2d5fa6; color:#fff;
-  border:none; border-radius:8px;
-  font-size:15px; font-weight:700;
-  font-family:'Tajawal',sans-serif; cursor:pointer;
-  transition:background .18s;
-}}
-.btn-primary:hover {{ background:#1c4a8a; }}
-.btn-primary:disabled {{ background:#93b4d8; cursor:not-allowed; }}
-.btn-outline {{
-  width:180px; padding:12px 0;
-  background:#1e3c7b; color:#fff;
-  border:none; border-radius:8px;
-  font-size:14px; font-weight:700;
-  font-family:'Tajawal',sans-serif; cursor:pointer;
-  transition:background .18s;
-}}
-.btn-outline:hover {{ background:#152e60; }}
-
-/* LOADING */
-.loading-overlay {{
-  display:none; position:fixed; inset:0;
-  background:rgba(255,255,255,.9); z-index:999;
-  justify-content:center; align-items:center;
-  flex-direction:column; gap:15px;
-}}
-.loading-overlay.active {{ display:flex; }}
-.spinner {{
-  width:48px; height:48px;
-  border:4px solid #dbe8f5;
-  border-top:4px solid #2d5fa6;
-  border-radius:50%;
-  animation:spin .8s linear infinite;
-}}
-@keyframes spin {{ to{{ transform:rotate(360deg); }} }}
-.loading-text {{
-  font-size:15px; color:#2d5fa6;
-  font-weight:700; font-family:'Tajawal',sans-serif;
-}}
-
-/* PAGES */
-.result-page {{ display:none; }}
-.result-page.active {{ display:block; }}
-.form-page {{ display:block; }}
-.form-page.hidden {{ display:none; }}
-
-/* RESULT CARD */
-.result-card {{
-  background:#fff; margin:10px 15px;
-  border-radius:12px; overflow:hidden;
-  box-shadow:0 4px 15px rgba(0,0,0,.08);
-}}
-.result-header {{
-  background:linear-gradient(135deg,#1a3472,#2d5fa6);
-  padding:22px 20px; text-align:center; color:#fff;
-}}
-.result-icon {{
-  width:60px; height:60px; margin:0 auto 10px;
-  background:rgba(255,255,255,.18); border-radius:50%;
-  display:flex; align-items:center; justify-content:center;
-  font-size:26px;
-}}
-.result-header-title {{ font-size:18px; font-weight:700; margin-bottom:4px; }}
-.result-header-subtitle {{ font-size:13px; opacity:.85; }}
-
-.ref-box {{
-  display:flex; justify-content:center; align-items:center;
-  padding:12px; margin:14px 20px 6px;
-  background:#ebf5fb; border-radius:8px;
-  border:1px dashed #2980b9;
-}}
-.ref-box span {{
-  font-size:15px; font-weight:700;
-  color:#1a5276; letter-spacing:1px; direction:ltr;
-}}
-.id-box {{
-  display:flex; justify-content:center; align-items:center;
-  padding:10px; margin:0 20px 15px;
-  background:#fef9e7; border-radius:8px;
-  border:1px dashed #f39c12;
-}}
-.id-box span {{
-  font-size:16px; font-weight:700;
-  color:#7d6608; letter-spacing:2px; direction:ltr;
-}}
-
-.result-details {{ padding:10px 20px 20px; }}
-.detail-row {{
-  display:flex; justify-content:space-between;
-  align-items:center; padding:14px 0;
-  border-bottom:1px solid #eef2f6;
-}}
-.detail-row:last-child {{ border-bottom:none; }}
-.detail-label {{
-  font-size:13.5px; font-weight:700;
-  color:#1a3472; min-width:110px; text-align:right;
-}}
-.detail-value {{
-  font-size:14px; font-weight:500;
-  color:#2c2c3e; flex:1;
-  text-align:center; direction:ltr;
-}}
-.detail-value.ar {{ direction:rtl; }}
-
-.result-buttons {{ padding:10px 20px 22px; }}
-.print-btn {{
-  display:flex; align-items:center; justify-content:center;
-  gap:8px; width:100%; padding:13px;
-  background:linear-gradient(135deg,#27ae60,#1e8449);
-  color:#fff; border:none; border-radius:8px;
-  font-size:15px; font-weight:700;
-  font-family:'Tajawal',sans-serif; cursor:pointer;
-  margin-bottom:10px;
-  box-shadow:0 4px 12px rgba(39,174,96,.25);
-  transition:all .2s;
-}}
-.print-btn:hover {{ background:linear-gradient(135deg,#229954,#196f3d); }}
-.back-btn {{
-  display:flex; align-items:center; justify-content:center;
-  gap:8px; width:100%; padding:13px;
-  background:linear-gradient(135deg,#2d5fa6,#1a3472);
-  color:#fff; border:none; border-radius:8px;
-  font-size:15px; font-weight:700;
-  font-family:'Tajawal',sans-serif; cursor:pointer;
-  transition:all .2s;
-}}
-.back-btn:hover {{ background:linear-gradient(135deg,#1c4a8a,#122554); }}
-
-.err-card {{
-  background:#fff2f2; border:1.5px solid #f5bfbf;
-  border-radius:10px; padding:22px 18px;
-  text-align:center; margin:15px;
-}}
-.err-title {{ font-size:15px; font-weight:700; color:#c62828; margin-bottom:6px; }}
-.err-sub {{ font-size:13px; color:#888; }}
-
-/* SIDEBAR */
-.sidebar-overlay {{
-  display:none; position:fixed; inset:0;
-  background:rgba(0,0,0,.45); z-index:200;
-}}
-.sidebar-overlay.active {{ display:block; }}
-.sidebar {{
-  position:fixed; top:0; right:-270px;
-  width:260px; height:100%; background:#fff;
-  z-index:201; transition:right .28s ease;
-  overflow-y:auto;
-  box-shadow:-5px 0 20px rgba(0,0,0,.1);
-}}
-.sidebar.active {{ right:0; }}
-.sidebar-header {{
-  background:linear-gradient(135deg,#1a3472,#2d5fa6);
-  padding:24px 20px; text-align:center;
-  position:relative;
-}}
-.sidebar-close {{
-  position:absolute; top:14px; left:14px;
-  width:30px; height:30px;
-  background:rgba(255,255,255,.2); border:none;
-  border-radius:50%; color:#fff; font-size:17px;
-  cursor:pointer; display:flex;
-  align-items:center; justify-content:center;
-}}
-.sidebar-close:hover {{ background:rgba(255,255,255,.3); }}
-.sidebar-menu {{ list-style:none; padding:12px 0; }}
-.sidebar-menu li {{ border-bottom:1px solid #eef2f6; }}
-.sidebar-menu li a {{
-  display:flex; align-items:center; gap:12px;
-  padding:14px 20px; color:#333;
-  text-decoration:none; font-size:14px;
-  font-weight:500; transition:background .2s;
-}}
-.sidebar-menu li a:hover {{ background:#ebf5fb; color:#2d5fa6; }}
-
-/* FOOTER */
-.footer {{
-  background:linear-gradient(180deg,#2d5fa6,#1a3472);
-  color:#fff; padding:30px 20px; margin-top:20px;
-}}
-.footer-logo-section {{
-  display:flex; align-items:center;
-  justify-content:center; gap:0;
-  margin-bottom:18px; padding-bottom:18px;
-  border-bottom:1px solid rgba(255,255,255,.18);
-  direction:ltr;
-}}
-.ft-logo-txt {{
-  display:flex; flex-direction:column;
-  align-items:flex-start; line-height:1.1; margin-right:8px;
-}}
-.ft-logo-ar {{ font-size:21px; font-weight:900; color:#fff; }}
-.ft-logo-en {{ font-size:11px; color:rgba(255,255,255,.75); letter-spacing:1px; }}
-.ft-logo-sep {{ width:1.5px; height:36px; background:rgba(255,255,255,.25); margin:0 8px; }}
-
-.footer-desc {{
-  font-size:13px; color:rgba(255,255,255,.88);
-  line-height:1.9; text-align:center;
-  margin-bottom:26px; padding:0 10px;
-}}
-.footer-section {{ margin-bottom:22px; }}
-.ft-sec-title {{
-  font-size:16px; font-weight:700;
-  text-align:center; margin-bottom:6px;
-}}
-.ft-line {{
-  width:50px; height:2.5px; background:#5b8fd4;
-  border-radius:2px; margin:0 auto 16px;
-}}
-.footer-links {{ list-style:none; text-align:center; }}
-.footer-links li {{
-  padding:10px 0;
-  border-bottom:1px solid rgba(255,255,255,.1);
-  font-size:14px; color:rgba(255,255,255,.78);
-}}
-.footer-links li:last-child {{ border-bottom:none; }}
-
-.ft-contact {{
-  display:flex; align-items:flex-start;
-  justify-content:space-between; gap:14px;
-  margin-bottom:16px; direction:ltr;
-}}
-.ft-brands {{
-  display:flex; flex-direction:column;
-  gap:7px; align-items:center;
-}}
-.ft-brand-box {{
-  background:rgba(255,255,255,.1); border-radius:8px;
-  padding:5px 8px;
-  display:flex; align-items:center; justify-content:center;
-  min-width:62px; min-height:44px;
-}}
-.ft-info {{
-  flex:1; display:flex; flex-direction:column;
-  gap:8px; align-items:flex-end; direction:rtl;
-}}
-.ft-row {{ display:flex; align-items:center; gap:8px; direction:ltr; }}
-.ft-row span {{ font-size:13px; color:rgba(255,255,255,.75); }}
-
-.ft-hours {{
-  text-align:center; font-size:12.5px;
-  color:rgba(255,255,255,.55); margin-bottom:16px;
-}}
-.footer-social {{
-  display:flex; justify-content:center;
-  gap:12px; margin-bottom:18px;
-}}
-.s-ico {{
-  width:33px; height:33px;
-  background:rgba(255,255,255,.12); border-radius:50%;
-  display:flex; align-items:center; justify-content:center;
-  font-size:13px; font-weight:900; color:#fff;
-  cursor:pointer; transition:background .2s;
-}}
-.s-ico:hover {{ background:rgba(255,255,255,.25); }}
-
-.footer-bottom {{
-  text-align:center; padding-top:14px;
-  border-top:1px solid rgba(255,255,255,.1);
-}}
-.footer-bottom p {{ font-size:12px; opacity:.55; margin-bottom:8px; }}
-.ft-links-row {{
-  display:flex; justify-content:center;
-  align-items:center; gap:8px; font-size:12px;
-}}
-.ft-links-row a {{ color:rgba(255,255,255,.5); text-decoration:none; }}
-.ft-links-row a:hover {{ color:#fff; }}
-.ft-links-sep {{ color:rgba(255,255,255,.2); }}
-
-@media print {{
-  .header,.sidebar,.sidebar-overlay,
-  .loading-overlay,.footer,
-  .print-btn,.back-btn,.btn-area {{ display:none !important; }}
-  .result-card {{ box-shadow:none; border:1px solid #ddd; }}
-  body {{ background:#fff; }}
-}}
-
-@media (max-width:480px) {{
-  .service-title {{ font-size:26px; }}
-  .btn-primary,.btn-outline {{ width:160px; }}
-}}
-</style>
-</head>
-<body>
-
-<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
-<div class="sidebar" id="sidebar">
-  <button class="sidebar-close" onclick="closeSidebar()">✕</button>
-  <div class="sidebar-header">
-    <div style="display:flex;align-items:center;justify-content:center;gap:0;direction:ltr;">
-      <div class="ft-logo-txt" style="margin-right:8px;">
-        <span style="color:#fff;font-size:20px;font-weight:900;">صحـة</span>
-        <span style="color:rgba(255,255,255,.75);font-size:11px;letter-spacing:1px;">Seha</span>
+def _sidebar(check_sb):
+    return f"""
+<div class="sb-ov" id="sbOv" onclick="sbClose()"></div>
+<div class="sb" id="sb">
+  <button class="sb-close" onclick="sbClose()">✕</button>
+  <div class="sb-hdr">
+    <div style="display:flex;align-items:center;justify-content:center;gap:0;direction:ltr">
+      <div class="ftr-logo-txt" style="margin-left:8px">
+        <span style="font-size:19px;font-weight:900;color:#fff">صحـة</span>
+        <span style="font-size:11px;color:rgba(255,255,255,.75)">Seha</span>
       </div>
-      <div style="width:1.5px;height:34px;background:rgba(255,255,255,.3);margin:0 8px;"></div>
+      <div style="width:1.5px;height:32px;background:rgba(255,255,255,.3);margin:0 8px"></div>
       {check_sb}
     </div>
   </div>
-  <ul class="sidebar-menu">
+  <ul class="sb-menu">
     <li><a href="#">🏠 الرئيسية</a></li>
     <li><a href="#">📋 الإجازات المرضية</a></li>
     <li><a href="#">🔍 الاستعلام عن التقارير</a></li>
@@ -474,299 +269,273 @@ body {{
     <li><a href="#">⚙️ الإعدادات</a></li>
     <li><a href="#">❓ المساعدة</a></li>
   </ul>
-</div>
+</div>"""
 
-<header class="header">
-  <button class="hamburger" onclick="openSidebar()">
+def _header(check_hdr):
+    return f"""
+<header class="hdr">
+  <button class="hdr-ham" onclick="sbOpen()">
     <span></span><span></span><span></span>
   </button>
-  <div class="logo-wrap">
-    <div class="logo-txt">
+  <div class="hdr-logo">
+    <div class="hdr-logo-txt">
       <span class="logo-ar">صحـة</span>
       <span class="logo-en">Seha</span>
     </div>
-    <div class="logo-sep"></div>
+    <div class="hdr-sep"></div>
     {check_hdr}
   </div>
-  <div style="width:32px;"></div>
-</header>
+  <div style="width:30px"></div>
+</header>"""
 
-<div class="loading-overlay" id="loadingOverlay">
-  <div class="spinner"></div>
-  <div class="loading-text">جاري الاستعلام...</div>
-</div>
-
-<div class="page-container">
-
-  <div class="form-page" id="formPage">
-    <div class="service-title-section">
-      <h1 class="service-title">الإجازات المرضية</h1>
-      <p class="service-description">
-        خدمة الاستعلام عن الإجازات المرضية تتيح لك الاستعلام عن حالة<br>
-        طلبك للإجازة ويمكنك طباعتها عن طريق تطبيق صحتي
-      </p>
+def _footer(check_ftr):
+    return f"""
+<footer class="ftr">
+  <div class="ftr-logo">
+    <div class="ftr-logo-txt">
+      <span class="ftr-logo-ar">صحـة</span>
+      <span class="ftr-logo-en">Seha</span>
     </div>
-    <div class="form-section">
-      <div class="form-group">
-        <input type="text" class="form-input" id="gslInp"
-          placeholder="رمز الخدمة"
-          autocomplete="off" autocorrect="off"
-          autocapitalize="characters" spellcheck="false">
-        <div class="error-msg" id="gslError">يرجى إدخال رمز الخدمة</div>
-      </div>
-      <div class="form-group">
-        <input type="text" class="form-input" id="idInp"
-          placeholder="رقم الهوية / الإقامة"
-          autocomplete="off" inputmode="numeric" maxlength="10">
-        <div class="error-msg" id="idError">يرجى إدخال رقم الهوية / الإقامة</div>
-      </div>
-      <div class="btn-area">
-        <button class="btn-primary" id="qBtn" onclick="doQuery()">استعلام</button>
-        <button class="btn-outline" onclick="doReset()">رجوع للاستعلامات</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="result-page" id="resultPage">
-    <div class="service-title-section">
-      <h1 class="service-title">الإجازات المرضية</h1>
-      <p class="service-description">
-        خدمة الاستعلام عن الإجازات المرضية تتيح لك الاستعلام عن حالة<br>
-        طلبك للإجازة ويمكنك طباعتها عن طريق تطبيق صحتي
-      </p>
-    </div>
-    <div class="result-card" id="resultCard"></div>
-  </div>
-
-</div>
-
-<footer class="footer">
-  <div class="footer-logo-section">
-    <div class="ft-logo-txt">
-      <span class="ft-logo-ar">صحـة</span>
-      <span class="ft-logo-en">Seha</span>
-    </div>
-    <div class="ft-logo-sep"></div>
+    <div class="ftr-sep"></div>
     {check_ftr}
   </div>
-
-  <p class="footer-desc">
+  <p class="ftr-desc">
     منصة صحة تخدم جميع المنشآت الطبية من خلال تقديم الخدمات الصحية إلكترونياً
-    لجميع المنشآت الطبية وتسعى إلى توحيد وأتمتة الإجراءات والخدمات وخفض التكاليف.
+    لجميع المنشآت الطبية وتسعى إلى توحيد وأتمتة الاجراءات والخدمات بما في دوره
+    رفع جودة الاداء وخفض التكاليف.
   </p>
-
-  <div class="footer-section">
-    <div class="ft-sec-title">القائمة الرئيسية</div>
-    <div class="ft-line"></div>
-    <ul class="footer-links">
-      <li>الخدمات</li>
-      <li>الاستعلامات</li>
-      <li>الأسئلة الشائعة</li>
-      <li>تواصل معنا</li>
-    </ul>
-  </div>
-
-  <div class="footer-section">
-    <div class="ft-sec-title">تواصل معنا</div>
-    <div class="ft-line"></div>
-    <div class="ft-contact">
-      <div class="ft-brands">
-        <div class="ft-brand-box">
-          <svg width="52" height="44" viewBox="0 0 52 44" fill="none">
-            <path d="M26 3L32 11L41 8L38 17L46 22L38 27L41 36L32 33L26 41L20 33L11 36L14 27L6 22L14 17L11 8L20 11Z"
-              fill="white" opacity=".85"/>
-            <circle cx="26" cy="22" r="5.5" fill="#1a3467"/>
-            <text x="26" y="43" text-anchor="middle" font-size="5" fill="white" opacity=".75"
-              font-family="Cairo,Arial">وزارة الصحة</text>
-          </svg>
-        </div>
-        <div class="ft-brand-box">
-          <svg width="52" height="44" viewBox="0 0 52 44" fill="none">
-            <rect x="4" y="8" width="44" height="26" rx="5"
-              fill="none" stroke="white" stroke-width="1.5" opacity=".5"/>
-            <text x="26" y="26" text-anchor="middle" font-size="13"
-              fill="white" font-weight="bold" font-family="Cairo,Arial" opacity=".9">لين</text>
-            <text x="26" y="37" text-anchor="middle" font-size="8"
-              fill="white" font-family="Arial" opacity=".65" letter-spacing="1">Lean</text>
-          </svg>
-        </div>
-      </div>
-      <div class="ft-info">
-        <div class="ft-row"><span>920002005</span><span>📞</span></div>
-        <div class="ft-row"><span>support@sehasaa.com</span><span>✉️</span></div>
-        <div class="ft-row"><span>920002005</span><span>💬</span></div>
-      </div>
+  <div class="ftr-sec-ttl">القائمة الرئيسية</div>
+  <ul class="ftr-links">
+    <li>الخدمات</li><li>الاستعلامات</li>
+    <li>الأسئلة الشائعة</li><li>تواصل معنا</li>
+  </ul>
+  <div class="ftr-sec-ttl">تواصل معنا</div>
+  <div class="ftr-ministry">
+    <div class="ftr-badge">
+      <div class="ftr-badge-ico">🏥</div>
+      <div>وزارة الصحة</div>
+      <div style="font-size:9px;opacity:.7">Ministry of Health</div>
+    </div>
+    <div class="ftr-badge">
+      <div class="ftr-badge-ico">📊</div>
+      <div style="font-weight:700">Lean</div>
     </div>
   </div>
-
-  <p class="ft-hours">أوقات العمل: الأحد حتى الخميس 8 ص - 11م</p>
-
-  <div class="footer-social">
-    <span class="s-ico">𝕏</span>
-    <span class="s-ico">
+  <div class="ftr-contact">
+    <div class="ftr-icos">
+      <div class="ftr-ico">📞</div>
+      <div class="ftr-ico">✉</div>
+      <div class="ftr-ico">💬</div>
+    </div>
+    <div class="ftr-nums">
+      <p>920002005</p>
+      <p class="em">support@sehasaa.com</p>
+      <p>920002005</p>
+    </div>
+  </div>
+  <p class="ftr-hours">أوقات العمل: الأحد حتى الخميس 8 ص - 11 م</p>
+  <div class="ftr-social">
+    <div class="soc-ico">𝕏</div>
+    <div class="soc-ico">
       <svg width="14" height="11" viewBox="0 0 16 12" fill="white">
         <path d="M15.6 1.9C15.4 1.1 14.8.5 14 .3 12.8 0 8 0 8 0S3.2 0 2 .3C1.2.5.6 1.1.4 1.9 0 3.2 0 6 0 6S0 8.8.4 10.1C.6 10.9 1.2 11.5 2 11.7 3.2 12 8 12 8 12S12.8 12 14 11.7C14.8 11.5 15.4 10.9 15.6 10.1 16 8.8 16 6 16 6S16 3.2 15.6 1.9ZM6.4 8.5V3.5L10.6 6 6.4 8.5Z"/>
       </svg>
-    </span>
-  </div>
-
-  <div class="footer-bottom">
-    <p>منصة صحة معتمدة من قبل وزارة الصحة © نسخة 2026</p>
-    <div class="ft-links-row">
-      <a href="#">سياسة الخصوصية وشروط الاستخدام</a>
-      <span class="ft-links-sep">|</span>
-      <a href="#">دليل الاستخدام</a>
     </div>
   </div>
-</footer>
+  <p class="ftr-copy">منصة صحة معتمدة من قبل وزارة الصحة © 2026</p>
+  <div class="ftr-btm">
+    <a href="#">سياسة الخصوصية وشروط الاستخدام</a>
+    <span style="opacity:.4">|</span>
+    <a href="#">دليل الاستخدام</a>
+  </div>
+</footer>"""
 
-<script>
-function openSidebar() {{
-  document.getElementById('sidebar').classList.add('active');
-  document.getElementById('sidebarOverlay').classList.add('active');
-  document.body.style.overflow = 'hidden';
-}}
-function closeSidebar() {{
-  document.getElementById('sidebar').classList.remove('active');
-  document.getElementById('sidebarOverlay').classList.remove('active');
-  document.body.style.overflow = '';
-}}
+_JS = """
+function sbOpen(){document.getElementById('sb').classList.add('on');document.getElementById('sbOv').classList.add('on');document.body.style.overflow='hidden'}
+function sbClose(){document.getElementById('sb').classList.remove('on');document.getElementById('sbOv').classList.remove('on');document.body.style.overflow=''}
+function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
+document.addEventListener('keydown',e=>{if(e.key==='Enter')doQuery()});
 
-(function() {{
-  const g = new URLSearchParams(location.search).get('gsl') || '';
-  if (g) {{
-    document.getElementById('gslInp').value = g.toUpperCase();
-    document.getElementById('idInp').focus();
-  }}
-}})();
+async function doQuery(){
+  const gsl=(document.getElementById('gI').value||'').trim().toUpperCase();
+  const id=(document.getElementById('iI').value||'').trim();
+  const btn=document.getElementById('qB');
+  const errBox=document.getElementById('errBox');
+  errBox.style.display='none';
+  document.getElementById('gI').classList.remove('err');
+  document.getElementById('iI').classList.remove('err');
 
-document.addEventListener('keydown', e => {{
-  if (e.key === 'Enter' && !document.getElementById('formPage').classList.contains('hidden'))
-    doQuery();
-}});
+  if(!gsl){document.getElementById('gI').classList.add('err')}
+  if(!id){document.getElementById('iI').classList.add('err')}
+  if(!gsl||!id){
+    errBox.style.display='block';
+    document.getElementById('eMsg').textContent='يرجى إدخال رمز الخدمة ورقم الهوية.';
+    return;
+  }
+  document.getElementById('loader').classList.add('on');
+  btn.textContent='جاري الاستعلام...';btn.disabled=true;
+  try{
+    const r=await fetch('/api/verify?gsl='+encodeURIComponent(gsl)+'&id='+encodeURIComponent(id));
+    const d=await r.json();
+    document.getElementById('loader').classList.remove('on');
+    if(d.success){
+      const v=d.data;
+      const issued=(v.issued_at||'').slice(0,10)||'—';
+      const days=v.days_count?v.days_count+' يوم':'—';
+      const rows=[
+        ['الاسم:',v.full_name||'—'],
+        ['تاريخ إصدار تقرير الإجازة:',issued],
+        ['تبدأ من:',v.leave_date||'—'],
+        ['وحتى:',v.end_date||'—'],
+        ['المدة بالأيام:',days],
+        ['اسم الطبيب:',v.doctor||'—'],
+        ['المسمى الوظيفي:',v.specialty||'—'],
+      ];
+      const rowsHtml=rows.map(([l,v])=>
+        `<div class="res-row"><div class="res-lbl">${esc(l)}</div><div class="res-val">${esc(v)}</div></div>`
+      ).join('');
+      document.getElementById('resCard').innerHTML=rowsHtml;
+      document.getElementById('pgForm').classList.remove('on');
+      document.getElementById('pgRes').classList.add('on');
+    }else{
+      errBox.style.display='block';
+      document.getElementById('eMsg').textContent=d.message||'لم يُعثر على نتيجة. تأكد من رمز الخدمة ورقم الهوية.';
+    }
+  }catch(e){
+    document.getElementById('loader').classList.remove('on');
+    errBox.style.display='block';
+    document.getElementById('eMsg').textContent='خطأ في الاتصال بالخادم، حاول مجدداً.';
+  }
+  window.scrollTo({top:0,behavior:'smooth'});
+  btn.textContent='استعلام';btn.disabled=false;
+}
 
-function esc(s) {{
-  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}}
+function doReset(){
+  ['gI','iI'].forEach(i=>{document.getElementById(i).value='';document.getElementById(i).classList.remove('err')});
+  document.getElementById('errBox').style.display='none';
+  document.getElementById('pgRes').classList.remove('on');
+  document.getElementById('pgForm').classList.add('on');
+  document.getElementById('resCard').innerHTML='';
+  document.getElementById('qB').textContent='استعلام';
+  document.getElementById('qB').disabled=false;
+  document.getElementById('gI').focus();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+"""
 
-async function doQuery() {{
-  const gsl = (document.getElementById('gslInp').value || '').trim().toUpperCase();
-  const id  = (document.getElementById('idInp').value  || '').trim();
-  const btn = document.getElementById('qBtn');
+# ══════════════════════════════════════════════════════════════
+# بناء HTML الكامل
+# ══════════════════════════════════════════════════════════════
+def build_html():
+    chk_hdr = seha_check_svg("#2d5fa6", 44)
+    chk_ftr = seha_check_svg("white",   46)
+    chk_sb  = seha_check_svg("white",   36)
 
-  ['gslInp','idInp'].forEach(i => document.getElementById(i).classList.remove('error'));
-  ['gslError','idError'].forEach(i => document.getElementById(i).classList.remove('show'));
+    # ── صورة التصميم كـ design banner ──
+    form_img_tag = (
+        f'<div class="design-img-wrap" style="margin-bottom:0">'
+        f'<img src="{_IMG_FORM}" alt="نموذج-الاستعلام" '
+        f'style="width:100%;max-width:480px;display:block;border-bottom:1px solid #e4e9f0">'
+        f'</div>'
+    ) if _IMG_FORM else ""
 
-  let err = false;
-  if (!gsl) {{
-    document.getElementById('gslInp').classList.add('error');
-    document.getElementById('gslError').classList.add('show');
-    err = true;
-  }}
-  if (!id) {{
-    document.getElementById('idInp').classList.add('error');
-    document.getElementById('idError').classList.add('show');
-    err = true;
-  }}
-  if (err) return;
+    result_img_tag = (
+        f'<div class="design-img-wrap" style="margin-bottom:0">'
+        f'<img src="{_IMG_RESULT}" alt="نتيجة-الإجازة" '
+        f'style="width:100%;max-width:480px;display:block;border-bottom:1px solid #e4e9f0">'
+        f'</div>'
+    ) if _IMG_RESULT else ""
 
-  document.getElementById('loadingOverlay').classList.add('active');
-  btn.textContent = 'جاري الاستعلام...';
-  btn.disabled = true;
+    return f"""<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>الإجازات المرضية - منصة صحة</title>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+<style>{_CSS}</style>
+</head>
+<body>
 
-  try {{
-    const r = await fetch('/api/verify?gsl=' + encodeURIComponent(gsl) + '&id=' + encodeURIComponent(id));
-    const d = await r.json();
+{_sidebar(chk_sb)}
+{_header(chk_hdr)}
 
-    document.getElementById('loadingOverlay').classList.remove('active');
+<div class="loader" id="loader">
+  <div class="spin"></div>
+  <div class="load-txt">جاري الاستعلام...</div>
+</div>
 
-    if (d.success) {{
-      const v = d.data;
-      const issued = v.issued_at ? String(v.issued_at).slice(0, 10) : '—';
+<div class="page-wrap">
 
-      let detailsHtml =
-        '<div class="detail-row"><span class="detail-label">الاسم</span><span class="detail-value ar">' + esc(v.full_name || '—') + '</span></div>' +
-        '<div class="detail-row"><span class="detail-label">تاريخ الإصدار</span><span class="detail-value">' + esc(issued) + '</span></div>' +
-        '<div class="detail-row"><span class="detail-label">تبدأ من</span><span class="detail-value">' + esc(v.leave_date || '—') + '</span></div>' +
-        '<div class="detail-row"><span class="detail-label">وحتى</span><span class="detail-value">' + esc(v.end_date || '—') + '</span></div>' +
-        '<div class="detail-row"><span class="detail-label">المدة بالأيام</span><span class="detail-value">' + esc(String(v.days_count || '—')) + '</span></div>' +
-        '<div class="detail-row"><span class="detail-label">اسم الطبيب</span><span class="detail-value ar">' + esc(v.doctor || '—') + '</span></div>' +
-        '<div class="detail-row"><span class="detail-label">التخصص الوظيفي</span><span class="detail-value ar">' + esc(v.specialty || '—') + '</span></div>';
+  <!-- ══ صفحة النموذج ══ -->
+  <div class="pg on" id="pgForm">
 
-      if (v.hospital) {{
-        detailsHtml += '<div class="detail-row"><span class="detail-label">الجهة</span><span class="detail-value ar">' + esc(v.hospital) + '</span></div>';
-      }}
+    <!-- صورة التصميم الرسمية -->
+    {form_img_tag}
 
-      document.getElementById('resultCard').innerHTML =
-        '<div class="result-header">' +
-          '<div class="result-icon">📋</div>' +
-          '<div class="result-header-title">تفاصيل الإجازة المرضية</div>' +
-          '<div class="result-header-subtitle">تم الاستعلام بنجاح</div>' +
-        '</div>' +
-        '<div class="ref-box"><span>' + esc(gsl) + '</span></div>' +
-        '<div class="id-box"><span>' + esc(id) + '</span></div>' +
-        '<div class="result-details">' + detailsHtml + '</div>' +
-        '<div class="result-buttons">' +
-          '<button class="print-btn" onclick="window.print()">🖨️ طباعة</button>' +
-          '<button class="back-btn" onclick="doReset()">رجوع للاستعلامات ←</button>' +
-        '</div>';
+    <!-- المحتوى التفاعلي الحقيقي -->
+    <div class="title-sec">
+      <h1 class="page-title">الإجازات المرضية</h1>
+      <p class="page-desc">
+        خدمة الاستعلام عن الإجازات المرضية تتيح لك الاستعلام عن حالة<br>
+        طلبك للإجازة ويمكنك طباعتها عن طريق تطبيق صحتي
+      </p>
+    </div>
 
-      document.getElementById('formPage').classList.add('hidden');
-      document.getElementById('resultPage').classList.add('active');
+    <div class="form-sec">
+      <div class="err-box" id="errBox">
+        <div class="err-ttl">⚠️ تعذّر الاستعلام</div>
+        <div class="err-sub" id="eMsg"></div>
+      </div>
+      <input type="text" class="f-inp" id="gI"
+        placeholder="رمز الخدمة"
+        autocomplete="off" autocorrect="off"
+        autocapitalize="characters" spellcheck="false">
+      <input type="text" class="f-inp" id="iI"
+        placeholder="رقم الهوية / الإقامة"
+        autocomplete="off" inputmode="numeric" maxlength="10">
+    </div>
 
-    }} else {{
-      document.getElementById('resultCard').innerHTML =
-        '<div class="err-card">' +
-          '<div class="err-title">⚠️ تعذّر الاستعلام</div>' +
-          '<div class="err-sub">' + esc(d.message || 'تأكد من رمز الخدمة ورقم الهوية وحاول مجدداً.') + '</div>' +
-        '</div>' +
-        '<div style="padding:0 20px 20px;">' +
-          '<button class="back-btn" onclick="doReset()">رجوع للاستعلامات ←</button>' +
-        '</div>';
-      document.getElementById('formPage').classList.add('hidden');
-      document.getElementById('resultPage').classList.add('active');
-    }}
+    <div class="btn-area">
+      <button class="btn-prim" id="qB" onclick="doQuery()">استعلام</button>
+      <button class="btn-dark" onclick="doReset()">رجوع للاستعلامات</button>
+    </div>
+  </div>
 
-  }} catch (e) {{
-    document.getElementById('loadingOverlay').classList.remove('active');
-    document.getElementById('resultCard').innerHTML =
-      '<div class="err-card">' +
-        '<div class="err-title">❌ خطأ في الاتصال</div>' +
-        '<div class="err-sub">تعذّر الوصول للخادم، حاول مجدداً.</div>' +
-      '</div>' +
-      '<div style="padding:0 20px 20px;">' +
-        '<button class="back-btn" onclick="doReset()">رجوع للاستعلامات ←</button>' +
-      '</div>';
-    document.getElementById('formPage').classList.add('hidden');
-    document.getElementById('resultPage').classList.add('active');
-  }}
+  <!-- ══ صفحة النتيجة ══ -->
+  <div class="pg" id="pgRes">
 
-  window.scrollTo({{ top: 0, behavior: 'smooth' }});
-  btn.textContent = 'استعلام';
-  btn.disabled = false;
-}}
+    <!-- صورة التصميم الرسمية -->
+    {result_img_tag}
 
-function doReset() {{
-  ['gslInp','idInp'].forEach(i => {{
-    document.getElementById(i).value = '';
-    document.getElementById(i).classList.remove('error');
-  }});
-  ['gslError','idError'].forEach(i => document.getElementById(i).classList.remove('show'));
-  document.getElementById('resultPage').classList.remove('active');
-  document.getElementById('formPage').classList.remove('hidden');
-  document.getElementById('resultCard').innerHTML = '';
-  document.getElementById('qBtn').textContent = 'استعلام';
-  document.getElementById('qBtn').disabled = false;
-  document.getElementById('gslInp').focus();
-  window.scrollTo({{ top: 0, behavior: 'smooth' }});
-}}
-</script>
+    <!-- المحتوى التفاعلي الحقيقي -->
+    <div class="title-sec">
+      <h1 class="page-title">الإجازات المرضية</h1>
+      <p class="page-desc">
+        خدمة الاستعلام عن الإجازات المرضية تتيح لك الاستعلام عن حالة<br>
+        طلبك للإجازة ويمكنك طباعتها عن طريق تطبيق صحتي
+      </p>
+    </div>
+
+    <div class="res-card" id="resCard"></div>
+
+    <div class="btn-area">
+      <button class="btn-prim" onclick="doReset()">استعلام جديد</button>
+      <button class="btn-dark" onclick="doReset()">رجوع للاستعلامات</button>
+    </div>
+  </div>
+
+</div>
+
+{_footer(chk_ftr)}
+
+<script>{_JS}</script>
 </body>
 </html>"""
 
 
 # ══════════════════════════════════════════════════════════════
-# Cache HTML — يُبنى مرة واحدة فقط
+# Cache HTML
 # ══════════════════════════════════════════════════════════════
 _HTML_CACHE = None
 def get_html():
@@ -788,7 +557,6 @@ def index(gsl_code=None):
 
 @app.route("/api/verify")
 def api_verify():
-    """البحث عن تقرير في القاعدة المشتركة برمز الخدمة + رقم الهوية."""
     gsl_code  = (request.args.get("gsl") or "").strip().upper()
     id_number = (request.args.get("id")  or "").strip()
 
@@ -809,12 +577,10 @@ def api_verify():
                 "message": "لم يُعثر على نتيجة. تأكد من رمز الخدمة ورقم الهوية."
             }), 404
 
-        # توحيد الحقول للواجهة
         leave_date = record.get("leave_date") or ""
-        end_date   = record.get("end_date") or ""
+        end_date   = record.get("end_date")   or ""
         days       = record.get("days") or 0
 
-        # إذا كان end_date فارغاً، نحسبه من leave_date + days
         if not end_date and leave_date and days:
             end_date = shared_db._compute_end_date(leave_date, days)
 
@@ -844,7 +610,6 @@ def api_verify():
 
 @app.route("/health")
 def health():
-    """فحص الصحة + إحصائيات سريعة."""
     stats = shared_db.get_stats()
     return jsonify({
         "status": "ok" if stats.get("enabled") else "no-db",
@@ -862,12 +627,14 @@ def api_stats():
 # تشغيل الموقع
 # ══════════════════════════════════════════════════════════════
 if __name__ == "__main__":
-    # تأكّد من تهيئة المخطط عند البدء
     if shared_db.is_enabled():
         shared_db.ensure_schema()
         print("✅ قاعدة البيانات المشتركة جاهزة")
     else:
-        print("⚠️ تنبيه: SHARED_DATABASE_URL غير مُعدّ — الموقع سيعمل لكن لن يجد نتائج")
+        print("⚠️ SHARED_DATABASE_URL غير مُعدّ")
+
+    print(f"🖼️  صورة النموذج : {'✅ محمّلة' if _IMG_FORM   else '❌ غير موجودة'}")
+    print(f"🖼️  صورة النتيجة : {'✅ محمّلة' if _IMG_RESULT else '❌ غير موجودة'}")
 
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
