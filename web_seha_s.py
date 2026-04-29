@@ -28,6 +28,15 @@ import shared_db
 
 app = Flask(__name__)
 
+# ══════════════════════════════════════════════════════════════
+# تسجيل صفحتَي seha-s.com (نموذج + نتيجة الإجازة)
+# ══════════════════════════════════════════════════════════════
+try:
+    from web_seha_s_pages import seha_s_pages
+    app.register_blueprint(seha_s_pages)
+except ImportError as _e:
+    print(f"⚠️ web_seha_s_pages غير موجود: {_e}")
+
 
 # ══════════════════════════════════════════════════════════════
 # SVG شعار صحة (checkmark مخطط)
