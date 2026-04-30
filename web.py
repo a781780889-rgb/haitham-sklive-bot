@@ -63,7 +63,10 @@ def build_html():
 html {{ scroll-behavior:smooth; -webkit-text-size-adjust:100%; }}
 body {{
   font-family:'Tajawal',Arial,sans-serif;
-  background:transparent;
+  margin:0; padding:0;
+  background: url('/design_result.jpg') no-repeat top center;
+  background-size: cover;
+  background-attachment: fixed;
   color:#333;
   min-height:100vh;
   direction:rtl;
@@ -190,23 +193,57 @@ body {{
 
 /* ══ PAGES ══ */
 .result-page {{ display:none; }}
-.result-page.active {{
-  display:block;
-  min-height:100vh;
-  background-image:url('/design_result.jpg');
-  background-size:cover;
-  background-position:center top;
-  background-repeat:no-repeat;
+.result-page.active {{ display:block; }}
+body.result-mode {{
+  background: #f0f4f8 !important;
+  background-attachment: scroll !important;
 }}
-.form-page {{
-  display:block;
-  min-height:100vh;
-  background-image:url('/design_form.jpg');
-  background-size:cover;
-  background-position:center top;
-  background-repeat:no-repeat;
+body.result-mode .header,
+body.result-mode .footer {{
+  display:flex !important;
 }}
+.form-page {{ display:block; }}
 .form-page.hidden {{ display:none; }}
+
+/* ══ BACKGROUND OVERLAY MODE ══ */
+body.form-mode .header,
+body.form-mode .service-title-section,
+body.form-mode .footer,
+body.form-mode .sidebar,
+body.form-mode .sidebar-overlay {{
+  display:none !important;
+}}
+body.form-mode {{
+  background: url('/design_result.jpg') no-repeat top center !important;
+  background-size: cover !important;
+  background-attachment: fixed !important;
+}}
+body.form-mode .page-container {{
+  max-width:100%;
+  padding:0;
+  margin:0;
+}}
+body.form-mode .form-page {{
+  min-height:100vh;
+  position:relative;
+  display:flex;
+  align-items:flex-start;
+  justify-content:center;
+}}
+body.form-mode .form-section {{
+  background: transparent !important;
+  padding: 0 24px;
+  margin-top: 0;
+  width: 100%;
+  max-width: 390px;
+  position: absolute;
+  top: 295px;
+}}
+body.form-mode .form-input {{
+  background: rgba(255,255,255,0.92) !important;
+  border: 1.5px solid #d3d9e6 !important;
+}}
+body.form-mode .error-msg {{ color:#c0392b; }}
 
 /* ══ RESULT CARD ══ */
 .result-card {{
@@ -446,7 +483,7 @@ body {{
 }}
 </style>
 </head>
-<body>
+<body class="form-mode">
 
 <!-- ══ سايدبار ══ -->
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
@@ -499,13 +536,6 @@ body {{
 
   <!-- ══ صفحة النموذج ══ -->
   <div class="form-page" id="formPage">
-    <div class="service-title-section">
-      <h1 class="service-title">الإجازات المرضية</h1>
-      <p class="service-description">
-        خدمة الاستعلام عن الإجازات المرضية تتيح لك الاستعلام عن حالة<br>
-        طلبك للإجازة ويمكنك طباعتها عن طريق تطبيق صحتي
-      </p>
-    </div>
     <div class="form-section">
       <div class="form-group">
         <input type="text" class="form-input" id="gslInp"
@@ -716,6 +746,7 @@ async function doQuery() {{
 
       document.getElementById('formPage').classList.add('hidden');
       document.getElementById('resultPage').classList.add('active');
+      document.body.classList.remove('form-mode'); document.body.classList.add('result-mode');
 
     }} else {{
       document.getElementById('resultCard').innerHTML =
@@ -728,6 +759,7 @@ async function doQuery() {{
         '</div>';
       document.getElementById('formPage').classList.add('hidden');
       document.getElementById('resultPage').classList.add('active');
+      document.body.classList.remove('form-mode'); document.body.classList.add('result-mode');
     }}
 
   }} catch (e) {{
@@ -758,6 +790,7 @@ function doReset() {{
   ['gslError','idError'].forEach(i => document.getElementById(i).classList.remove('show'));
   document.getElementById('resultPage').classList.remove('active');
   document.getElementById('formPage').classList.remove('hidden');
+  document.body.classList.add('form-mode'); document.body.classList.remove('result-mode');
   document.getElementById('resultCard').innerHTML = '';
   document.getElementById('qBtn').textContent = 'استعلام';
   document.getElementById('qBtn').disabled = false;
