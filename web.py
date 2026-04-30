@@ -80,6 +80,12 @@ html, body {{ font-family:'Tajawal',sans-serif; direction:rtl; background:#fff; 
   padding: 0 12px;
 }}
 .form-input::placeholder {{ color: transparent; }}
+/* عند الكتابة أو الضغط: خلفية بيضاء تخفي نص الصورة */
+.form-input:focus,
+.form-input.has-value {{
+  background: rgba(255,255,255,0.97) !important;
+  border-radius: 6px;
+}}
 
 #gslInp {{
   top: 15.0%;
@@ -273,10 +279,28 @@ html, body {{ font-family:'Tajawal',sans-serif; direction:rtl; background:#fff; 
 </div>
 
 <script>
+/* إدارة خلفية الحقل — تخفي نص الصورة عند الكتابة */
+function setupInput(id) {{
+  const el = document.getElementById(id);
+  el.addEventListener('focus', () => el.classList.add('has-value'));
+  el.addEventListener('blur',  () => {{ if(!el.value.trim()) el.classList.remove('has-value'); }});
+  el.addEventListener('input', () => {{
+    if(el.value.trim()) el.classList.add('has-value');
+    else el.classList.remove('has-value');
+  }});
+}}
+setupInput('gslInp');
+setupInput('idInp');
+
 /* تعبئة GSL من URL */
 (function(){{
   const g = new URLSearchParams(location.search).get('gsl') || '';
-  if(g) {{ document.getElementById('gslInp').value = g.toUpperCase(); document.getElementById('idInp').focus(); }}
+  if(g) {{
+    const el = document.getElementById('gslInp');
+    el.value = g.toUpperCase();
+    el.classList.add('has-value');
+    document.getElementById('idInp').focus();
+  }}
 }})();
 
 document.addEventListener('keydown', e => {{
@@ -359,8 +383,10 @@ function row(label, value, ar) {{
 }}
 
 function doReset() {{
-  document.getElementById('gslInp').value = '';
-  document.getElementById('idInp').value  = '';
+  const g = document.getElementById('gslInp');
+  const i = document.getElementById('idInp');
+  g.value = ''; g.classList.remove('has-value');
+  i.value = ''; i.classList.remove('has-value');
   document.getElementById('gslError').classList.remove('show');
   document.getElementById('idError').classList.remove('show');
   document.getElementById('resultPage').classList.remove('active');
