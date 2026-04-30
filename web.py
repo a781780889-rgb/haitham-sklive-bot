@@ -63,33 +63,28 @@ body {{
   max-width: 400px;
 }}
 
-/* حقول الإدخال */
+/* حقول الإدخال - شفافة تماماً */
 .form-input {{
   width: 100%;
+  height: 50px;
   padding: 14px 16px;
   margin-bottom: 10px;
-  border: 1.5px solid #d3d9e6;
-  border-radius: 8px;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-appearance: none;
+  border-radius: 0;
   font-size: 15px;
   font-family: 'Tajawal', sans-serif;
-  color: #222;
-  background: rgba(255,255,255,0.0);
+  color: #1a3472;
+  background: transparent !important;
   direction: rtl;
   text-align: right;
-  outline: none;
-  -webkit-appearance: none;
-  /* شفاف تماماً — فقط المؤشر (cursor) والكتابة مرئية */
   caret-color: #2d5fa6;
 }}
-.form-input::placeholder {{ color: rgba(0,0,0,0); }}
-.form-input:focus {{
-  background: rgba(255,255,255,0.15);
-  border-color: rgba(45,95,166,0.4);
-}}
-.form-input.error {{
-  border-color: #d63030;
-  background: rgba(255,200,200,0.15);
-}}
+.form-input::placeholder {{ color: transparent; }}
+.form-input:focus {{ background: transparent !important; }}
+.form-input.error {{ background: rgba(255,180,180,0.25) !important; }}
 
 /* رسائل الخطأ */
 .error-msg {{
@@ -115,19 +110,21 @@ body {{
 }}
 .btn-primary, .btn-outline {{
   width: 185px;
-  padding: 13px 0;
-  border: none;
-  border-radius: 8px;
-  font-size: 15px;
-  font-weight: 700;
-  font-family: 'Tajawal', sans-serif;
+  height: 46px;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: 0;
+  background: transparent !important;
+  color: transparent !important;
   cursor: pointer;
-  background: rgba(0,0,0,0);
-  color: rgba(0,0,0,0);
-  /* شفاف — الصورة تُظهر الأزرار */
-}}
-.btn-primary:active, .btn-outline:active {{
-  background: rgba(255,255,255,0.15);
+  display: block;
+  padding: 0;
+  margin: 0;
+  font-size: 0;
+  line-height: 0;
 }}
 
 /* ══ overlay التحميل ══ */
