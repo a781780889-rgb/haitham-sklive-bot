@@ -24,8 +24,17 @@ def get_bg_b64():
     return ""
 
 
+def get_result_bg_b64():
+    p = os.path.join(_THIS_DIR, "result_bg.jpg")
+    if os.path.exists(p):
+        with open(p, "rb") as f:
+            return "data:image/jpeg;base64," + base64.b64encode(f.read()).decode()
+    return ""
+
+
 def build_html():
-    bg = get_bg_b64()
+    bg        = get_bg_b64()
+    result_bg = get_result_bg_b64()
 
     return f"""<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -162,153 +171,83 @@ html, body {{ font-family:'Tajawal',sans-serif; direction:rtl; background:#fff; 
 #gslError {{ top: 17.4%; }}
 #idError  {{ top: 21.1%; }}
 
-/* ══ صفحة النتيجة (تغطي الشاشة كاملاً) ══ */
-/* ══ صفحة النتيجة — تغطي الشاشة كاملاً ══ */
+/* ══ صفحة النتيجة — تغطي الشاشة كاملاً وتتمرير ══ */
 .result-page {{
   display: none;
   position: fixed;
   inset: 0;
-  background: #f5f7fa;
+  background: #fff;
   z-index: 500;
   overflow-y: auto;
   direction: rtl;
 }}
 .result-page.active {{ display: block; }}
 
-/* هيدر النتيجة */
-.res-header {{
-  background: #fff;
-  padding: 14px 16px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  direction: ltr;
-  border-bottom: 1px solid #e8edf5;
-}}
-.res-logo-wrap {{ display:flex; align-items:center; gap:0; direction:ltr; }}
-.res-logo-txt  {{ display:flex; flex-direction:column; align-items:flex-start; line-height:1.1; margin-right:8px; }}
-.res-logo-ar   {{ font-size:17px; font-weight:900; color:#1a5276; }}
-.res-logo-en   {{ font-size:11px; font-weight:600; color:#2980b9; letter-spacing:1px; }}
-.res-logo-sep  {{ width:1.5px; height:32px; background:#ccd8ea; margin:0 8px; }}
-
-/* عنوان الصفحة */
-.res-page-title {{
-  padding: 20px 16px 8px;
-  font-size: 28px;
-  font-weight: 900;
-  color: #1a3472;
-  text-align: right;
-}}
-.res-page-desc {{
-  padding: 0 16px 16px;
-  font-size: 13px;
-  color: #555;
-  line-height: 1.6;
-  text-align: right;
-}}
-
-/* البطاقة الرئيسية */
-.res-card {{
-  margin: 0 12px 16px;
-  background: #fff;
-  border: 1px solid #dde3ed;
-  border-radius: 8px;
+/* الحاوية الرئيسية للنتيجة — الصورة هي الأساس */
+#resultWrap {{
+  position: relative;
+  max-width: 430px;
+  margin: 0 auto;
+  display: block;
   overflow: hidden;
 }}
-.res-field {{
-  padding: 14px 16px;
-  border-bottom: 1px solid #edf0f5;
+#resultBgImg {{
+  width: 100%;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
 }}
-.res-field:last-child {{ border-bottom: none; }}
-.res-field-label {{
-  font-size: 13px;
-  font-weight: 800;
-  color: #1a3472;
-  margin-bottom: 5px;
-}}
-.res-field-value {{
-  font-size: 14px;
+
+/* قيم البيانات الشفافة فوق الصورة */
+/* الصورة أبعادها: 1438×7725px */
+/* كل قيمة: يُحدَّد موضعها بنسبة مئوية من ارتفاع الصورة */
+.res-val {{
+  position: absolute;
+  left: 4%;
+  width: 92%;
+  text-align: center;
+  font-family: 'Tajawal', sans-serif;
+  font-size: clamp(12px, 3.2vw, 15px);
   font-weight: 400;
   color: #2c2c3e;
+  background: rgba(247,248,250,0.97);
+  border-radius: 4px;
+  padding: 2px 10px;
   direction: rtl;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }}
 
-/* أزرار النتيجة */
-.res-buttons {{
-  padding: 8px 12px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+/* الأزرار الشفافة فوق أزرار الصورة */
+.res-btn-overlay {{
+  position: absolute;
+  left: 24%;
+  width: 52%;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent !important;
+  cursor: pointer;
+  font-size: 0;
+  padding: 0;
 }}
-.res-btn-new {{
-  display: flex; align-items: center; justify-content: center;
-  width: 145px; padding: 11px 0;
-  background: #2d5fa6;
-  color: #fff; border: none; border-radius: 6px;
-  font-size: 14px; font-weight: 700;
-  font-family: 'Tajawal', sans-serif;
-  cursor: pointer; margin: 0 auto;
-  transition: background .18s;
-}}
-.res-btn-new:hover {{ background: #1c4a8a; }}
-.res-btn-back {{
-  display: flex; align-items: center; justify-content: center;
-  width: 145px; padding: 11px 0;
-  background: #fff;
-  color: #2d5fa6;
-  border: 1.5px solid #2d5fa6;
-  border-radius: 6px;
-  font-size: 14px; font-weight: 700;
-  font-family: 'Tajawal', sans-serif;
-  cursor: pointer; margin: 0 auto;
-  transition: all .18s;
-}}
-.res-btn-back:hover {{ background: #ebf5fb; }}
-
-/* فوتر النتيجة */
-.res-footer {{
-  background: #2d5fa6;
-  padding: 30px 20px 20px;
-  text-align: center;
-  color: #fff;
-  margin-top: 10px;
-}}
-.res-footer-logo {{
-  display: flex; align-items: center; justify-content: center;
-  gap: 0; direction: ltr; margin-bottom: 20px;
-}}
-.res-footer-logo-txt {{ display:flex; flex-direction:column; align-items:flex-start; line-height:1.1; margin-right:8px; }}
-.res-footer-logo-ar {{ font-size:20px; font-weight:900; color:#fff; }}
-.res-footer-logo-en {{ font-size:11px; color:rgba(255,255,255,.7); letter-spacing:1px; }}
-.res-footer-sep     {{ width:1.5px; height:36px; background:rgba(255,255,255,.3); margin:0 10px; }}
-.res-footer-menu-title {{
-  font-size: 14px; font-weight: 800; color: #fff;
-  margin-bottom: 12px; padding-bottom: 8px;
-  border-bottom: 1px solid rgba(255,255,255,.2);
-}}
-.res-footer-menu {{ list-style: none; margin-bottom: 24px; }}
-.res-footer-menu li {{
-  padding: 10px 0;
-  font-size: 13px; color: rgba(255,255,255,.85);
-  border-bottom: 1px solid rgba(255,255,255,.1);
-}}
-.res-contact-title {{
-  font-size: 14px; font-weight: 800;
-  margin-bottom: 12px; padding-bottom: 8px;
-  border-bottom: 1px solid rgba(255,255,255,.2);
-}}
-.res-contact-info {{ font-size: 12px; color: rgba(255,255,255,.8); line-height: 2; }}
-.res-footer-copy {{
-  margin-top: 20px; padding-top: 14px;
-  border-top: 1px solid rgba(255,255,255,.2);
-  font-size: 11px; color: rgba(255,255,255,.6);
-}}
+.res-btn-overlay:focus {{ outline: none !important; }}
 
 /* خطأ */
-.err-card {{
-  background:#fff2f2; border:1.5px solid #f5bfbf;
-  border-radius:10px; padding:22px 18px;
-  text-align:center; margin:12px;
+.err-overlay {{
+  position: absolute;
+  left: 3%; width: 94%;
+  top: 10.4%;
+  background: rgba(255,242,242,0.97);
+  border: 1.5px solid #f5bfbf;
+  border-radius: 10px;
+  padding: 18px 14px;
+  text-align: center;
+  z-index: 20;
 }}
 .err-title {{ font-size:15px; font-weight:700; color:#c62828; margin-bottom:6px; }}
 .err-sub   {{ font-size:13px; color:#888; }}
@@ -322,52 +261,42 @@ html, body {{ font-family:'Tajawal',sans-serif; direction:rtl; background:#fff; 
   <div class="loading-text">جاري الاستعلام...</div>
 </div>
 
-<!-- صفحة النتيجة -->
+<!-- صفحة النتيجة — الصورة كخلفية مع عناصر فوقها -->
 <div class="result-page" id="resultPage">
-  <!-- هيدر -->
-  <div class="res-header">
-    <div style="width:28px;"></div>
-    <div class="res-logo-wrap">
-      <div class="res-logo-txt">
-        <span class="res-logo-ar">صحـة</span>
-        <span class="res-logo-en">Seha</span>
-      </div>
-      <div class="res-logo-sep"></div>
-      <svg width="36" height="33" viewBox="0 0 60 55" fill="none"><defs><clipPath id="chkR"><polyline points="4,30 22,48 56,8" stroke="black" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" fill="none"/></clipPath></defs><g clip-path="url(#chkR)"><line x1="-10" y1="56" x2="40" y2="-4" stroke="#2d5fa6" stroke-width="4.2" opacity="0.22"/><line x1="4" y1="56" x2="54" y2="-4" stroke="#2d5fa6" stroke-width="4.2" opacity="0.55"/><line x1="18" y1="56" x2="68" y2="-4" stroke="#2d5fa6" stroke-width="4.2" opacity="0.85"/><line x1="32" y1="56" x2="82" y2="-4" stroke="#2d5fa6" stroke-width="4.2"/><line x1="46" y1="56" x2="96" y2="-4" stroke="#2d5fa6" stroke-width="4.2" opacity="0.6"/></g><polyline points="4,30 22,48 56,8" stroke="#2d5fa6" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+  <div id="resultWrap">
+    <img id="resultBgImg" src="{result_bg}" alt="">
+
+    <!-- قيم البيانات مُركّبة فوق الصورة بنسب مئوية دقيقة -->
+    <!-- الصورة 1438×7725px — كل نسبة من ارتفاع الصورة الكلي -->
+
+    <!-- الاسم -->
+    <div class="res-val" id="rName"     style="top:13.7%; height:2.2%;"></div>
+    <!-- تاريخ إصدار -->
+    <div class="res-val" id="rIssued"   style="top:18.7%; height:2.2%;"></div>
+    <!-- تبدأ من -->
+    <div class="res-val" id="rStart"    style="top:23.7%; height:2.2%;"></div>
+    <!-- وحتى -->
+    <div class="res-val" id="rEnd"      style="top:28.9%; height:2.2%;"></div>
+    <!-- المدة -->
+    <div class="res-val" id="rDays"     style="top:32.5%; height:2.2%;"></div>
+    <!-- اسم الطبيب -->
+    <div class="res-val" id="rDoctor"   style="top:37.5%; height:2.2%;"></div>
+    <!-- المسمى الوظيفي -->
+    <div class="res-val" id="rSpecialty" style="top:41.7%; height:2.2%;"></div>
+
+    <!-- رسالة خطأ (تظهر فوق البطاقة عند الفشل) -->
+    <div class="err-overlay" id="errOverlay" style="display:none;">
+      <div class="err-title" id="errTitle">⚠️ تعذّر الاستعلام</div>
+      <div class="err-sub"   id="errSub">تأكد من رمز الخدمة ورقم الهوية وحاول مجدداً.</div>
     </div>
-    <div style="width:28px;"></div>
-  </div>
-  <!-- عنوان + وصف -->
-  <div class="res-page-title">الإجازات المرضية</div>
-  <div class="res-page-desc">خدمة الاستعلام عن الإجازات المرضية تتيح لك الاستعلام عن حالة طلبك للإجازة ويمكنك طباعتها عن طريق تطبيق صحتي</div>
-  <!-- بطاقة البيانات -->
-  <div class="res-card" id="resultCard"></div>
-  <!-- أزرار -->
-  <div class="res-buttons">
-    <button class="res-btn-new"  onclick="doReset()">استعلام جديد</button>
-    <button class="res-btn-back" onclick="doReset()">رجوع للاستعلامات</button>
-  </div>
-  <!-- فوتر -->
-  <div class="res-footer">
-    <div class="res-footer-logo">
-      <div class="res-footer-logo-txt">
-        <span class="res-footer-logo-ar">صحـة</span>
-        <span class="res-footer-logo-en">Seha</span>
-      </div>
-      <div class="res-footer-sep"></div>
-      <svg width="44" height="40" viewBox="0 0 60 55" fill="none"><defs><clipPath id="chkF"><polyline points="4,30 22,48 56,8" stroke="black" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" fill="none"/></clipPath></defs><g clip-path="url(#chkF)"><line x1="-10" y1="56" x2="40" y2="-4" stroke="white" stroke-width="4.2" opacity="0.22"/><line x1="4" y1="56" x2="54" y2="-4" stroke="white" stroke-width="4.2" opacity="0.55"/><line x1="18" y1="56" x2="68" y2="-4" stroke="white" stroke-width="4.2" opacity="0.85"/><line x1="32" y1="56" x2="82" y2="-4" stroke="white" stroke-width="4.2"/><line x1="46" y1="56" x2="96" y2="-4" stroke="white" stroke-width="4.2" opacity="0.6"/></g><polyline points="4,30 22,48 56,8" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
-    </div>
-    <p style="font-size:12px;color:rgba(255,255,255,.8);line-height:1.7;margin-bottom:22px;">منصة صحة تخدم جميع المنشآت الطبية من خلال تقديم الخدمات الصحية إلكترونياً لجميع المنشآت الطبية وتسعى إلى توحيد وأتمتة الإجراءات والخدمات بما في دوره رفع جودة الاداء وخفض التكاليف.</p>
-    <div class="res-footer-menu-title">القائمة الرئيسية</div>
-    <ul class="res-footer-menu">
-      <li>الخدمات</li><li>الاستعلامات</li><li>الأسئلة الشائعة</li><li>تواصل معنا</li>
-    </ul>
-    <div class="res-contact-title">تواصل معنا</div>
-    <div class="res-contact-info">
-      📞 920002005<br>✉️ info@seha.sa<br>💬 920002005<br>
-      <span style="font-size:11px;">أوقات العمل: الأحد حتى الخميس 8 ص - 11 م</span>
-    </div>
-    <div class="res-footer-copy">منصة صحة معتمدة من قبل وزارة الصحة © 2026</div>
+
+    <!-- زر استعلام جديد شفاف فوق زر الصورة -->
+    <button class="res-btn-overlay" id="rBtnNew"
+            style="top:46.2%; height:2.1%;" onclick="doReset()"> </button>
+
+    <!-- زر رجوع شفاف فوق زر الصورة -->
+    <button class="res-btn-overlay" id="rBtnBack"
+            style="top:49.0%; height:2.1%;" onclick="doReset()"> </button>
   </div>
 </div>
 
@@ -453,37 +382,33 @@ async function doQuery() {{
       const v = d.data;
       const issued = v.issued_at ? v.issued_at.slice(0,10) : '—';
       const days   = (v.days_count && v.days_count !== 'null') ? esc(String(v.days_count)) + ' يوم' : '—';
-      document.getElementById('resultCard').innerHTML =
-        field('الاسم:',                     esc(v.full_name||'—'))     +
-        field('تاريخ إصدار تقرير الإجازة:', esc(issued))               +
-        field('تبدأ من:',                   esc(v.excuse_date||'—'))    +
-        field('وحتى:',                      esc(v.end_date||'—'))       +
-        field('المدة بالأيام:',             days)                        +
-        field('اسم الطبيب:',               esc(v.doctor||'—'))          +
-        field('المسمى الوظيفي:',           esc(v.specialty||'—'));
+
+      /* تعبئة الحقول فوق صورة الخلفية */
+      document.getElementById('rName').textContent     = v.full_name    || '—';
+      document.getElementById('rIssued').textContent   = issued;
+      document.getElementById('rStart').textContent    = v.excuse_date  || '—';
+      document.getElementById('rEnd').textContent      = v.end_date     || '—';
+      document.getElementById('rDays').textContent     = days;
+      document.getElementById('rDoctor').textContent   = v.doctor       || '—';
+      document.getElementById('rSpecialty').textContent = v.specialty   || '—';
+
+      document.getElementById('errOverlay').style.display = 'none';
       document.getElementById('resultPage').classList.add('active');
       document.getElementById('resultPage').scrollTop = 0;
     }} else {{
-      document.getElementById('resultCard').innerHTML =
-        '<div class="err-card"><div class="err-title">⚠️ تعذّر الاستعلام</div>' +
-        '<div class="err-sub">تأكد من رمز الخدمة ورقم الهوية وحاول مجدداً.</div></div>';
+      document.getElementById('errTitle').textContent = '⚠️ تعذّر الاستعلام';
+      document.getElementById('errSub').textContent   = 'تأكد من رمز الخدمة ورقم الهوية وحاول مجدداً.';
+      document.getElementById('errOverlay').style.display = 'block';
       document.getElementById('resultPage').classList.add('active');
     }}
   }} catch(e) {{
     document.getElementById('loadingOverlay').classList.remove('active');
-    document.getElementById('resultCard').innerHTML =
-      '<div class="err-card"><div class="err-title">❌ خطأ في الاتصال</div>' +
-      '<div class="err-sub">تعذّر الوصول للخادم.</div></div>';
+    document.getElementById('errTitle').textContent = '❌ خطأ في الاتصال';
+    document.getElementById('errSub').textContent   = 'تعذّر الوصول للخادم.';
+    document.getElementById('errOverlay').style.display = 'block';
     document.getElementById('resultPage').classList.add('active');
   }}
   document.getElementById('btnQuery').disabled = false;
-}}
-
-function field(label, value) {{
-  return '<div class="res-field">' +
-    '<div class="res-field-label">' + label + '</div>' +
-    '<div class="res-field-value">' + value + '</div>' +
-  '</div>';
 }}
 
 function doReset() {{
@@ -494,7 +419,10 @@ function doReset() {{
   document.getElementById('gslError').classList.remove('show');
   document.getElementById('idError').classList.remove('show');
   document.getElementById('resultPage').classList.remove('active');
-  document.getElementById('resultCard').innerHTML = '';
+  document.getElementById('errOverlay').style.display = 'none';
+  /* مسح القيم */
+  ['rName','rIssued','rStart','rEnd','rDays','rDoctor','rSpecialty']
+    .forEach(id => document.getElementById(id).textContent = '');
   document.getElementById('btnQuery').disabled = false;
   document.getElementById('gslInp').focus();
   window.scrollTo({{top:0, behavior:'smooth'}});
