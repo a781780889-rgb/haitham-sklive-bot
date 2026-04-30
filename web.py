@@ -7,7 +7,7 @@ web.py — موقع التحقق من الإجازات المرضية (sehasaa.c
 
 import os, sys
 from datetime import datetime, timedelta
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _THIS_DIR)
@@ -63,7 +63,7 @@ def build_html():
 html {{ scroll-behavior:smooth; -webkit-text-size-adjust:100%; }}
 body {{
   font-family:'Tajawal',Arial,sans-serif;
-  background:#f0f4f8;
+  background:transparent;
   color:#333;
   min-height:100vh;
   direction:rtl;
@@ -190,8 +190,22 @@ body {{
 
 /* ══ PAGES ══ */
 .result-page {{ display:none; }}
-.result-page.active {{ display:block; }}
-.form-page {{ display:block; }}
+.result-page.active {{
+  display:block;
+  min-height:100vh;
+  background-image:url('/design_result.jpg');
+  background-size:cover;
+  background-position:center top;
+  background-repeat:no-repeat;
+}}
+.form-page {{
+  display:block;
+  min-height:100vh;
+  background-image:url('/design_form.jpg');
+  background-size:cover;
+  background-position:center top;
+  background-repeat:no-repeat;
+}}
 .form-page.hidden {{ display:none; }}
 
 /* ══ RESULT CARD ══ */
@@ -837,6 +851,15 @@ def api_verify():
     except Exception as ex:
         return jsonify({"success": False, "message": f"خطأ: {str(ex)}"}), 500
 
+
+
+@app.route("/design_form.jpg")
+def serve_design_form():
+    return send_file(os.path.join(_THIS_DIR, "design_form.jpg"), mimetype="image/jpeg")
+
+@app.route("/design_result.jpg")
+def serve_design_result():
+    return send_file(os.path.join(_THIS_DIR, "design_result.jpg"), mimetype="image/jpeg")
 
 @app.route("/health")
 def health():
