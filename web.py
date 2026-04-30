@@ -2,8 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 web.py — الإجازات المرضية
-الخلفية: design_result.jpg بالكامل
-فوقها فقط: حقلي الإدخال + زرّان + overlay التحميل + صفحة النتيجة
+الصورة كـ <img> والعناصر مُركّبة فوقها بنسب مئوية دقيقة مقاسة من الصورة
 """
 
 import os, sys, base64
@@ -27,7 +26,6 @@ def get_bg_b64():
 
 def build_html():
     bg = get_bg_b64()
-    bg_css = f'url("{bg}")' if bg else "none"
 
     return f"""<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -35,96 +33,87 @@ def build_html():
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>الإجازات المرضية - منصة صحة</title>
-<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap" rel="stylesheet">
 <style>
 * {{ margin:0; padding:0; box-sizing:border-box; }}
-html, body {{
-  width:100%; height:100%;
-  font-family:'Tajawal',sans-serif;
-  direction:rtl;
-  overflow-x:hidden;
-}}
+html, body {{ font-family:'Tajawal',sans-serif; direction:rtl; background:#fff; }}
 
-/* ══ الخلفية الكاملة ══ */
-body {{
-  background: {bg_css} no-repeat top center / cover;
-  min-height:100vh;
+/* ══ الحاوية الرئيسية — الصورة هي الأساس ══ */
+#pageWrap {{
+  position: relative;
+  max-width: 430px;
+  margin: 0 auto;
+  display: block;
+  overflow: hidden;
 }}
-
-/* ══ الغلاف الشفاف الذي يحتوي العناصر التفاعلية ══ */
-/* نضعها بالضبط فوق منطقة الفورم في الصورة */
-.overlay-form {{
-  position: absolute;
-  /* ضبط الموضع ليتطابق مع الحقول في الصورة */
-  top: 330px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 90%;
-  max-width: 400px;
-}}
-
-/* حقول الإدخال - شفافة تماماً */
-.form-input {{
+#bgImg {{
   width: 100%;
-  height: 50px;
-  padding: 14px 16px;
-  margin-bottom: 10px;
-  border: none !important;
-  outline: none !important;
-  box-shadow: none !important;
-  -webkit-appearance: none;
-  border-radius: 0;
-  font-size: 15px;
-  font-family: 'Tajawal', sans-serif;
-  color: #1a3472;
-  background: transparent !important;
-  direction: rtl;
-  text-align: right;
-  caret-color: #2d5fa6;
+  display: block;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
 }}
-.form-input::placeholder {{ color: transparent; }}
-.form-input:focus {{ background: transparent !important; }}
-.form-input.error {{ background: rgba(255,180,180,0.25) !important; }}
 
-/* رسائل الخطأ */
-.error-msg {{
-  display: none;
-  color: #e74c3c;
-  font-size: 12px;
-  font-weight: 700;
-  margin-top: -6px;
-  margin-bottom: 6px;
-  background: rgba(255,255,255,0.85);
-  padding: 3px 8px;
-  border-radius: 4px;
-}}
-.error-msg.show {{ display: block; }}
+/* ══ الحقول الشفافة مُركّبة بالضبط فوق الصورة ══ */
+/* القياسات مأخوذة بالبيكسل من الصورة 1421×5796 */
+/* Input 1 "رمز الخدمة"  : y=871-1000  → 15.0%→17.3% */
+/* Input 2 "رقم الهوية"  : y=1087-1216 → 18.8%→21.0% */
+/* Button استعلام        : y=1276-1388 → 22.0%→23.9%, x=37.2%-64.1% */
+/* Button رجوع           : y=1475-1587 → 25.4%→27.4%, x=37.0%-64.3% */
 
-/* الأزرار — شفافة أيضاً تماماً */
-.btn-area {{
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  margin-top: 14px;
-}}
-.btn-primary, .btn-outline {{
-  width: 185px;
-  height: 46px;
+.form-input {{
+  position: absolute;
+  left: 4%;
+  width: 92%;
   border: none !important;
   outline: none !important;
   box-shadow: none !important;
   -webkit-appearance: none;
   appearance: none;
-  border-radius: 0;
   background: transparent !important;
-  color: transparent !important;
+  font-family: 'Tajawal', sans-serif;
+  font-size: clamp(13px, 3.5vw, 16px);
+  color: #1a3472;
+  direction: rtl;
+  text-align: right;
+  caret-color: #2d5fa6;
+  padding: 0 12px;
+}}
+.form-input::placeholder {{ color: transparent; }}
+
+#gslInp {{
+  top: 15.0%;
+  height: 2.3%;
+}}
+#idInp {{
+  top: 18.8%;
+  height: 2.2%;
+}}
+
+/* ══ الأزرار الشفافة ══ */
+.btn-transparent {{
+  position: absolute;
+  left: 37%;
+  width: 27%;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent !important;
   cursor: pointer;
-  display: block;
-  padding: 0;
-  margin: 0;
   font-size: 0;
-  line-height: 0;
+  padding: 0;
+}}
+.btn-transparent:focus {{ outline: none !important; }}
+
+#btnQuery {{
+  top: 22.0%;
+  height: 1.9%;
+}}
+#btnBack {{
+  top: 25.4%;
+  height: 2.0%;
 }}
 
 /* ══ overlay التحميل ══ */
@@ -132,7 +121,7 @@ body {{
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(255,255,255,0.88);
+  background: rgba(255,255,255,0.9);
   z-index: 999;
   justify-content: center;
   align-items: center;
@@ -148,29 +137,42 @@ body {{
   animation: spin .8s linear infinite;
 }}
 @keyframes spin {{ to{{ transform:rotate(360deg); }} }}
-.loading-text {{
-  font-size: 15px; color: #2d5fa6;
-  font-weight: 700; font-family: 'Tajawal',sans-serif;
-}}
+.loading-text {{ font-size:16px; color:#2d5fa6; font-weight:700; }}
 
-/* ══ صفحة النتيجة ══ */
+/* ══ رسائل الخطأ تحت الحقل ══ */
+.error-msg {{
+  display: none;
+  position: absolute;
+  left: 4%; width: 92%;
+  background: rgba(231,76,60,0.9);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 4px;
+  z-index: 10;
+}}
+.error-msg.show {{ display: block; }}
+#gslError {{ top: 17.4%; }}
+#idError  {{ top: 21.1%; }}
+
+/* ══ صفحة النتيجة (تغطي الشاشة كاملاً) ══ */
 .result-page {{
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(240,244,248,0.97);
+  background: rgba(240,244,248,0.98);
   z-index: 500;
   overflow-y: auto;
   padding: 20px 15px;
 }}
 .result-page.active {{ display: block; }}
-
 .result-card {{
   background: #fff;
   border-radius: 14px;
   overflow: hidden;
   box-shadow: 0 6px 28px rgba(0,0,0,.15);
-  max-width: 430px;
+  max-width: 400px;
   margin: 0 auto;
 }}
 .result-header {{
@@ -183,60 +185,54 @@ body {{
   display: flex; align-items: center; justify-content: center;
   font-size: 26px;
 }}
-.result-header-title {{ font-size: 18px; font-weight: 700; margin-bottom: 4px; }}
-.result-header-subtitle {{ font-size: 13px; opacity: .85; }}
+.result-header-title {{ font-size:18px; font-weight:700; margin-bottom:4px; }}
+.result-header-sub   {{ font-size:13px; opacity:.85; }}
 .ref-box {{
-  display: flex; justify-content: center;
-  padding: 12px; margin: 14px 20px 6px;
-  background: #ebf5fb; border-radius: 8px;
-  border: 1px dashed #2980b9;
+  display:flex; justify-content:center; padding:12px;
+  margin:14px 20px 6px; background:#ebf5fb;
+  border-radius:8px; border:1px dashed #2980b9;
 }}
 .ref-box span {{ font-size:15px; font-weight:700; color:#1a5276; direction:ltr; }}
 .id-box {{
-  display: flex; justify-content: center;
-  padding: 10px; margin: 0 20px 15px;
-  background: #fef9e7; border-radius: 8px;
-  border: 1px dashed #f39c12;
+  display:flex; justify-content:center; padding:10px;
+  margin:0 20px 15px; background:#fef9e7;
+  border-radius:8px; border:1px dashed #f39c12;
 }}
 .id-box span {{ font-size:16px; font-weight:700; color:#7d6608; direction:ltr; }}
-.result-details {{ padding: 10px 20px 20px; }}
+.result-details {{ padding:10px 20px 20px; }}
 .detail-row {{
-  display: flex; justify-content: space-between;
-  align-items: center; padding: 14px 0;
-  border-bottom: 1px solid #eef2f6;
+  display:flex; justify-content:space-between;
+  align-items:center; padding:12px 0;
+  border-bottom:1px solid #eef2f6;
 }}
-.detail-row:last-child {{ border-bottom: none; }}
-.detail-label {{ font-size:13.5px; font-weight:700; color:#1a3472; min-width:110px; text-align:right; }}
-.detail-value {{ font-size:14px; font-weight:500; color:#2c2c3e; flex:1; text-align:center; direction:ltr; }}
+.detail-row:last-child {{ border-bottom:none; }}
+.detail-label {{ font-size:13px; font-weight:700; color:#1a3472; min-width:110px; text-align:right; }}
+.detail-value {{ font-size:13px; font-weight:500; color:#2c2c3e; flex:1; text-align:center; direction:ltr; }}
 .detail-value.ar {{ direction:rtl; }}
-.result-buttons {{ padding: 10px 20px 22px; }}
+.result-buttons {{ padding:10px 20px 22px; }}
 .print-btn {{
-  display: flex; align-items: center; justify-content: center;
-  gap: 8px; width: 100%; padding: 13px;
-  background: linear-gradient(135deg,#27ae60,#1e8449);
-  color: #fff; border: none; border-radius: 8px;
-  font-size: 15px; font-weight: 700; font-family: 'Tajawal',sans-serif;
-  cursor: pointer; margin-bottom: 10px;
+  display:flex; align-items:center; justify-content:center;
+  gap:8px; width:100%; padding:13px;
+  background:linear-gradient(135deg,#27ae60,#1e8449);
+  color:#fff; border:none; border-radius:8px;
+  font-size:15px; font-weight:700; font-family:'Tajawal',sans-serif;
+  cursor:pointer; margin-bottom:10px;
 }}
 .back-btn {{
-  display: flex; align-items: center; justify-content: center;
-  gap: 8px; width: 100%; padding: 13px;
-  background: linear-gradient(135deg,#2d5fa6,#1a3472);
-  color: #fff; border: none; border-radius: 8px;
-  font-size: 15px; font-weight: 700; font-family: 'Tajawal',sans-serif;
-  cursor: pointer;
+  display:flex; align-items:center; justify-content:center;
+  gap:8px; width:100%; padding:13px;
+  background:linear-gradient(135deg,#2d5fa6,#1a3472);
+  color:#fff; border:none; border-radius:8px;
+  font-size:15px; font-weight:700; font-family:'Tajawal',sans-serif;
+  cursor:pointer;
 }}
 .err-card {{
-  background: #fff2f2; border: 1.5px solid #f5bfbf;
-  border-radius: 10px; padding: 22px 18px;
-  text-align: center; margin: 15px;
+  background:#fff2f2; border:1.5px solid #f5bfbf;
+  border-radius:10px; padding:22px 18px;
+  text-align:center; margin:15px;
 }}
 .err-title {{ font-size:15px; font-weight:700; color:#c62828; margin-bottom:6px; }}
-.err-sub {{ font-size:13px; color:#888; }}
-
-@media print {{
-  .loading-overlay, .result-page {{ display:none !important; }}
-}}
+.err-sub   {{ font-size:13px; color:#888; }}
 </style>
 </head>
 <body>
@@ -247,66 +243,68 @@ body {{
   <div class="loading-text">جاري الاستعلام...</div>
 </div>
 
-<!-- صفحة النتيجة (تغطي الشاشة بالكامل) -->
+<!-- صفحة النتيجة -->
 <div class="result-page" id="resultPage">
   <div class="result-card" id="resultCard"></div>
 </div>
 
-<!-- الفورم الشفاف فوق الصورة -->
-<div class="overlay-form" id="overlayForm">
+<!-- الصورة + العناصر التفاعلية فوقها بدقة -->
+<div id="pageWrap">
+  <img id="bgImg" src="{bg}" alt="">
+
+  <!-- Input 1: رمز الخدمة -->
   <input type="text" class="form-input" id="gslInp"
     placeholder="رمز الخدمة"
     autocomplete="off" autocorrect="off"
     autocapitalize="characters" spellcheck="false">
   <div class="error-msg" id="gslError">يرجى إدخال رمز الخدمة</div>
 
+  <!-- Input 2: رقم الهوية / الإقامة -->
   <input type="text" class="form-input" id="idInp"
     placeholder="رقم الهوية / الإقامة"
     autocomplete="off" inputmode="numeric" maxlength="10">
-  <div class="error-msg" id="idError">يرجى إدخال رقم الهوية / الإقامة</div>
+  <div class="error-msg" id="idError">يرجى إدخال رقم الهوية</div>
 
-  <div class="btn-area">
-    <!-- الأزرار شفافة — تتفاعل فقط بالنقر -->
-    <button class="btn-primary" id="qBtn" onclick="doQuery()">‎</button>
-    <button class="btn-outline" onclick="doReset()">‎</button>
-  </div>
+  <!-- زر استعلام (شفاف تماماً فوق الزر في الصورة) -->
+  <button class="btn-transparent" id="btnQuery" onclick="doQuery()"> </button>
+
+  <!-- زر رجوع للاستعلامات (شفاف تماماً) -->
+  <button class="btn-transparent" id="btnBack" onclick="doReset()"> </button>
 </div>
 
 <script>
 /* تعبئة GSL من URL */
 (function(){{
   const g = new URLSearchParams(location.search).get('gsl') || '';
-  if(g) document.getElementById('gslInp').value = g.toUpperCase();
+  if(g) {{ document.getElementById('gslInp').value = g.toUpperCase(); document.getElementById('idInp').focus(); }}
 }})();
 
 document.addEventListener('keydown', e => {{
-  if(e.key === 'Enter' && document.getElementById('resultPage').style.display !== 'block')
-    doQuery();
+  if(e.key === 'Enter') doQuery();
 }});
 
-function esc(s) {{
-  return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}}
+function esc(s) {{ return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }}
 
 async function doQuery() {{
   const gsl = (document.getElementById('gslInp').value||'').trim().toUpperCase();
   const id  = (document.getElementById('idInp').value||'').trim();
 
-  document.getElementById('gslInp').classList.remove('error');
-  document.getElementById('idInp').classList.remove('error');
+  // إعادة تعيين الأخطاء
+  document.getElementById('gslInp').style.background = 'transparent';
+  document.getElementById('idInp').style.background  = 'transparent';
   document.getElementById('gslError').classList.remove('show');
   document.getElementById('idError').classList.remove('show');
 
   let err = false;
-  if(!gsl){{ document.getElementById('gslInp').classList.add('error'); document.getElementById('gslError').classList.add('show'); err=true; }}
-  if(!id){{  document.getElementById('idInp').classList.add('error');  document.getElementById('idError').classList.add('show');  err=true; }}
+  if(!gsl) {{ document.getElementById('gslError').classList.add('show'); err=true; }}
+  if(!id)  {{ document.getElementById('idError').classList.add('show');  err=true; }}
   if(err) return;
 
   document.getElementById('loadingOverlay').classList.add('active');
-  document.getElementById('qBtn').disabled = true;
+  document.getElementById('btnQuery').disabled = true;
 
   try {{
-    const r = await fetch('/api/verify?gsl='+encodeURIComponent(gsl)+'&id='+encodeURIComponent(id));
+    const r = await fetch('/api/verify?gsl=' + encodeURIComponent(gsl) + '&id=' + encodeURIComponent(id));
     const d = await r.json();
     document.getElementById('loadingOverlay').classList.remove('active');
 
@@ -314,53 +312,62 @@ async function doQuery() {{
       const v = d.data;
       const issued = v.issued_at ? v.issued_at.slice(0,10) : '—';
       document.getElementById('resultCard').innerHTML =
-        '<div class="result-header"><div class="result-icon">📋</div>' +
-        '<div class="result-header-title">تفاصيل الإجازة المرضية</div>' +
-        '<div class="result-header-subtitle">تم الاستعلام بنجاح</div></div>' +
-        '<div class="ref-box"><span>'+esc(gsl)+'</span></div>' +
-        '<div class="id-box"><span>'+esc(id)+'</span></div>' +
+        '<div class="result-header">' +
+          '<div class="result-icon">📋</div>' +
+          '<div class="result-header-title">تفاصيل الإجازة المرضية</div>' +
+          '<div class="result-header-sub">تم الاستعلام بنجاح ✓</div>' +
+        '</div>' +
+        '<div class="ref-box"><span>' + esc(gsl) + '</span></div>' +
+        '<div class="id-box"><span>' + esc(id) + '</span></div>' +
         '<div class="result-details">' +
-        '<div class="detail-row"><span class="detail-label">الاسم</span><span class="detail-value ar">'+esc(v.full_name)+'</span></div>' +
-        '<div class="detail-row"><span class="detail-label">تاريخ الإصدار</span><span class="detail-value">'+esc(issued)+'</span></div>' +
-        '<div class="detail-row"><span class="detail-label">تبدأ من</span><span class="detail-value">'+esc(v.excuse_date)+'</span></div>' +
-        '<div class="detail-row"><span class="detail-label">وحتى</span><span class="detail-value">'+esc(v.end_date)+'</span></div>' +
-        '<div class="detail-row"><span class="detail-label">المدة بالأيام</span><span class="detail-value">'+esc(String(v.days_count))+'</span></div>' +
-        '<div class="detail-row"><span class="detail-label">اسم الطبيب</span><span class="detail-value ar">'+esc(v.doctor||'—')+'</span></div>' +
-        '<div class="detail-row"><span class="detail-label">التخصص الوظيفي</span><span class="detail-value ar">'+esc(v.specialty||'—')+'</span></div>' +
+          row('الاسم',             esc(v.full_name),  true)  +
+          row('تاريخ الإصدار',    esc(issued),        false) +
+          row('تبدأ من',          esc(v.excuse_date), false) +
+          row('وحتى',             esc(v.end_date),    false) +
+          row('المدة بالأيام',    esc(String(v.days_count)), false) +
+          row('اسم الطبيب',       esc(v.doctor||'—'), true)  +
+          row('التخصص الوظيفي',  esc(v.specialty||'—'), true) +
         '</div>' +
         '<div class="result-buttons">' +
-        '<button class="print-btn" onclick="window.print()">🖨️ طباعة</button>' +
-        '<button class="back-btn" onclick="doReset()">رجوع للاستعلامات ←</button>' +
+          '<button class="print-btn" onclick="window.print()">🖨️ طباعة</button>' +
+          '<button class="back-btn"  onclick="doReset()">← رجوع للاستعلامات</button>' +
         '</div>';
       document.getElementById('resultPage').classList.add('active');
     }} else {{
       document.getElementById('resultCard').innerHTML =
         '<div class="err-card"><div class="err-title">⚠️ تعذّر الاستعلام</div>' +
         '<div class="err-sub">تأكد من رمز الخدمة ورقم الهوية وحاول مجدداً.</div></div>' +
-        '<div style="padding:0 20px 20px;"><button class="back-btn" onclick="doReset()">رجوع للاستعلامات ←</button></div>';
+        '<div style="padding:0 20px 20px;"><button class="back-btn" onclick="doReset()">← رجوع</button></div>';
       document.getElementById('resultPage').classList.add('active');
     }}
   }} catch(e) {{
     document.getElementById('loadingOverlay').classList.remove('active');
     document.getElementById('resultCard').innerHTML =
       '<div class="err-card"><div class="err-title">❌ خطأ في الاتصال</div>' +
-      '<div class="err-sub">تعذّر الوصول للخادم، حاول مجدداً.</div></div>' +
-      '<div style="padding:0 20px 20px;"><button class="back-btn" onclick="doReset()">رجوع للاستعلامات ←</button></div>';
+      '<div class="err-sub">تعذّر الوصول للخادم.</div></div>' +
+      '<div style="padding:0 20px 20px;"><button class="back-btn" onclick="doReset()">← رجوع</button></div>';
     document.getElementById('resultPage').classList.add('active');
   }}
-  document.getElementById('qBtn').disabled = false;
+  document.getElementById('btnQuery').disabled = false;
+}}
+
+function row(label, value, ar) {{
+  return '<div class="detail-row">' +
+    '<span class="detail-label">' + label + '</span>' +
+    '<span class="detail-value' + (ar?' ar':'') + '">' + value + '</span>' +
+  '</div>';
 }}
 
 function doReset() {{
   document.getElementById('gslInp').value = '';
   document.getElementById('idInp').value  = '';
-  document.getElementById('gslInp').classList.remove('error');
-  document.getElementById('idInp').classList.remove('error');
   document.getElementById('gslError').classList.remove('show');
   document.getElementById('idError').classList.remove('show');
   document.getElementById('resultPage').classList.remove('active');
   document.getElementById('resultCard').innerHTML = '';
-  document.getElementById('qBtn').disabled = false;
+  document.getElementById('btnQuery').disabled = false;
+  document.getElementById('gslInp').focus();
+  window.scrollTo({{top:0, behavior:'smooth'}});
 }}
 </script>
 </body>
@@ -413,11 +420,16 @@ def api_verify():
         except Exception:
             end_date = order.get("excuse_date", "")
         return jsonify({"success":True,"data":{
-            "gsl_code":order["gsl_code"],"full_name":order.get("full_name",""),
-            "hospital":order.get("hospital",""),"doctor":order.get("doctor",""),
-            "specialty":order.get("specialty",""),"excuse_date":order.get("excuse_date",""),
-            "end_date":end_date,"days_count":order.get("days_count",1),
-            "workplace":order.get("workplace",""),"issued_at":order.get("created_at","")
+            "gsl_code":    order["gsl_code"],
+            "full_name":   order.get("full_name",""),
+            "hospital":    order.get("hospital",""),
+            "doctor":      order.get("doctor",""),
+            "specialty":   order.get("specialty",""),
+            "excuse_date": order.get("excuse_date",""),
+            "end_date":    end_date,
+            "days_count":  order.get("days_count",1),
+            "workplace":   order.get("workplace",""),
+            "issued_at":   order.get("created_at","")
         }})
     except Exception as ex:
         return jsonify({"success":False,"message":f"خطأ: {str(ex)}"}), 500
