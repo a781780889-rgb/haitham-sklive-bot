@@ -163,79 +163,152 @@ html, body {{ font-family:'Tajawal',sans-serif; direction:rtl; background:#fff; 
 #idError  {{ top: 21.1%; }}
 
 /* ══ صفحة النتيجة (تغطي الشاشة كاملاً) ══ */
+/* ══ صفحة النتيجة — تغطي الشاشة كاملاً ══ */
 .result-page {{
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(240,244,248,0.98);
+  background: #f5f7fa;
   z-index: 500;
   overflow-y: auto;
-  padding: 20px 15px;
+  direction: rtl;
 }}
 .result-page.active {{ display: block; }}
-.result-card {{
+
+/* هيدر النتيجة */
+.res-header {{
   background: #fff;
-  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  direction: ltr;
+  border-bottom: 1px solid #e8edf5;
+}}
+.res-logo-wrap {{ display:flex; align-items:center; gap:0; direction:ltr; }}
+.res-logo-txt  {{ display:flex; flex-direction:column; align-items:flex-start; line-height:1.1; margin-right:8px; }}
+.res-logo-ar   {{ font-size:17px; font-weight:900; color:#1a5276; }}
+.res-logo-en   {{ font-size:11px; font-weight:600; color:#2980b9; letter-spacing:1px; }}
+.res-logo-sep  {{ width:1.5px; height:32px; background:#ccd8ea; margin:0 8px; }}
+
+/* عنوان الصفحة */
+.res-page-title {{
+  padding: 20px 16px 8px;
+  font-size: 28px;
+  font-weight: 900;
+  color: #1a3472;
+  text-align: right;
+}}
+.res-page-desc {{
+  padding: 0 16px 16px;
+  font-size: 13px;
+  color: #555;
+  line-height: 1.6;
+  text-align: right;
+}}
+
+/* البطاقة الرئيسية */
+.res-card {{
+  margin: 0 12px 16px;
+  background: #fff;
+  border: 1px solid #dde3ed;
+  border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 6px 28px rgba(0,0,0,.15);
-  max-width: 400px;
-  margin: 0 auto;
 }}
-.result-header {{
-  background: linear-gradient(135deg,#1a3472,#2d5fa6);
-  padding: 22px 20px; text-align: center; color: #fff;
+.res-field {{
+  padding: 14px 16px;
+  border-bottom: 1px solid #edf0f5;
 }}
-.result-icon {{
-  width: 60px; height: 60px; margin: 0 auto 10px;
-  background: rgba(255,255,255,.18); border-radius: 50%;
+.res-field:last-child {{ border-bottom: none; }}
+.res-field-label {{
+  font-size: 13px;
+  font-weight: 800;
+  color: #1a3472;
+  margin-bottom: 5px;
+}}
+.res-field-value {{
+  font-size: 14px;
+  font-weight: 400;
+  color: #2c2c3e;
+  direction: rtl;
+}}
+
+/* أزرار النتيجة */
+.res-buttons {{
+  padding: 8px 12px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}}
+.res-btn-new {{
   display: flex; align-items: center; justify-content: center;
-  font-size: 26px;
+  width: 145px; padding: 11px 0;
+  background: #2d5fa6;
+  color: #fff; border: none; border-radius: 6px;
+  font-size: 14px; font-weight: 700;
+  font-family: 'Tajawal', sans-serif;
+  cursor: pointer; margin: 0 auto;
+  transition: background .18s;
 }}
-.result-header-title {{ font-size:18px; font-weight:700; margin-bottom:4px; }}
-.result-header-sub   {{ font-size:13px; opacity:.85; }}
-.ref-box {{
-  display:flex; justify-content:center; padding:12px;
-  margin:14px 20px 6px; background:#ebf5fb;
-  border-radius:8px; border:1px dashed #2980b9;
+.res-btn-new:hover {{ background: #1c4a8a; }}
+.res-btn-back {{
+  display: flex; align-items: center; justify-content: center;
+  width: 145px; padding: 11px 0;
+  background: #fff;
+  color: #2d5fa6;
+  border: 1.5px solid #2d5fa6;
+  border-radius: 6px;
+  font-size: 14px; font-weight: 700;
+  font-family: 'Tajawal', sans-serif;
+  cursor: pointer; margin: 0 auto;
+  transition: all .18s;
 }}
-.ref-box span {{ font-size:15px; font-weight:700; color:#1a5276; direction:ltr; }}
-.id-box {{
-  display:flex; justify-content:center; padding:10px;
-  margin:0 20px 15px; background:#fef9e7;
-  border-radius:8px; border:1px dashed #f39c12;
+.res-btn-back:hover {{ background: #ebf5fb; }}
+
+/* فوتر النتيجة */
+.res-footer {{
+  background: #2d5fa6;
+  padding: 30px 20px 20px;
+  text-align: center;
+  color: #fff;
+  margin-top: 10px;
 }}
-.id-box span {{ font-size:16px; font-weight:700; color:#7d6608; direction:ltr; }}
-.result-details {{ padding:10px 20px 20px; }}
-.detail-row {{
-  display:flex; justify-content:space-between;
-  align-items:center; padding:12px 0;
-  border-bottom:1px solid #eef2f6;
+.res-footer-logo {{
+  display: flex; align-items: center; justify-content: center;
+  gap: 0; direction: ltr; margin-bottom: 20px;
 }}
-.detail-row:last-child {{ border-bottom:none; }}
-.detail-label {{ font-size:13px; font-weight:700; color:#1a3472; min-width:110px; text-align:right; }}
-.detail-value {{ font-size:13px; font-weight:500; color:#2c2c3e; flex:1; text-align:center; direction:ltr; }}
-.detail-value.ar {{ direction:rtl; }}
-.result-buttons {{ padding:10px 20px 22px; }}
-.print-btn {{
-  display:flex; align-items:center; justify-content:center;
-  gap:8px; width:100%; padding:13px;
-  background:linear-gradient(135deg,#27ae60,#1e8449);
-  color:#fff; border:none; border-radius:8px;
-  font-size:15px; font-weight:700; font-family:'Tajawal',sans-serif;
-  cursor:pointer; margin-bottom:10px;
+.res-footer-logo-txt {{ display:flex; flex-direction:column; align-items:flex-start; line-height:1.1; margin-right:8px; }}
+.res-footer-logo-ar {{ font-size:20px; font-weight:900; color:#fff; }}
+.res-footer-logo-en {{ font-size:11px; color:rgba(255,255,255,.7); letter-spacing:1px; }}
+.res-footer-sep     {{ width:1.5px; height:36px; background:rgba(255,255,255,.3); margin:0 10px; }}
+.res-footer-menu-title {{
+  font-size: 14px; font-weight: 800; color: #fff;
+  margin-bottom: 12px; padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255,255,255,.2);
 }}
-.back-btn {{
-  display:flex; align-items:center; justify-content:center;
-  gap:8px; width:100%; padding:13px;
-  background:linear-gradient(135deg,#2d5fa6,#1a3472);
-  color:#fff; border:none; border-radius:8px;
-  font-size:15px; font-weight:700; font-family:'Tajawal',sans-serif;
-  cursor:pointer;
+.res-footer-menu {{ list-style: none; margin-bottom: 24px; }}
+.res-footer-menu li {{
+  padding: 10px 0;
+  font-size: 13px; color: rgba(255,255,255,.85);
+  border-bottom: 1px solid rgba(255,255,255,.1);
 }}
+.res-contact-title {{
+  font-size: 14px; font-weight: 800;
+  margin-bottom: 12px; padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255,255,255,.2);
+}}
+.res-contact-info {{ font-size: 12px; color: rgba(255,255,255,.8); line-height: 2; }}
+.res-footer-copy {{
+  margin-top: 20px; padding-top: 14px;
+  border-top: 1px solid rgba(255,255,255,.2);
+  font-size: 11px; color: rgba(255,255,255,.6);
+}}
+
+/* خطأ */
 .err-card {{
   background:#fff2f2; border:1.5px solid #f5bfbf;
   border-radius:10px; padding:22px 18px;
-  text-align:center; margin:15px;
+  text-align:center; margin:12px;
 }}
 .err-title {{ font-size:15px; font-weight:700; color:#c62828; margin-bottom:6px; }}
 .err-sub   {{ font-size:13px; color:#888; }}
@@ -251,7 +324,51 @@ html, body {{ font-family:'Tajawal',sans-serif; direction:rtl; background:#fff; 
 
 <!-- صفحة النتيجة -->
 <div class="result-page" id="resultPage">
-  <div class="result-card" id="resultCard"></div>
+  <!-- هيدر -->
+  <div class="res-header">
+    <div style="width:28px;"></div>
+    <div class="res-logo-wrap">
+      <div class="res-logo-txt">
+        <span class="res-logo-ar">صحـة</span>
+        <span class="res-logo-en">Seha</span>
+      </div>
+      <div class="res-logo-sep"></div>
+      <svg width="36" height="33" viewBox="0 0 60 55" fill="none"><defs><clipPath id="chkR"><polyline points="4,30 22,48 56,8" stroke="black" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" fill="none"/></clipPath></defs><g clip-path="url(#chkR)"><line x1="-10" y1="56" x2="40" y2="-4" stroke="#2d5fa6" stroke-width="4.2" opacity="0.22"/><line x1="4" y1="56" x2="54" y2="-4" stroke="#2d5fa6" stroke-width="4.2" opacity="0.55"/><line x1="18" y1="56" x2="68" y2="-4" stroke="#2d5fa6" stroke-width="4.2" opacity="0.85"/><line x1="32" y1="56" x2="82" y2="-4" stroke="#2d5fa6" stroke-width="4.2"/><line x1="46" y1="56" x2="96" y2="-4" stroke="#2d5fa6" stroke-width="4.2" opacity="0.6"/></g><polyline points="4,30 22,48 56,8" stroke="#2d5fa6" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+    </div>
+    <div style="width:28px;"></div>
+  </div>
+  <!-- عنوان + وصف -->
+  <div class="res-page-title">الإجازات المرضية</div>
+  <div class="res-page-desc">خدمة الاستعلام عن الإجازات المرضية تتيح لك الاستعلام عن حالة طلبك للإجازة ويمكنك طباعتها عن طريق تطبيق صحتي</div>
+  <!-- بطاقة البيانات -->
+  <div class="res-card" id="resultCard"></div>
+  <!-- أزرار -->
+  <div class="res-buttons">
+    <button class="res-btn-new"  onclick="doReset()">استعلام جديد</button>
+    <button class="res-btn-back" onclick="doReset()">رجوع للاستعلامات</button>
+  </div>
+  <!-- فوتر -->
+  <div class="res-footer">
+    <div class="res-footer-logo">
+      <div class="res-footer-logo-txt">
+        <span class="res-footer-logo-ar">صحـة</span>
+        <span class="res-footer-logo-en">Seha</span>
+      </div>
+      <div class="res-footer-sep"></div>
+      <svg width="44" height="40" viewBox="0 0 60 55" fill="none"><defs><clipPath id="chkF"><polyline points="4,30 22,48 56,8" stroke="black" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" fill="none"/></clipPath></defs><g clip-path="url(#chkF)"><line x1="-10" y1="56" x2="40" y2="-4" stroke="white" stroke-width="4.2" opacity="0.22"/><line x1="4" y1="56" x2="54" y2="-4" stroke="white" stroke-width="4.2" opacity="0.55"/><line x1="18" y1="56" x2="68" y2="-4" stroke="white" stroke-width="4.2" opacity="0.85"/><line x1="32" y1="56" x2="82" y2="-4" stroke="white" stroke-width="4.2"/><line x1="46" y1="56" x2="96" y2="-4" stroke="white" stroke-width="4.2" opacity="0.6"/></g><polyline points="4,30 22,48 56,8" stroke="white" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" fill="none"/></svg>
+    </div>
+    <p style="font-size:12px;color:rgba(255,255,255,.8);line-height:1.7;margin-bottom:22px;">منصة صحة تخدم جميع المنشآت الطبية من خلال تقديم الخدمات الصحية إلكترونياً لجميع المنشآت الطبية وتسعى إلى توحيد وأتمتة الإجراءات والخدمات بما في دوره رفع جودة الاداء وخفض التكاليف.</p>
+    <div class="res-footer-menu-title">القائمة الرئيسية</div>
+    <ul class="res-footer-menu">
+      <li>الخدمات</li><li>الاستعلامات</li><li>الأسئلة الشائعة</li><li>تواصل معنا</li>
+    </ul>
+    <div class="res-contact-title">تواصل معنا</div>
+    <div class="res-contact-info">
+      📞 920002005<br>✉️ info@seha.sa<br>💬 920002005<br>
+      <span style="font-size:11px;">أوقات العمل: الأحد حتى الخميس 8 ص - 11 م</span>
+    </div>
+    <div class="res-footer-copy">منصة صحة معتمدة من قبل وزارة الصحة © 2026</div>
+  </div>
 </div>
 
 <!-- الصورة + العناصر التفاعلية فوقها بدقة -->
@@ -335,50 +452,37 @@ async function doQuery() {{
     if(d.success) {{
       const v = d.data;
       const issued = v.issued_at ? v.issued_at.slice(0,10) : '—';
+      const days   = (v.days_count && v.days_count !== 'null') ? esc(String(v.days_count)) + ' يوم' : '—';
       document.getElementById('resultCard').innerHTML =
-        '<div class="result-header">' +
-          '<div class="result-icon">📋</div>' +
-          '<div class="result-header-title">تفاصيل الإجازة المرضية</div>' +
-          '<div class="result-header-sub">تم الاستعلام بنجاح ✓</div>' +
-        '</div>' +
-        '<div class="ref-box"><span>' + esc(gsl) + '</span></div>' +
-        '<div class="id-box"><span>' + esc(id) + '</span></div>' +
-        '<div class="result-details">' +
-          row('الاسم',             esc(v.full_name),  true)  +
-          row('تاريخ الإصدار',    esc(issued),        false) +
-          row('تبدأ من',          esc(v.excuse_date), false) +
-          row('وحتى',             esc(v.end_date),    false) +
-          row('المدة بالأيام',    esc(String(v.days_count)), false) +
-          row('اسم الطبيب',       esc(v.doctor||'—'), true)  +
-          row('التخصص الوظيفي',  esc(v.specialty||'—'), true) +
-        '</div>' +
-        '<div class="result-buttons">' +
-          '<button class="print-btn" onclick="window.print()">🖨️ طباعة</button>' +
-          '<button class="back-btn"  onclick="doReset()">← رجوع للاستعلامات</button>' +
-        '</div>';
+        field('الاسم:',                     esc(v.full_name||'—'))     +
+        field('تاريخ إصدار تقرير الإجازة:', esc(issued))               +
+        field('تبدأ من:',                   esc(v.excuse_date||'—'))    +
+        field('وحتى:',                      esc(v.end_date||'—'))       +
+        field('المدة بالأيام:',             days)                        +
+        field('اسم الطبيب:',               esc(v.doctor||'—'))          +
+        field('المسمى الوظيفي:',           esc(v.specialty||'—'));
       document.getElementById('resultPage').classList.add('active');
+      document.getElementById('resultPage').scrollTop = 0;
     }} else {{
       document.getElementById('resultCard').innerHTML =
         '<div class="err-card"><div class="err-title">⚠️ تعذّر الاستعلام</div>' +
-        '<div class="err-sub">تأكد من رمز الخدمة ورقم الهوية وحاول مجدداً.</div></div>' +
-        '<div style="padding:0 20px 20px;"><button class="back-btn" onclick="doReset()">← رجوع</button></div>';
+        '<div class="err-sub">تأكد من رمز الخدمة ورقم الهوية وحاول مجدداً.</div></div>';
       document.getElementById('resultPage').classList.add('active');
     }}
   }} catch(e) {{
     document.getElementById('loadingOverlay').classList.remove('active');
     document.getElementById('resultCard').innerHTML =
       '<div class="err-card"><div class="err-title">❌ خطأ في الاتصال</div>' +
-      '<div class="err-sub">تعذّر الوصول للخادم.</div></div>' +
-      '<div style="padding:0 20px 20px;"><button class="back-btn" onclick="doReset()">← رجوع</button></div>';
+      '<div class="err-sub">تعذّر الوصول للخادم.</div></div>';
     document.getElementById('resultPage').classList.add('active');
   }}
   document.getElementById('btnQuery').disabled = false;
 }}
 
-function row(label, value, ar) {{
-  return '<div class="detail-row">' +
-    '<span class="detail-label">' + label + '</span>' +
-    '<span class="detail-value' + (ar?' ar':'') + '">' + value + '</span>' +
+function field(label, value) {{
+  return '<div class="res-field">' +
+    '<div class="res-field-label">' + label + '</div>' +
+    '<div class="res-field-value">' + value + '</div>' +
   '</div>';
 }}
 
