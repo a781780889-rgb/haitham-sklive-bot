@@ -63,8 +63,7 @@ def build_html():
 html {{ scroll-behavior:smooth; -webkit-text-size-adjust:100%; }}
 body {{
   font-family:'Tajawal',Arial,sans-serif;
-  margin:0; padding:0;
-  background:#f0f4f8;
+  background:#f0f4f8 url('/design_result.jpg') no-repeat top center / cover fixed;
   color:#333;
   min-height:100vh;
   direction:rtl;
@@ -194,55 +193,6 @@ body {{
 .result-page.active {{ display:block; }}
 .form-page {{ display:block; }}
 .form-page.hidden {{ display:none; }}
-
-/* ══ BG IMAGE WRAPPER ══ */
-#bgWrapper {{
-  position:fixed; inset:0; z-index:0;
-  background:url('/design_result.jpg') no-repeat top center;
-  background-size:100% auto;
-  pointer-events:none;
-}}
-#formOverlay {{
-  position:fixed;
-  width:88%; max-width:340px;
-  left:50%; transform:translateX(-50%);
-  top:163px;
-  z-index:10;
-}}
-#formOverlay .form-input {{
-  width:100%;
-  padding:14px 16px;
-  border:none !important;
-  background:transparent !important;
-  box-shadow:none !important;
-  outline:none;
-  font-size:15px;
-  font-family:'Tajawal',sans-serif;
-  color:#222;
-  direction:rtl; text-align:right;
-}}
-#formOverlay .form-input::placeholder {{ color:#a0a8bc; }}
-#formOverlay .err {{ color:#e74c3c; font-size:12px; margin-top:2px; display:none; padding-right:4px; }}
-#formOverlay .err.show {{ display:block; }}
-#formOverlay .input-box {{
-  border:1.5px solid #d3d9e6; border-radius:8px;
-  background:rgba(255,255,255,0.85);
-  margin-bottom:12px; overflow:hidden;
-}}
-#formOverlay .input-box:focus-within {{
-  border-color:#2d5fa6;
-  box-shadow:0 0 0 3px rgba(45,95,166,.12);
-}}
-#formOverlay .obtn {{
-  display:block; width:100%; padding:13px 0;
-  border:none; border-radius:8px; margin-bottom:10px;
-  font-size:15px; font-weight:700; font-family:'Tajawal',sans-serif;
-  cursor:pointer; color:#fff; text-align:center;
-}}
-#formOverlay .obtn-primary {{ background:#2d5fa6; }}
-#formOverlay .obtn-primary:hover {{ background:#1c4a8a; }}
-#formOverlay .obtn-outline {{ background:#1e3c7b; font-size:14px; }}
-#formOverlay .obtn-outline:hover {{ background:#152e60; }}
 
 /* ══ RESULT CARD ══ */
 .result-card {{
@@ -525,36 +475,43 @@ body {{
   <div style="width:32px;"></div>
 </header>
 
-<!-- ══ خلفية الصورة ══ -->
-<div id="bgWrapper"></div>
-
-<!-- ══ نموذج الاستعلام (أوفرلاي فوق الصورة) ══ -->
-<div id="formOverlay">
-  <div class="input-box">
-    <input type="text" class="form-input" id="gslInp"
-      placeholder="رمز الخدمة"
-      autocomplete="off" autocorrect="off"
-      autocapitalize="characters" spellcheck="false">
-  </div>
-  <div class="err" id="gslError">يرجى إدخال رمز الخدمة</div>
-  <div class="input-box">
-    <input type="text" class="form-input" id="idInp"
-      placeholder="رقم الهوية / الإقامة"
-      autocomplete="off" inputmode="numeric" maxlength="10">
-  </div>
-  <div class="err" id="idError">يرجى إدخال رقم الهوية / الإقامة</div>
-  <button class="obtn obtn-primary" id="qBtn" onclick="doQuery()">استعلام</button>
-  <button class="obtn obtn-outline" onclick="doReset()">رجوع للاستعلامات</button>
-</div>
-
 <!-- ══ تحميل ══ -->
 <div class="loading-overlay" id="loadingOverlay">
   <div class="spinner"></div>
   <div class="loading-text">جاري الاستعلام...</div>
 </div>
 
-<!-- ══ صفحة النتيجة ══ (مخفية في البداية) -->
-<div id="resultWrapper" style="display:none; position:relative; z-index:20; background:#f0f4f8;">
+<div class="page-container">
+
+  <!-- ══ صفحة النموذج ══ -->
+  <div class="form-page" id="formPage">
+    <div class="service-title-section">
+      <h1 class="service-title">الإجازات المرضية</h1>
+      <p class="service-description">
+        خدمة الاستعلام عن الإجازات المرضية تتيح لك الاستعلام عن حالة<br>
+        طلبك للإجازة ويمكنك طباعتها عن طريق تطبيق صحتي
+      </p>
+    </div>
+    <div class="form-section">
+      <div class="form-group">
+        <input type="text" class="form-input" id="gslInp"
+          placeholder="رمز الخدمة"
+          autocomplete="off" autocorrect="off"
+          autocapitalize="characters" spellcheck="false">
+        <div class="error-msg" id="gslError">يرجى إدخال رمز الخدمة</div>
+      </div>
+      <div class="form-group">
+        <input type="text" class="form-input" id="idInp"
+          placeholder="رقم الهوية / الإقامة"
+          autocomplete="off" inputmode="numeric" maxlength="10">
+        <div class="error-msg" id="idError">يرجى إدخال رقم الهوية / الإقامة</div>
+      </div>
+      <div class="btn-area">
+        <button class="btn-primary" id="qBtn" onclick="doQuery()">استعلام</button>
+        <button class="btn-outline" onclick="doReset()">رجوع للاستعلامات</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ══ صفحة النتيجة ══ -->
   <div class="result-page" id="resultPage">
@@ -568,7 +525,7 @@ body {{
     <div class="result-card" id="resultCard"></div>
   </div>
 
-</div><!-- end resultWrapper -->
+</div>
 
 <!-- ══ فوتر ══ -->
 <footer class="footer">
@@ -676,7 +633,7 @@ function closeSidebar() {{
 
 /* Enter */
 document.addEventListener('keydown', e => {{
-  if (e.key === 'Enter' && document.getElementById('formOverlay').style.display !== 'none')
+  if (e.key === 'Enter' && !document.getElementById('formPage').classList.contains('hidden'))
     doQuery();
 }});
 
@@ -743,10 +700,7 @@ async function doQuery() {{
           '<button class="back-btn" onclick="doReset()">رجوع للاستعلامات ←</button>' +
         '</div>';
 
-      // Switch to result view
-      document.getElementById('formOverlay').style.display = 'none';
-      document.getElementById('bgWrapper').style.display = 'none';
-      document.getElementById('resultWrapper').style.display = 'block';
+      document.getElementById('formPage').classList.add('hidden');
       document.getElementById('resultPage').classList.add('active');
 
     }} else {{
@@ -758,10 +712,7 @@ async function doQuery() {{
         '<div style="padding:0 20px 20px;">' +
           '<button class="back-btn" onclick="doReset()">رجوع للاستعلامات ←</button>' +
         '</div>';
-      // Switch to result view
-      document.getElementById('formOverlay').style.display = 'none';
-      document.getElementById('bgWrapper').style.display = 'none';
-      document.getElementById('resultWrapper').style.display = 'block';
+      document.getElementById('formPage').classList.add('hidden');
       document.getElementById('resultPage').classList.add('active');
     }}
 
@@ -775,9 +726,7 @@ async function doQuery() {{
       '<div style="padding:0 20px 20px;">' +
         '<button class="back-btn" onclick="doReset()">رجوع للاستعلامات ←</button>' +
       '</div>';
-    document.getElementById('formOverlay').style.display = 'none';
-    document.getElementById('bgWrapper').style.display = 'none';
-    document.getElementById('resultWrapper').style.display = 'block';
+    document.getElementById('formPage').classList.add('hidden');
     document.getElementById('resultPage').classList.add('active');
   }}
 
@@ -793,13 +742,8 @@ function doReset() {{
     document.getElementById(i).classList.remove('error');
   }});
   ['gslError','idError'].forEach(i => document.getElementById(i).classList.remove('show'));
-  // Switch back to form view
   document.getElementById('resultPage').classList.remove('active');
-  document.getElementById('resultWrapper').style.display = 'none';
-  document.getElementById('bgWrapper').style.display = 'block';
-  document.getElementById('formOverlay').style.display = 'block';
-  document.getElementById('gslInp').value = '';
-  document.getElementById('idInp').value = '';
+  document.getElementById('formPage').classList.remove('hidden');
   document.getElementById('resultCard').innerHTML = '';
   document.getElementById('qBtn').textContent = 'استعلام';
   document.getElementById('qBtn').disabled = false;
@@ -895,12 +839,8 @@ def api_verify():
 
 
 
-@app.route("/design_form.jpg")
-def serve_design_form():
-    return send_file(os.path.join(_THIS_DIR, "design_form.jpg"), mimetype="image/jpeg")
-
 @app.route("/design_result.jpg")
-def serve_design_result():
+def serve_bg_image():
     return send_file(os.path.join(_THIS_DIR, "design_result.jpg"), mimetype="image/jpeg")
 
 @app.route("/health")
