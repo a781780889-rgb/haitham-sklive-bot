@@ -399,24 +399,26 @@ def build_result_html(data: dict):
     doctor = v("doctor")
     spec   = v("spec")
 
-    # ── إحداثيات الحقول على الصورة (top % من ارتفاع الصورة الكاملة)
-    # الصورة الأصلية 1438×7725 px — تم قياس مواضع القيم المحذوفة بدقة
-    # top%  = y_center / 7725 * 100
+    # ── إحداثيات الحقول على الصورة
+    # center% = مركز المنطقة الفارغة / ارتفاع الصورة (7725px) * 100
+    # height% = ارتفاع المنطقة الفارغة / 7725 * 100
     fields = [
-        # (معرّف, top%, قيمة)
-        ("name",   16.50, name),
-        ("issued", 20.98, issued),
-        ("start",  25.51, start),
-        ("end",    30.05, end),
-        ("days",   34.65, days),
-        ("doctor", 39.22, doctor),
-        ("spec",   43.75, spec),
+        # (id, center%, height%, value)
+        ("name",   16.8738, 3.7670, name),
+        ("issued", 21.3010, 3.5599, issued),
+        ("start",  25.9094, 3.8188, start),
+        ("end",    30.3883, 3.7152, end),
+        ("days",   35.5469, 2.6667, days),
+        ("doctor", 39.5275, 3.7670, doctor),
+        ("spec",   44.2589, 2.0712, spec),
     ]
 
     overlays = ""
-    for fid, top_pct, value in fields:
+    for fid, center_pct, height_pct, value in fields:
+        top_pct = center_pct - height_pct / 2
         overlays += f"""
-        <div class="field-overlay" id="fo-{fid}" style="top:{top_pct:.3f}%;">
+        <div class="field-overlay" id="fo-{fid}"
+             style="top:{top_pct:.4f}%;height:{height_pct:.4f}%;">
           <span>{value}</span>
         </div>"""
 
@@ -463,19 +465,17 @@ body{{font-family:'Cairo',Arial,sans-serif;background:#eef0f3;
   display:flex;
   justify-content:center;
   align-items:center;
-  transform:translateY(-50%);
-  pointer-events:none;
 }}
 .field-overlay span{{
   font-family:'Cairo',sans-serif;
-  font-size:clamp(9px, 2.2vw, 14px);
-  font-weight:400;
+  font-size:clamp(10px, 2.4vw, 15px);
+  font-weight:500;
   color:#333;
   letter-spacing:0.01em;
   white-space:nowrap;
   direction:rtl;
   text-align:center;
-  max-width:65%;
+  max-width:70%;
   overflow:hidden;
   text-overflow:ellipsis;
 }}
