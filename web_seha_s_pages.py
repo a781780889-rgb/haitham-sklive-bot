@@ -368,30 +368,59 @@ function doReset() {{
 
 
 # ──────────────────────────────────────────────────────────────────────
-# صفحة 2: نتيجة الإجازة (بيانات ديناميكية)
+# صفحة 2: نتيجة الإجازة — خلفية seha_clean.jpg + بيانات ديناميكية
 # ──────────────────────────────────────────────────────────────────────
+def _load_result_bg():
+    """تحميل صورة الخلفية كـ base64 مرة واحدة."""
+    import base64
+    candidates = [
+        os.path.join(_THIS_DIR, "seha_clean.jpg"),
+        os.path.join(_THIS_DIR, "result_bg.jpg"),
+        os.path.join(_THIS_DIR, "design_result.jpg"),
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            with open(p, "rb") as f:
+                return "data:image/jpeg;base64," + base64.b64encode(f.read()).decode()
+    return ""
+
+_RESULT_BG_B64 = _load_result_bg()
+
 def build_result_html(data: dict):
     def v(key, fallback="—"):
         val = data.get(key, "")
-        return val if val else fallback
+        return str(val).strip() if val else fallback
 
-    rows = [
-        ("الاسم:",                    v("name")),
-        ("تاريخ إصدار تقرير الإجازة:", v("issued")),
-        ("تبدأ من:",                   v("start")),
-        ("وحتى:",                      v("end")),
-        ("المدة بالأيام:",              v("days") + (" يوم" if v("days") != "—" else "")),
-        ("اسم الطبيب:",                v("doctor")),
-        ("المسمى الوظيفي:",            v("spec")),
+    name   = v("name")
+    issued = v("issued")
+    start  = v("start")
+    end    = v("end")
+    days   = v("days") + (" يوم" if v("days") != "—" else "")
+    doctor = v("doctor")
+    spec   = v("spec")
+
+    # ── إحداثيات الحقول على الصورة (top % من ارتفاع الصورة الكاملة)
+    # الصورة الأصلية 1438×7725 px — تم قياس مواضع القيم المحذوفة بدقة
+    # top%  = y_center / 7725 * 100
+    fields = [
+        # (معرّف, top%, قيمة)
+        ("name",   16.50, name),
+        ("issued", 20.98, issued),
+        ("start",  25.51, start),
+        ("end",    30.05, end),
+        ("days",   34.65, days),
+        ("doctor", 39.22, doctor),
+        ("spec",   43.75, spec),
     ]
 
-    rows_html = "".join(
-        f'<div class="result-row">'
-        f'<div class="result-label">{label}</div>'
-        f'<div class="result-value">{value}</div>'
-        f'</div>'
-        for label, value in rows
-    )
+    overlays = ""
+    for fid, top_pct, value in fields:
+        overlays += f"""
+        <div class="field-overlay" id="fo-{fid}" style="top:{top_pct:.3f}%;">
+          <span>{value}</span>
+        </div>"""
+
+    bg_style = f'background-image:url("{_RESULT_BG_B64}");' if _RESULT_BG_B64 else "background:#f5f7fa;"
 
     return f"""<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -400,31 +429,93 @@ def build_result_html(data: dict):
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>نتيجة الإجازة المرضية - منصة صحة</title>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&display=swap" rel="stylesheet">
-<style>{_COMMON_CSS}</style>
+<style>
+*,*::before,*::after{{margin:0;padding:0;box-sizing:border-box}}
+html{{-webkit-text-size-adjust:100%}}
+body{{font-family:'Cairo',Arial,sans-serif;background:#eef0f3;
+     direction:rtl;color:#222;min-height:100vh;overflow-x:hidden}}
+
+/* ── wrapper يحاكي شاشة موبايل ── */
+.page-wrap{{
+  max-width:480px;
+  margin:0 auto;
+  background:#fff;
+  min-height:100vh;
+  position:relative;
+}}
+
+/* ── حاوية الصورة ── */
+.img-wrap{{
+  position:relative;
+  width:100%;
+  /* نسبة العرض إلى الارتفاع: 1438:7725 */
+  padding-bottom:{7725/1438*100:.4f}%;
+  {bg_style}
+  background-size:100% 100%;
+  background-repeat:no-repeat;
+  background-position:top center;
+}}
+
+/* ── حقول البيانات الديناميكية ── */
+.field-overlay{{
+  position:absolute;
+  right:0; left:0;
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  transform:translateY(-50%);
+  pointer-events:none;
+}}
+.field-overlay span{{
+  font-family:'Cairo',sans-serif;
+  font-size:clamp(9px, 2.2vw, 14px);
+  font-weight:400;
+  color:#333;
+  letter-spacing:0.01em;
+  white-space:nowrap;
+  direction:rtl;
+  text-align:center;
+  max-width:65%;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}}
+
+/* ── أزرار التنقل تحت الصورة ── */
+.action-btns{{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:10px;
+  padding:20px 16px 30px;
+  background:#fff;
+}}
+.btn{{
+  width:170px;padding:13px 0;border-radius:8px;
+  font-family:'Cairo',sans-serif;font-size:15px;font-weight:700;
+  cursor:pointer;border:none;transition:opacity .2s;
+}}
+.btn:active{{opacity:.85}}
+.btn-primary{{background:#1a6db5;color:#fff}}
+.btn-outline{{background:#1e3c7b;color:#fff}}
+</style>
 </head>
 <body>
+<div class="page-wrap">
 
-{_header_html("seha-s.com/#/inquiries/slenqu")}
-
-<div class="main">
-  <h1 class="page-title">الإجازات المرضية</h1>
-  <p class="page-desc">
-    خدمة الاستعلام عن الإجازات المرضية تتيح لك الاستعلام عن حالة
-    طلبك للإجازة ويمكنك طباعتها عن طريق تطبيق صحتي
-  </p>
-
-  <div class="result-card">
-    {rows_html}
+  <!-- الصورة + البيانات الديناميكية -->
+  <div class="img-wrap">
+    {overlays}
   </div>
 
-  <div class="btn-wrap">
-    <button class="btn btn-primary" onclick="window.location.href='/slenqu'">استعلام جديد</button>
-    <button class="btn btn-outline" onclick="window.location.href='/slenqu'">رجوع للاستعلامات</button>
+  <!-- أزرار الإجراء -->
+  <div class="action-btns">
+    <button class="btn btn-primary"
+            onclick="window.location.href='/slenqu'">استعلام جديد</button>
+    <button class="btn btn-outline"
+            onclick="window.location.href='/slenqu'">رجوع للاستعلامات</button>
   </div>
+
 </div>
-
-{_footer_html()}
-
 </body>
 </html>"""
 
