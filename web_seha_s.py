@@ -145,12 +145,29 @@ body{font-family:'Tajawal',Arial,sans-serif;background:#fff;
 .pg{display:none}.pg.on{display:block}
 
 /* ── RESULT CARD ── */
-.res-card{border:1px solid #d8e2ef;border-radius:10px;
-  overflow:hidden;margin:0 20px 20px;background:#fff}
-.res-row{padding:14px 20px;border-bottom:1px solid #edf0f6;text-align:center}
+.res-card{
+  border:1.5px solid #d0d8e8;border-radius:14px;
+  overflow:hidden;margin:16px 18px 24px;
+  background:#fff;
+  box-shadow:0 2px 14px rgba(45,95,166,.08)
+}
+.res-row{
+  padding:24px 24px 20px;
+  border-bottom:1px solid #eef1f7;
+  text-align:center;
+  background:#f9fafb
+}
+.res-row:nth-child(even){background:#fff}
 .res-row:last-child{border-bottom:none}
-.res-lbl{font-size:15px;font-weight:700;color:#1a3b6e;margin-bottom:5px}
-.res-val{font-size:14px;color:#3a3a50;font-weight:400}
+.res-lbl{
+  font-size:16.5px;font-weight:800;
+  color:#111;margin-bottom:12px;
+  letter-spacing:-.2px
+}
+.res-val{
+  font-size:15.5px;color:#333;
+  font-weight:400;line-height:1.6
+}
 
 /* ── ERROR ── */
 .err-box{margin:0 20px 16px;padding:16px 18px;
@@ -408,17 +425,32 @@ async function doQuery(){
 
     if(d.success){
       const v=d.data;
-      /* تنسيق التاريخ: أخذ أول 10 أحرف فقط (YYYY-MM-DD) */
-      const issued=(v.issued_at||'').replace('T',' ').slice(0,10)||'—';
-      const days=v.days_count?v.days_count+' يوم':'—';
+
+      /* ── تحويل التاريخ من YYYY-MM-DD إلى DD-MM-YYYY ── */
+      function fmtDate(s){
+        if(!s||s==='—')return '—';
+        s=s.replace('T',' ').slice(0,10);           /* أخذ الجزء dd فقط */
+        const p=s.split('-');
+        if(p.length===3){
+          if(p[0].length===4) return p[2]+'-'+p[1]+'-'+p[0]; /* YYYY-MM-DD → DD-MM-YYYY */
+          return s;                                             /* بالفعل DD-MM-YYYY */
+        }
+        return s;
+      }
+
+      const issued = fmtDate(v.issued_at||'');
+      const leaveD = fmtDate(v.leave_date||'');
+      const endD   = fmtDate(v.end_date  ||'');
+      const days   = v.days_count ? v.days_count+' يوم' : '—';
+
       const rows=[
-        ['الاسم:',             v.full_name   ||'—'],
-        ['تاريخ إصدار تقرير الإجازة:', issued],
-        ['تبدأ من:',           v.leave_date  ||'—'],
-        ['وحتى:',              v.end_date    ||'—'],
-        ['المدة بالأيام:',     days],
-        ['اسم الطبيب:',        v.doctor      ||'—'],
-        ['المسمى الوظيفي:',    v.specialty   ||'—'],
+        ['الاسم:',                      v.full_name  ||'—'],
+        ['تاريخ إصدار تقرير الإجازة:',  issued],
+        ['تبدأ من:',                     leaveD],
+        ['وحتى:',                        endD],
+        ['المدة بالأيام:',               days],
+        ['اسم الطبيب:',                  v.doctor     ||'—'],
+        ['المسمى الوظيفي:',              v.specialty  ||'—'],
       ];
       const rowsHtml=rows.map(([lbl,val])=>
         `<div class="res-row"><div class="res-lbl">${esc(lbl)}</div><div class="res-val">${esc(val)}</div></div>`
