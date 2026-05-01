@@ -253,8 +253,8 @@ def _sidebar(check_sb):
   <div class="sb-hdr">
     <div style="display:flex;align-items:center;justify-content:center;gap:0;direction:ltr">
       <div class="ftr-logo-txt" style="margin-left:8px">
-        <span style="font-size:19px;font-weight:900;color:#fff">صحـة</span>
-        <span style="font-size:11px;color:rgba(255,255,255,.75)">Seha</span>
+        <span style="font-size:19px;font-weight:900;color:#fff">sehasaa</span>
+        <span style="font-size:11px;color:rgba(255,255,255,.75)">sehasaa</span>
       </div>
       <div style="width:1.5px;height:32px;background:rgba(255,255,255,.3);margin:0 8px"></div>
       {check_sb}
@@ -279,8 +279,8 @@ def _header(check_hdr):
   </button>
   <div class="hdr-logo">
     <div class="hdr-logo-txt">
-      <span class="logo-ar">صحـة</span>
-      <span class="logo-en">Seha</span>
+      <span class="logo-ar">sehasaa</span>
+      <span class="logo-en">sehasaa</span>
     </div>
     <div class="hdr-sep"></div>
     {check_hdr}
@@ -293,14 +293,14 @@ def _footer(check_ftr):
 <footer class="ftr">
   <div class="ftr-logo">
     <div class="ftr-logo-txt">
-      <span class="ftr-logo-ar">صحـة</span>
-      <span class="ftr-logo-en">Seha</span>
+      <span class="ftr-logo-ar">sehasaa</span>
+      <span class="ftr-logo-en">sehasaa</span>
     </div>
     <div class="ftr-sep"></div>
     {check_ftr}
   </div>
   <p class="ftr-desc">
-    منصة صحة تخدم جميع المنشآت الطبية من خلال تقديم الخدمات الصحية إلكترونياً
+    sehasaa تخدم جميع المنشآت الطبية من خلال تقديم الخدمات الصحية إلكترونياً
     لجميع المنشآت الطبية وتسعى إلى توحيد وأتمتة الاجراءات والخدمات بما في دوره
     رفع جودة الاداء وخفض التكاليف.
   </p>
@@ -313,8 +313,8 @@ def _footer(check_ftr):
   <div class="ftr-ministry">
     <div class="ftr-badge">
       <div class="ftr-badge-ico">🏥</div>
-      <div>وزارة الصحة</div>
-      <div style="font-size:9px;opacity:.7">Ministry of Health</div>
+      <div>sehasaa.com</div>
+      <div style="font-size:9px;opacity:.7">sehasaa.com</div>
     </div>
     <div class="ftr-badge">
       <div class="ftr-badge-ico">📊</div>
@@ -342,7 +342,7 @@ def _footer(check_ftr):
       </svg>
     </div>
   </div>
-  <p class="ftr-copy">منصة صحة معتمدة من قبل وزارة الصحة © 2026</p>
+  <p class="ftr-copy">sehasaa.com © 2026</p>
   <div class="ftr-btm">
     <a href="#">سياسة الخصوصية وشروط الاستخدام</a>
     <span style="opacity:.4">|</span>
@@ -451,7 +451,7 @@ def build_html():
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>الإجازات المرضية - منصة صحة</title>
+<title>الإجازات المرضية - sehasaa</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
 <style>{_CSS}</style>
 </head>
