@@ -356,68 +356,101 @@ function sbClose(){document.getElementById('sb').classList.remove('on');document
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 document.addEventListener('keydown',e=>{if(e.key==='Enter')doQuery()});
 
+/* ── مساعدات الصفحات ── */
+function showFormPage(){
+  document.getElementById('pgRes').classList.remove('on');
+  document.getElementById('pgForm').classList.add('on');
+}
+function showResPage(){
+  document.getElementById('pgForm').classList.remove('on');
+  document.getElementById('pgRes').classList.add('on');
+}
+function showFormErr(msg){
+  const b=document.getElementById('errBox');
+  document.getElementById('eMsg').textContent=msg;
+  b.style.display='block';
+  showFormPage();
+}
+function showResErr(msg){
+  const b=document.getElementById('errBoxRes');
+  document.getElementById('eMsgRes').textContent=msg;
+  b.style.display='block';
+  document.getElementById('resCard').innerHTML='';
+  showResPage();
+}
+
 async function doQuery(){
   const gsl=(document.getElementById('gI').value||'').trim().toUpperCase();
   const id=(document.getElementById('iI').value||'').trim();
   const btn=document.getElementById('qB');
-  const errBox=document.getElementById('errBox');
-  errBox.style.display='none';
+
+  /* إخفاء أي أخطاء سابقة */
+  document.getElementById('errBox').style.display='none';
+  document.getElementById('errBoxRes').style.display='none';
   document.getElementById('gI').classList.remove('err');
   document.getElementById('iI').classList.remove('err');
 
+  /* تحقق من الإدخال */
   if(!gsl){document.getElementById('gI').classList.add('err')}
   if(!id){document.getElementById('iI').classList.add('err')}
   if(!gsl||!id){
-    errBox.style.display='block';
-    document.getElementById('eMsg').textContent='يرجى إدخال رمز الخدمة ورقم الهوية.';
+    showFormErr('يرجى إدخال رمز الخدمة ورقم الهوية.');
     return;
   }
+
   document.getElementById('loader').classList.add('on');
   btn.textContent='جاري الاستعلام...';btn.disabled=true;
+
   try{
     const r=await fetch('/api/verify?gsl='+encodeURIComponent(gsl)+'&id='+encodeURIComponent(id));
     const d=await r.json();
     document.getElementById('loader').classList.remove('on');
+
     if(d.success){
       const v=d.data;
-      const issued=(v.issued_at||'').slice(0,10)||'—';
+      /* تنسيق التاريخ: أخذ أول 10 أحرف فقط (YYYY-MM-DD) */
+      const issued=(v.issued_at||'').replace('T',' ').slice(0,10)||'—';
       const days=v.days_count?v.days_count+' يوم':'—';
       const rows=[
-        ['الاسم:',v.full_name||'—'],
-        ['تاريخ إصدار تقرير الإجازة:',issued],
-        ['تبدأ من:',v.leave_date||'—'],
-        ['وحتى:',v.end_date||'—'],
-        ['المدة بالأيام:',days],
-        ['اسم الطبيب:',v.doctor||'—'],
-        ['المسمى الوظيفي:',v.specialty||'—'],
+        ['الاسم:',             v.full_name   ||'—'],
+        ['تاريخ إصدار تقرير الإجازة:', issued],
+        ['تبدأ من:',           v.leave_date  ||'—'],
+        ['وحتى:',              v.end_date    ||'—'],
+        ['المدة بالأيام:',     days],
+        ['اسم الطبيب:',        v.doctor      ||'—'],
+        ['المسمى الوظيفي:',    v.specialty   ||'—'],
       ];
-      const rowsHtml=rows.map(([l,v])=>
-        `<div class="res-row"><div class="res-lbl">${esc(l)}</div><div class="res-val">${esc(v)}</div></div>`
+      const rowsHtml=rows.map(([lbl,val])=>
+        `<div class="res-row"><div class="res-lbl">${esc(lbl)}</div><div class="res-val">${esc(val)}</div></div>`
       ).join('');
       document.getElementById('resCard').innerHTML=rowsHtml;
-      document.getElementById('pgForm').classList.remove('on');
-      document.getElementById('pgRes').classList.add('on');
+      document.getElementById('errBoxRes').style.display='none';
+      /* الانتقال إلى صفحة النتيجة فقط عند النجاح */
+      showResPage();
     }else{
-      errBox.style.display='block';
-      document.getElementById('eMsg').textContent=d.message||'لم يُعثر على نتيجة. تأكد من رمز الخدمة ورقم الهوية.';
+      /* فشل الاستعلام → نبقى في صفحة النموذج ونُظهر الخطأ هناك */
+      showFormErr(d.message||'لم يُعثر على نتيجة. تأكد من رمز الخدمة ورقم الهوية وحاول مجدداً.');
     }
-  }catch(e){
+  }catch(err){
     document.getElementById('loader').classList.remove('on');
-    errBox.style.display='block';
-    document.getElementById('eMsg').textContent='خطأ في الاتصال بالخادم، حاول مجدداً.';
+    showFormErr('خطأ في الاتصال بالخادم، حاول مجدداً.');
   }
+
   window.scrollTo({top:0,behavior:'smooth'});
   btn.textContent='استعلام';btn.disabled=false;
 }
 
 function doReset(){
-  ['gI','iI'].forEach(i=>{document.getElementById(i).value='';document.getElementById(i).classList.remove('err')});
+  ['gI','iI'].forEach(i=>{
+    document.getElementById(i).value='';
+    document.getElementById(i).classList.remove('err');
+  });
   document.getElementById('errBox').style.display='none';
-  document.getElementById('pgRes').classList.remove('on');
-  document.getElementById('pgForm').classList.add('on');
+  document.getElementById('errBoxRes').style.display='none';
   document.getElementById('resCard').innerHTML='';
   document.getElementById('qB').textContent='استعلام';
   document.getElementById('qB').disabled=false;
+  showFormPage();
   document.getElementById('gI').focus();
   window.scrollTo({top:0,behavior:'smooth'});
 }
@@ -515,6 +548,12 @@ def build_html():
         خدمة الاستعلام عن الإجازات المرضية تتيح لك الاستعلام عن حالة<br>
         طلبك للإجازة ويمكنك طباعتها عن طريق تطبيق صحتي
       </p>
+    </div>
+
+    <!-- صندوق خطأ صفحة النتيجة -->
+    <div class="err-box" id="errBoxRes" style="display:none">
+      <div class="err-ttl">⚠️ تعذّر الاستعلام</div>
+      <div class="err-sub" id="eMsgRes">تأكد من رمز الخدمة ورقم الهوية وحاول مجدداً.</div>
     </div>
 
     <div class="res-card" id="resCard"></div>

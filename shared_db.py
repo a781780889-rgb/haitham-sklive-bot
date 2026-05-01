@@ -348,16 +348,43 @@ def find_report(report_number: str, patient_id: str) -> dict | None:
     if conn is None:
         return None
     try:
+        rn_clean = report_number.strip().upper()
+        id_clean  = patient_id.strip()
+
         with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+            # ── محاولة 1: مطابقة تامة (الأسرع والأكثر دقة)
             cur.execute(
                 """SELECT * FROM reports
                    WHERE UPPER(TRIM(report_number)) = %s
                      AND TRIM(patient_id) = %s
                    LIMIT 1""",
-                (report_number.strip().upper(), patient_id.strip()),
+                (rn_clean, id_clean),
             )
             row = cur.fetchone()
-            return dict(row) if row else None
+            if row:
+                return dict(row)
+
+            # ── محاولة 2: البحث برمز الخدمة فقط ثم التحقق من الهوية بمرونة
+            #    (يغطي حالات الأصفار الزائدة أو الحروف الكبيرة/الصغيرة)
+            cur.execute(
+                """SELECT * FROM reports
+                   WHERE UPPER(TRIM(report_number)) = %s
+                   LIMIT 20""",
+                (rn_clean,),
+            )
+            rows = cur.fetchall()
+            for r in rows:
+                stored_id = (r.get("patient_id") or "").strip()
+                # مقارنة بعد إزالة الأصفار البادئة والمسافات
+                if stored_id.lstrip("0") == id_clean.lstrip("0"):
+                    return dict(r)
+                # مقارنة رقمية إذا كانا أرقاماً
+                if stored_id.isdigit() and id_clean.isdigit():
+                    if int(stored_id) == int(id_clean):
+                        return dict(r)
+
+            return None
+
     except Exception as e:
         logger.error(f"❌ فشل البحث عن التقرير: {e}")
         return None
