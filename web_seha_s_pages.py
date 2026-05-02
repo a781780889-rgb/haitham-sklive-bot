@@ -101,12 +101,14 @@ body{font-family:'Cairo',Arial,sans-serif;background:#fff;direction:rtl;
   font-family:'Cairo',sans-serif}
 
 /* RESULT CARD */
-.result-card{border:1px solid #dde3ed;border-radius:10px;
-  overflow:hidden;margin-bottom:20px}
-.result-row{padding:14px 16px;border-bottom:1px solid #eef2f6;text-align:center}
+.result-card{border:1.5px solid #dde3ed;border-radius:10px;
+  overflow:hidden;margin-bottom:24px;background:#fff;
+  box-shadow:0 1px 6px rgba(0,0,0,.06)}
+.result-row{padding:18px 18px 14px;border-bottom:1px solid #eef2f6;text-align:right}
 .result-row:last-child{border-bottom:none}
-.result-label{font-size:15px;font-weight:700;color:#1a3472;margin-bottom:4px}
-.result-value{font-size:14px;color:#444;font-weight:400}
+.result-label{font-size:15px;font-weight:700;color:#1a3472;margin-bottom:10px;display:block}
+.result-value{font-size:14px;color:#555;font-weight:400;display:block;
+  text-align:center;min-height:18px;padding-bottom:2px}
 
 /* ERROR */
 .err-card{background:#fff2f2;border:1.5px solid #f5bfbf;border-radius:10px;
