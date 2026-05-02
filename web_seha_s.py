@@ -145,18 +145,6 @@ body{font-family:'Tajawal',Arial,sans-serif;background:#fff;
 /* ── PAGES TOGGLE ── */
 .pg{display:none}.pg.on{display:block}
 
-/* ── RESULT PAGE BACKGROUND ── */
-#pgRes{
-  background-size:cover;
-  background-position:center top;
-  background-repeat:no-repeat;
-  min-height:100vh;
-  position:relative;
-}
-#pgRes .title-sec{background:transparent}
-#pgRes .res-card{background:transparent;border:none;box-shadow:none}
-#pgRes .btn-area{padding-bottom:40px}
-
 /* ── RESULT CARD ── */
 .res-card{border:1px solid #d8e2ef;border-radius:10px;
   overflow:hidden;margin:0 20px 20px;background:#fff}
@@ -444,7 +432,7 @@ def build_html():
     chk_ftr = seha_check_svg("white",   46)
     chk_sb  = seha_check_svg("white",   36)
 
-    # ── صورة التصميم كـ design banner (صفحة النموذج) ──
+    # ── صورة صفحة النموذج ──
     form_img_tag = (
         f'<div class="design-img-wrap" style="margin-bottom:0">'
         f'<img src="{_IMG_FORM}" alt="نموذج-الاستعلام" '
@@ -452,18 +440,14 @@ def build_html():
         f'</div>'
     ) if _IMG_FORM else ""
 
-    # ── اختيار الصورة الصحيحة للخلفية: 233685.jpg أولاً ثم design_result.jpg ──
-    bg_image = _IMG_RESULT_NEW or _IMG_RESULT
-    # حقن الـ background مباشرة في <style> لضمان الظهور على كل المتصفحات
-    res_bg_style = f"""
-#pgRes{{
-  background-image:url('{bg_image}') !important;
-  background-size:cover !important;
-  background-position:center top !important;
-  background-repeat:no-repeat !important;
-  min-height:100vh;
-  position:relative;
-}}""" if bg_image else ""
+    # ── صورة صفحة النتيجة — نفس أسلوب صفحة النموذج تماماً ──
+    result_bg = _IMG_RESULT_NEW or _IMG_RESULT
+    result_img_tag = (
+        f'<div class="design-img-wrap" style="margin-bottom:0">'
+        f'<img src="{result_bg}" alt="نتيجة-الإجازة" '
+        f'style="width:100%;max-width:480px;display:block;border-bottom:1px solid #e4e9f0">'
+        f'</div>'
+    ) if result_bg else ""
 
     return f"""<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -472,7 +456,7 @@ def build_html():
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>الإجازات المرضية - sehasaa</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
-<style>{_CSS}{res_bg_style}</style>
+<style>{_CSS}</style>
 </head>
 <body>
 
@@ -522,10 +506,12 @@ def build_html():
   </div>
 
   <!-- ══ صفحة النتيجة ══ -->
-  <!-- الخلفية الأصلية 232971.jpg مطبّقة بالكامل عبر CSS background -->
   <div class="pg" id="pgRes">
 
-    <!-- المحتوى التفاعلي الحقيقي (بدون صورة img — الخلفية تأتي من CSS) -->
+    <!-- صورة الخلفية الرسمية — نفس أسلوب صفحة النموذج تماماً -->
+    {result_img_tag}
+
+    <!-- المحتوى التفاعلي الحقيقي -->
     <div class="title-sec">
       <h1 class="page-title">الإجازات المرضية</h1>
       <p class="page-desc">
