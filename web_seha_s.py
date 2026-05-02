@@ -20,15 +20,16 @@ app = Flask(__name__)
 # ══════════════════════════════════════════════════════════════
 # تحميل صور التصميم (مرة واحدة عند البدء)
 # ══════════════════════════════════════════════════════════════
-def _load_img(filename):
+def _load_img(filename, mime="image/jpeg"):
     p = os.path.join(_THIS_DIR, filename)
     if os.path.exists(p):
         with open(p, "rb") as f:
-            return "data:image/jpeg;base64," + base64.b64encode(f.read()).decode()
+            return f"data:{mime};base64," + base64.b64encode(f.read()).decode()
     return ""
 
-_IMG_FORM   = _load_img("design_form.jpg")
-_IMG_RESULT = _load_img("design_result.jpg")
+_IMG_FORM        = _load_img("design_form.jpg")
+_IMG_RESULT      = _load_img("design_result.jpg")
+_IMG_RESULT_NEW  = _load_img("232971.jpg")         # الصورة الجديدة للنتيجة
 
 # ══════════════════════════════════════════════════════════════
 # SVG شعار صحة (checkmark مخطط)
@@ -143,6 +144,18 @@ body{font-family:'Tajawal',Arial,sans-serif;background:#fff;
 
 /* ── PAGES TOGGLE ── */
 .pg{display:none}.pg.on{display:block}
+
+/* ── RESULT PAGE BACKGROUND ── */
+#pgRes{
+  background-image:var(--res-bg);
+  background-size:cover;
+  background-position:center top;
+  background-repeat:no-repeat;
+  min-height:100vh;
+}
+#pgRes .title-sec{background:transparent}
+#pgRes .res-card{background:transparent;border:none;box-shadow:none}
+#pgRes .btn-area{padding-bottom:40px}
 
 /* ── RESULT CARD ── */
 .res-card{border:1px solid #d8e2ef;border-radius:10px;
@@ -431,7 +444,7 @@ def build_html():
     chk_ftr = seha_check_svg("white",   46)
     chk_sb  = seha_check_svg("white",   36)
 
-    # ── صورة التصميم كـ design banner ──
+    # ── صورة التصميم كـ design banner (صفحة النموذج) ──
     form_img_tag = (
         f'<div class="design-img-wrap" style="margin-bottom:0">'
         f'<img src="{_IMG_FORM}" alt="نموذج-الاستعلام" '
@@ -439,12 +452,9 @@ def build_html():
         f'</div>'
     ) if _IMG_FORM else ""
 
-    result_img_tag = (
-        f'<div class="design-img-wrap" style="margin-bottom:0">'
-        f'<img src="{_IMG_RESULT}" alt="نتيجة-الإجازة" '
-        f'style="width:100%;max-width:480px;display:block;border-bottom:1px solid #e4e9f0">'
-        f'</div>'
-    ) if _IMG_RESULT else ""
+    # ── اختيار الصورة الصحيحة للخلفية: 232971.jpg أولاً ثم design_result.jpg ──
+    bg_image = _IMG_RESULT_NEW or _IMG_RESULT
+    res_bg_css = f"--res-bg:url('{bg_image}');" if bg_image else ""
 
     return f"""<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -455,7 +465,7 @@ def build_html():
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
 <style>{_CSS}</style>
 </head>
-<body>
+<body style="{res_bg_css}">
 
 {_sidebar(chk_sb)}
 {_header(chk_hdr)}
@@ -503,12 +513,10 @@ def build_html():
   </div>
 
   <!-- ══ صفحة النتيجة ══ -->
+  <!-- الخلفية الأصلية 232971.jpg مطبّقة بالكامل عبر CSS background -->
   <div class="pg" id="pgRes">
 
-    <!-- صورة التصميم الرسمية -->
-    {result_img_tag}
-
-    <!-- المحتوى التفاعلي الحقيقي -->
+    <!-- المحتوى التفاعلي الحقيقي (بدون صورة img — الخلفية تأتي من CSS) -->
     <div class="title-sec">
       <h1 class="page-title">الإجازات المرضية</h1>
       <p class="page-desc">
