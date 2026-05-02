@@ -29,7 +29,7 @@ def _load_img(filename, mime="image/jpeg"):
 
 _IMG_FORM        = _load_img("design_form.jpg")
 _IMG_RESULT      = _load_img("design_result.jpg")
-_IMG_RESULT_NEW  = _load_img("232971.jpg")         # الصورة الجديدة للنتيجة
+_IMG_RESULT_NEW  = _load_img("233685.jpg")         # الصورة الجديدة للنتيجة
 
 # ══════════════════════════════════════════════════════════════
 # SVG شعار صحة (checkmark مخطط)
@@ -147,11 +147,11 @@ body{font-family:'Tajawal',Arial,sans-serif;background:#fff;
 
 /* ── RESULT PAGE BACKGROUND ── */
 #pgRes{
-  background-image:var(--res-bg);
   background-size:cover;
   background-position:center top;
   background-repeat:no-repeat;
   min-height:100vh;
+  position:relative;
 }
 #pgRes .title-sec{background:transparent}
 #pgRes .res-card{background:transparent;border:none;box-shadow:none}
@@ -452,9 +452,18 @@ def build_html():
         f'</div>'
     ) if _IMG_FORM else ""
 
-    # ── اختيار الصورة الصحيحة للخلفية: 232971.jpg أولاً ثم design_result.jpg ──
+    # ── اختيار الصورة الصحيحة للخلفية: 233685.jpg أولاً ثم design_result.jpg ──
     bg_image = _IMG_RESULT_NEW or _IMG_RESULT
-    res_bg_css = f"--res-bg:url('{bg_image}');" if bg_image else ""
+    # حقن الـ background مباشرة في <style> لضمان الظهور على كل المتصفحات
+    res_bg_style = f"""
+#pgRes{{
+  background-image:url('{bg_image}') !important;
+  background-size:cover !important;
+  background-position:center top !important;
+  background-repeat:no-repeat !important;
+  min-height:100vh;
+  position:relative;
+}}""" if bg_image else ""
 
     return f"""<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -463,9 +472,9 @@ def build_html():
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>الإجازات المرضية - sehasaa</title>
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
-<style>{_CSS}</style>
+<style>{_CSS}{res_bg_style}</style>
 </head>
-<body style="{res_bg_css}">
+<body>
 
 {_sidebar(chk_sb)}
 {_header(chk_hdr)}
@@ -641,8 +650,8 @@ if __name__ == "__main__":
     else:
         print("⚠️ SHARED_DATABASE_URL غير مُعدّ")
 
-    print(f"🖼️  صورة النموذج : {'✅ محمّلة' if _IMG_FORM   else '❌ غير موجودة'}")
-    print(f"🖼️  صورة النتيجة : {'✅ محمّلة' if _IMG_RESULT else '❌ غير موجودة'}")
+    print(f"🖼️  صورة النموذج  : {'✅ محمّلة' if _IMG_FORM        else '❌ غير موجودة'}")
+    print(f"🖼️  خلفية النتيجة : {'✅ محمّلة (233685.jpg)' if _IMG_RESULT_NEW else ('⚠️ fallback design_result.jpg' if _IMG_RESULT else '❌ غير موجودة')}")
 
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
