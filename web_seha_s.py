@@ -396,8 +396,8 @@ async function doQuery(){
         `<div class="res-row"><div class="res-lbl">${esc(l)}</div><div class="res-val">${esc(v)}</div></div>`
       ).join('');
       document.getElementById('resCard').innerHTML=rowsHtml;
-      document.getElementById('pgForm').classList.remove('on');
-      document.getElementById('pgRes').classList.add('on');
+      document.getElementById('secForm').style.display='none';
+      document.getElementById('secRes').style.display='block';
     }else{
       errBox.style.display='block';
       document.getElementById('eMsg').textContent=d.message||'لم يُعثر على نتيجة. تأكد من رمز الخدمة ورقم الهوية.';
@@ -414,8 +414,8 @@ async function doQuery(){
 function doReset(){
   ['gI','iI'].forEach(i=>{document.getElementById(i).value='';document.getElementById(i).classList.remove('err')});
   document.getElementById('errBox').style.display='none';
-  document.getElementById('pgRes').classList.remove('on');
-  document.getElementById('pgForm').classList.add('on');
+  document.getElementById('secRes').style.display='none';
+  document.getElementById('secForm').style.display='block';
   document.getElementById('resCard').innerHTML='';
   document.getElementById('qB').textContent='استعلام';
   document.getElementById('qB').disabled=false;
@@ -432,22 +432,13 @@ def build_html():
     chk_ftr = seha_check_svg("white",   46)
     chk_sb  = seha_check_svg("white",   36)
 
-    # ── صورة صفحة النموذج ──
+    # ── صورة صفحة النموذج فقط ──
     form_img_tag = (
         f'<div class="design-img-wrap" style="margin-bottom:0">'
         f'<img src="{_IMG_FORM}" alt="نموذج-الاستعلام" '
         f'style="width:100%;max-width:480px;display:block;border-bottom:1px solid #e4e9f0">'
         f'</div>'
     ) if _IMG_FORM else ""
-
-    # ── صورة صفحة النتيجة — نفس أسلوب صفحة النموذج تماماً ──
-    result_bg = _IMG_RESULT_NEW or _IMG_RESULT
-    result_img_tag = (
-        f'<div class="design-img-wrap" style="margin-bottom:0">'
-        f'<img src="{result_bg}" alt="نتيجة-الإجازة" '
-        f'style="width:100%;max-width:480px;display:block;border-bottom:1px solid #e4e9f0">'
-        f'</div>'
-    ) if result_bg else ""
 
     return f"""<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -470,13 +461,11 @@ def build_html():
 
 <div class="page-wrap">
 
-  <!-- ══ صفحة النموذج ══ -->
-  <div class="pg on" id="pgForm">
+  <!-- ══ قسم النموذج (صورة + عنوان + حقول) ══ -->
+  <div id="secForm">
 
-    <!-- صورة التصميم الرسمية -->
     {form_img_tag}
 
-    <!-- المحتوى التفاعلي الحقيقي -->
     <div class="title-sec">
       <h1 class="page-title">الإجازات المرضية</h1>
       <p class="page-desc">
@@ -505,23 +494,9 @@ def build_html():
     </div>
   </div>
 
-  <!-- ══ صفحة النتيجة ══ -->
-  <div class="pg" id="pgRes">
-
-    <!-- صورة الخلفية الرسمية — نفس أسلوب صفحة النموذج تماماً -->
-    {result_img_tag}
-
-    <!-- المحتوى التفاعلي الحقيقي -->
-    <div class="title-sec">
-      <h1 class="page-title">الإجازات المرضية</h1>
-      <p class="page-desc">
-        خدمة الاستعلام عن الإجازات المرضية تتيح لك الاستعلام عن حالة<br>
-        طلبك للإجازة ويمكنك طباعتها عن طريق تطبيق صحتي
-      </p>
-    </div>
-
+  <!-- ══ قسم النتيجة — نظيف بدون أي صورة أو تصميم ══ -->
+  <div id="secRes" style="display:none">
     <div class="res-card" id="resCard"></div>
-
     <div class="btn-area">
       <button class="btn-prim" onclick="doReset()">استعلام جديد</button>
       <button class="btn-dark" onclick="doReset()">رجوع للاستعلامات</button>
