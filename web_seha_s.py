@@ -28,8 +28,7 @@ def _load_img(filename, mime="image/jpeg"):
     return ""
 
 _IMG_FORM        = _load_img("design_form.jpg")
-_IMG_RESULT      = _load_img("design_result.jpg")
-_IMG_RESULT_NEW  = _load_img("233685.jpg")         # الصورة الجديدة للنتيجة
+_IMG_RESULT_NEW  = _load_img("result_bg.jpg")      # خلفية صفحة النتيجة
 
 # ══════════════════════════════════════════════════════════════
 # SVG شعار صحة (checkmark مخطط)
@@ -432,13 +431,21 @@ def build_html():
     chk_ftr = seha_check_svg("white",   46)
     chk_sb  = seha_check_svg("white",   36)
 
-    # ── صورة صفحة النموذج فقط ──
+    # ── صورة صفحة النموذج ──
     form_img_tag = (
         f'<div class="design-img-wrap" style="margin-bottom:0">'
         f'<img src="{_IMG_FORM}" alt="نموذج-الاستعلام" '
         f'style="width:100%;max-width:480px;display:block;border-bottom:1px solid #e4e9f0">'
         f'</div>'
     ) if _IMG_FORM else ""
+
+    # ── صورة خلفية صفحة النتيجة ──
+    result_bg_tag = (
+        f'<div class="design-img-wrap" style="margin-bottom:0">'
+        f'<img src="{_IMG_RESULT_NEW}" alt="نتيجة-الإجازة" '
+        f'style="width:100%;max-width:480px;display:block;border-bottom:1px solid #e4e9f0">'
+        f'</div>'
+    ) if _IMG_RESULT_NEW else ""
 
     return f"""<!DOCTYPE html>
 <html lang="ar" dir="rtl">
@@ -494,8 +501,9 @@ def build_html():
     </div>
   </div>
 
-  <!-- ══ قسم النتيجة — نظيف بدون أي صورة أو تصميم ══ -->
+  <!-- ══ قسم النتيجة — خلفية result_bg.jpg فقط ══ -->
   <div id="secRes" style="display:none">
+    {result_bg_tag}
     <div class="res-card" id="resCard"></div>
     <div class="btn-area">
       <button class="btn-prim" onclick="doReset()">استعلام جديد</button>
