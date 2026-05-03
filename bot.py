@@ -3021,9 +3021,9 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             file = await doc.get_file()
             template_name     = context.user_data.get("template_name", "قالب")
             template_hospital = context.user_data.get("template_hospital", "عام")
-            save_path = os.path.join(TEMPLATES_DIR, f"{int(datetime.now().timestamp())}_{doc.file_name}")
-            await file.download_to_drive(save_path)
-            db.add_pdf_template(template_name, template_hospital, save_path)
+            # تحميل PDF مباشرة إلى DB بدون حفظ على القرص
+            pdf_bytes = await file.download_as_bytearray()
+            db.add_pdf_template(template_name, template_hospital, file_data=bytes(pdf_bytes))
             context.user_data["state"] = "admin_templates"
             await update.message.reply_text(
                 f"✅ *تم إضافة القالب بنجاح!*\n\n📄 الاسم: {template_name}\n🏥 المستشفى: {template_hospital}",
@@ -3040,9 +3040,9 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         hospital_name = context.user_data.get("logo_hospital", "")
         photo = update.message.photo[-1]
         file  = await photo.get_file()
-        save_path = os.path.join(LOGOS_DIR, f"{int(datetime.now().timestamp())}_{hospital_name.replace(' ','_')}.jpg")
-        await file.download_to_drive(save_path)
-        db.set_hospital_logo(hospital_name, save_path)
+        # تحميل الصورة مباشرة إلى الذاكرة وحفظها في DB
+        logo_bytes = await file.download_as_bytearray()
+        db.set_hospital_logo(hospital_name, logo_data=bytes(logo_bytes), mime_type="image/jpeg")
         # رسالة النجاح
         await update.message.reply_text(
             f"✅ *تم رفع شعار {hospital_name} بنجاح!*\n\n"

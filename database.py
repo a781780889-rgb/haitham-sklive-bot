@@ -27,6 +27,14 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# تخزين الملفات في قاعدة البيانات
+try:
+    from file_storage import init_file_storage, save_file, get_file, delete_file, file_exists,         get_file_as_temp, save_file_from_path, logo_key, template_key, signature_key,         payment_screenshot_key, get_storage_stats
+    _FILE_STORAGE_AVAILABLE = True
+except ImportError:
+    _FILE_STORAGE_AVAILABLE = False
+    logger.warning('⚠️ file_storage.py غير متوفر')
+
 
 def _get_payment_details():
     return {
@@ -211,6 +219,10 @@ def init_db():
 
     # تهيئة جدول الأكواد
     init_vouchers_table(conn)
+
+    # تهيئة تخزين الملفات في DB
+    if _FILE_STORAGE_AVAILABLE:
+        init_file_storage(conn)
 
     conn.commit()
 
@@ -595,26 +607,87 @@ def delete_hospital(hospital_id):
         conn.close()
 
 
-def set_hospital_logo(hospital_name, logo_path):
-    conn = get_conn()
-    try:
-        conn.execute("UPDATE hospitals SET logo_path=? WHERE name=?", (logo_path, hospital_name))
-        conn.commit()
-    finally:
-        conn.close()
+def set_hospital_logo(hospital_name, logo_path=None, logo_data: bytes = None, mime_type="image/jpeg"):
+    """
+    يحفظ شعار المستشفى.
+    - logo_data: بيانات الصورة مباشرة (مُفضَّل — يُخزَّن في DB)
+    - logo_path: مسار ملف على القرص (للتوافق القديم)
+    """
+    # احفظ في file_storage إذا كانت البيانات متوفرة
+    if _FILE_STORAGE_AVAILABLE and logo_data:
+        fkey = logo_key(hospital_name)
+        save_file(fkey, logo_data, f"{hospital_name}.jpg", mime_type, "logo")
+        # احفظ المفتاح في العمود logo_path للتوافق
+        logo_path = f"db:{fkey}"
+
+    if logo_path:
+        conn = get_conn()
+        try:
+            conn.execute("UPDATE hospitals SET logo_path=? WHERE name=?", (logo_path, hospital_name))
+            conn.commit()
+        finally:
+            conn.close()
 
 
 def get_hospital_logo(hospital_name):
+    """
+    يُعيد مسار الشعار أو None.
+    إذا كان مخزوناً في DB يُنزّله إلى ملف مؤقت ويُعيد مساره.
+    """
     conn = get_conn()
     try:
         row = conn.execute(
             "SELECT logo_path FROM hospitals WHERE name=?", (hospital_name,)
         ).fetchone()
-        if row and row["logo_path"] and os.path.exists(row["logo_path"]):
-            return row["logo_path"]
+        if not row or not row["logo_path"]:
+            # محاولة مباشرة من file_storage
+            if _FILE_STORAGE_AVAILABLE:
+                fkey = logo_key(hospital_name)
+                if file_exists(fkey):
+                    return get_file_as_temp(fkey, ".jpg")
+            return None
+
+        lp = row["logo_path"]
+
+        # مخزون في DB
+        if lp.startswith("db:") and _FILE_STORAGE_AVAILABLE:
+            fkey = lp[3:]
+            return get_file_as_temp(fkey, ".jpg")
+
+        # مسار على القرص (قديم)
+        if os.path.exists(lp):
+            return lp
+
+        # حاول من file_storage مباشرة
+        if _FILE_STORAGE_AVAILABLE:
+            fkey = logo_key(hospital_name)
+            if file_exists(fkey):
+                return get_file_as_temp(fkey, ".jpg")
+
         return None
     finally:
         conn.close()
+
+
+def get_hospital_logo_data(hospital_name) -> bytes | None:
+    """يُعيد بيانات الشعار مباشرة (bytes) بدون ملف مؤقت""",
+    if _FILE_STORAGE_AVAILABLE:
+        fkey = logo_key(hospital_name)
+        data = get_file(fkey)
+        if data:
+            return data
+    # fallback: قرأ من القرص
+    conn = get_conn()
+    try:
+        row = conn.execute("SELECT logo_path FROM hospitals WHERE name=?", (hospital_name,)).fetchone()
+        if row and row["logo_path"] and not row["logo_path"].startswith("db:"):
+            lp = row["logo_path"]
+            if os.path.exists(lp):
+                with open(lp, "rb") as f:
+                    return f.read()
+    finally:
+        conn.close()
+    return None
 
 
 def set_hospital_name_en(hospital_name, name_en):
@@ -700,16 +773,40 @@ def increment_doctor_orders(doctor_name, hospital_name):
 
 # ── القوالب ──
 
-def add_pdf_template(name, hospital_name, file_path):
+def add_pdf_template(name, hospital_name, file_path=None, file_data: bytes = None):
+    """
+    يضيف قالب PDF.
+    - file_data: بيانات PDF مباشرة (مُخزَّنة في DB)
+    - file_path: مسار على القرص (للتوافق القديم)
+    يُعيد ID القالب الجديد.
+    """
     conn = get_conn()
     try:
         row = conn.execute("SELECT id FROM hospitals WHERE name=?", (hospital_name,)).fetchone()
         hospital_id = row["id"] if row else None
-        conn.execute(
+
+        # حفظ في DB أولاً لنحصل على ID
+        cur = conn.execute(
             "INSERT INTO pdf_templates (name, hospital_id, file_path) VALUES (?,?,?)",
-            (name, hospital_id, file_path)
+            (name, hospital_id, file_path or "pending")
         )
         conn.commit()
+        tpl_id = cur.lastrowid
+
+        # حفظ البيانات في file_storage
+        if _FILE_STORAGE_AVAILABLE and file_data:
+            fkey = template_key(tpl_id)
+            save_file(fkey, file_data, f"{name}.pdf", "application/pdf", "template")
+            conn.execute("UPDATE pdf_templates SET file_path=? WHERE id=?", (f"db:{fkey}", tpl_id))
+            conn.commit()
+        elif file_path and _FILE_STORAGE_AVAILABLE and os.path.exists(file_path):
+            # رحّل من القرص إلى DB
+            fkey = template_key(tpl_id)
+            save_file_from_path(fkey, file_path, "application/pdf", "template")
+            conn.execute("UPDATE pdf_templates SET file_path=? WHERE id=?", (f"db:{fkey}", tpl_id))
+            conn.commit()
+
+        return tpl_id
     finally:
         conn.close()
 
@@ -751,15 +848,53 @@ def set_active_template(template_id):
         conn.close()
 
 
+def get_template_file_path(template_id: int) -> str | None:
+    """يُعيد مسار مؤقت لملف القالب (يُنزَّل من DB إذا لزم)"""
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            "SELECT file_path FROM pdf_templates WHERE id=?", (template_id,)
+        ).fetchone()
+        if not row:
+            return None
+        fp = row["file_path"] or ""
+
+        # مخزون في DB
+        if fp.startswith("db:") and _FILE_STORAGE_AVAILABLE:
+            fkey = fp[3:]
+            return get_file_as_temp(fkey, ".pdf")
+
+        # مسار على القرص
+        if os.path.exists(fp):
+            return fp
+
+        # محاولة من file_storage مباشرة
+        if _FILE_STORAGE_AVAILABLE:
+            fkey = template_key(template_id)
+            if file_exists(fkey):
+                return get_file_as_temp(fkey, ".pdf")
+
+        return None
+    finally:
+        conn.close()
+
+
 def delete_template(template_id):
     conn = get_conn()
     try:
         row = conn.execute(
             "SELECT file_path FROM pdf_templates WHERE id=?", (template_id,)
         ).fetchone()
-        if row and row["file_path"] and os.path.exists(row["file_path"]):
-            try: os.remove(row["file_path"])
-            except: pass
+        if row and row["file_path"]:
+            fp = row["file_path"]
+            if fp.startswith("db:") and _FILE_STORAGE_AVAILABLE:
+                delete_file(fp[3:])
+            elif os.path.exists(fp):
+                try: os.remove(fp)
+                except: pass
+        # حذف من file_storage مباشرة (للتأكد)
+        if _FILE_STORAGE_AVAILABLE:
+            delete_file(template_key(template_id))
         conn.execute("DELETE FROM pdf_templates WHERE id=?", (template_id,))
         conn.commit()
     finally:
