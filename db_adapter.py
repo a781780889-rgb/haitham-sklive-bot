@@ -276,7 +276,18 @@ class _PGCursor:
         self._consumed = False      # هل تم استهلاك _last_row؟
         self._last_was_insert = False
 
+    @staticmethod
+    def _fix_params(params):
+        """يحوّل bytes → psycopg2.Binary لضمان تخزين البيانات الثنائية بشكل صحيح في BYTEA"""
+        if not params:
+            return params
+        return tuple(
+            psycopg2.Binary(p) if isinstance(p, (bytes, bytearray)) else p
+            for p in params
+        )
+
     def execute(self, sql, params=()):
+        params = self._fix_params(params)
         translated = translate_sql(sql)
         if not translated.strip():
             # جملة PRAGMA مُتجاهلة — نعود دون فعل شيء
@@ -309,6 +320,7 @@ class _PGCursor:
         return self
 
     def executemany(self, sql, seq_of_params):
+        seq_of_params = [self._fix_params(p) for p in seq_of_params]
         translated = translate_sql(sql)
         if not translated.strip():
             return self
