@@ -222,7 +222,11 @@ def init_db():
 
     # تهيئة تخزين الملفات في DB
     if _FILE_STORAGE_AVAILABLE:
-        init_file_storage(conn)
+        try:
+            with conn.savepoint("file_storage_init"):
+                init_file_storage(conn)
+        except Exception as e:
+            logger.warning(f"⚠️ file_storage init skipped: {e}")
 
     conn.commit()
 

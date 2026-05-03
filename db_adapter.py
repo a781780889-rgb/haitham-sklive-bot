@@ -238,6 +238,9 @@ def translate_sql(sql: str) -> str:
         # إذا كانت فيها ON CONFLICT بالفعل، لا مشكلة
         s = re.sub(r"\bINSERT\s+OR\s+REPLACE\s+INTO\b", "INSERT INTO", s, flags=re.IGNORECASE)
 
+    # 14-a) BLOB → BYTEA  (PostgreSQL لا يدعم نوع BLOB — يستخدم BYTEA بدلاً منه)
+    s = re.sub(r'\bBLOB\b', 'BYTEA', s, flags=re.IGNORECASE)
+
     # 14) PRAGMA ... — إزالة كاملة (لا يدعمها PostgreSQL)
     if re.match(r"\s*PRAGMA\b", s, flags=re.IGNORECASE):
         return ""  # جملة فارغة — سيتم تخطّيها
