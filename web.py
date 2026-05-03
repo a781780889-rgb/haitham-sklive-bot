@@ -467,7 +467,12 @@ async function doQuery() {
     document.getElementById('loadingOverlay').classList.remove('active');
     if(d.success){
       const v=d.data;
-      const days=(v.days_count&&v.days_count!=='null')?String(v.days_count)+' يوم':'—';
+      const n=parseInt(v.days_count);
+      let days='—';
+      if(v.days_count&&v.days_count!=='null'&&!isNaN(n)){
+        if(n===1) days='يوم';
+        else days=String(n)+' أيام';
+      }
       document.getElementById('rName').textContent      = v.full_name||'—';
       document.getElementById('rIssued').textContent    = v.issued_at?fmtDate(v.issued_at.slice(0,10)):'—';
       document.getElementById('rStart').textContent     = fmtDate(v.excuse_date)||'—';
