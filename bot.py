@@ -1524,7 +1524,8 @@ async def generate_and_send_pdf(update, context, uid):
         return
 
     await update.effective_message.reply_text("⏳ جاري إنشاء ملف PDF...", reply_markup=back_keyboard())
-    pdf_path_temp = None
+    pdf_path_temp  = None
+    template_tmp   = None  # ملف مؤقت للقالب إن استُخرج من BLOB
 
     try:
         logo_path = db.get_hospital_logo(hospital)
@@ -1534,7 +1535,7 @@ async def generate_and_send_pdf(update, context, uid):
 
         # ── جلب القالب من قاعدة البيانات ──
         active_template = db.get_active_template()
-        if not active_template or not active_template.get("file_path"):
+        if not active_template:
             await update.effective_message.reply_text(
                 "❌ *لا يوجد قالب PDF!*\n\n"
                 "يجب رفع قالب أولاً من:\n"
@@ -1545,11 +1546,28 @@ async def generate_and_send_pdf(update, context, uid):
             db.refund_balance(uid, price, "لا يوجد قالب PDF")
             return
 
-        template_path = active_template["file_path"]
-        if not os.path.exists(template_path):
+        # ── تحديد مسار القالب: BLOB من DB أولاً، ثم مسار الملف ──
+        template_file_data = active_template.get("file_data")
+        template_path_db   = active_template.get("file_path", "")
+
+        if template_file_data:
+            # ✅ الأفضل: استخراج BLOB مباشرة من قاعدة البيانات → ملف مؤقت
+            template_tmp = os.path.join(
+                tempfile.gettempdir(),
+                f"tpl_{uid}_{int(datetime.now().timestamp())}.pdf"
+            )
+            with open(template_tmp, "wb") as _tf:
+                _tf.write(template_file_data)
+            template_path = template_tmp
+        elif template_path_db and os.path.exists(template_path_db):
+            # ✅ احتياطي: الملف موجود على القرص
+            template_path = template_path_db
+        else:
+            # ❌ لا بيانات ولا ملف
             await update.effective_message.reply_text(
                 "❌ *ملف القالب مفقود!*\n\n"
-                "أعد رفع القالب من لوحة التحكم.",
+                "أعد رفع القالب من:\n"
+                "⚙️ نظام البوت ← 📄 قوالب PDF ← ➕ إضافة قالب",
                 parse_mode="Markdown",
                 reply_markup=main_menu_keyboard(is_admin_user(uid))
             )
@@ -1644,10 +1662,15 @@ async def generate_and_send_pdf(update, context, uid):
             parse_mode="Markdown", reply_markup=back_keyboard()
         )
     finally:
-        # ✅ حذف الملف المؤقت بأمان
+        # ✅ حذف الملفات المؤقتة بأمان
         try:
             if pdf_path_temp and os.path.exists(pdf_path_temp):
                 os.remove(pdf_path_temp)
+        except Exception:
+            pass
+        try:
+            if template_tmp and os.path.exists(template_tmp):
+                os.remove(template_tmp)
         except Exception:
             pass
 
