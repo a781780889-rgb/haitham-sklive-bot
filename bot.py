@@ -31,6 +31,14 @@ from pdf_gen import (
     _parse_ar_gregorian,
     _GREGORIAN_MONTHS_AR,
 )
+from smart_parser import (
+    smart_parse_full,
+    get_missing,
+    build_missing_prompt,
+    build_smart_preview,
+    parse_any_date,
+    parse_date_range,
+)
 
 # ══════════════════════════════════════════════
 # الإعدادات الثابتة
@@ -1119,31 +1127,81 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await ask_patient_data(update, context)
         return
 
-    # ── جمع بيانات المريض ──
+    # ══════════════════════════════════════════════════════════
+    # ── جمع بيانات المريض بالمحرك الذكي ──
+    # ══════════════════════════════════════════════════════════
     if state == "collecting_data":
-        parsed = parse_free_text_order(text)
+        # ─── تحليل الرسالة بالمحرك الذكي ───────────────────────
+        parsed = smart_parse_full(text)
+
+        # fallback: المحلل القديم إن لم يجد المحرك الجديد شيئاً
+        if not parsed:
+            parsed = parse_free_text_order(text)
+
         if not parsed:
             await update.message.reply_text(
-                "⚠️ لم أتعرف على البيانات.\nأرسلها بالشكل:\n`الاسم الكامل: ...`",
+                "🤖 *لم أتمكن من التعرف على البيانات.*\n\n"
+                "💡 يمكنك الإرسال بأي صيغة، مثلاً:\n"
+                "`الاسم: محمد علي`\n"
+                "`رقم الهوية: 1234567890`\n"
+                "`جهة العمل: شركة أرامكو`\n\n"
+                "أو أرسل البيانات كلها دفعة واحدة.",
                 parse_mode="Markdown", reply_markup=back_keyboard()
             )
             return
+
         od = context.user_data.get("order_data", {})
+
+        # ─── دمج البيانات المُستخرجة مع الموجودة ───────────────
+        # معالجة تاريخ الإجازة بشكل خاص (نطاق)
+        if parsed.get("excuse_date"):
+            od["excuse_date"] = parsed.pop("excuse_date")
+
+        if "exit_date" in parsed:
+            od["exit_date"] = parsed.pop("exit_date")
+
+        if "days_count" in parsed:
+            od["days_count"] = parsed.pop("days_count")
+
         od.update(parsed)
         context.user_data["order_data"] = od
-        missing = get_missing_fields(od)
+
+        # ─── التحقق من الحقول الناقصة ───────────────────────────
+        missing = get_missing(od)
+
         if missing:
-            miss_txt = "\n".join([f"• {f['label']}" for f in missing])
+            # عرض ما تم استيعابه + طلب الناقص
+            received_lines = []
+            labels_map = {
+                'full_name': 'الاسم', 'id_number': 'رقم الهوية',
+                'workplace': 'جهة العمل', 'nationality': 'الجنسية',
+                'city': 'المدينة', 'excuse_date': 'تاريخ الإجازة',
+            }
+            for key, label in labels_map.items():
+                if od.get(key):
+                    received_lines.append(f"  ✅ {label}: *{od[key]}*")
+
+            received_block = "\n".join(received_lines)
+            missing_prompt = build_missing_prompt(od)
+
+            reply = ""
+            if received_block:
+                reply = f"📥 *تم استيعاب:*\n{received_block}\n\n"
+            reply += missing_prompt
+
             await update.message.reply_text(
-                f"⚠️ *الحقول الناقصة:*\n{miss_txt}\n\nأرسلها:",
+                reply,
                 parse_mode="Markdown", reply_markup=back_keyboard()
             )
         else:
+            # ─── اكتملت البيانات ────────────────────────────────
             context.user_data["state"] = "confirm_order"
             context.user_data["prev_state"] = "collecting_data"
-            preview = build_order_preview(context.user_data)
+
+            preview = build_smart_preview(od, context.user_data)
+
             await update.message.reply_text(
-                "✅ *تم استلام جميع البيانات.*\n\n" + preview,
+                "✅ *تم استلام جميع البيانات بنجاح!*\n\n" + preview,
                 parse_mode="Markdown",
                 reply_markup=confirm_keyboard()
             )
@@ -1155,13 +1213,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if state == "confirm_order" and ":" in text:
-        parsed = parse_free_text_order(text)
+        # استخدام المحرك الذكي أولاً ثم القديم كـ fallback
+        parsed = smart_parse_full(text)
+        if not parsed:
+            parsed = parse_free_text_order(text)
         if parsed:
             od = context.user_data.get("order_data", {})
+            if parsed.get("excuse_date"):
+                od["excuse_date"] = parsed.pop("excuse_date")
+            if "exit_date" in parsed:
+                od["exit_date"] = parsed.pop("exit_date")
+            if "days_count" in parsed:
+                od["days_count"] = parsed.pop("days_count")
             od.update(parsed)
             context.user_data["order_data"] = od
             await update.message.reply_text(
-                "✏️ *تم التعديل:*\n\n" + build_order_preview(context.user_data),
+                "✏️ *تم التعديل:*\n\n" + build_smart_preview(od, context.user_data),
                 parse_mode="Markdown", reply_markup=confirm_keyboard()
             )
         return
