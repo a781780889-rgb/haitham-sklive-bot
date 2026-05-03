@@ -5,6 +5,7 @@ bot.py - البوت الرئيسي النسخة الشاملة
 يشمل جميع الأنظمة الخمسة عشر
 """
 
+import io
 import logging
 import os
 import re
@@ -62,6 +63,44 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+
+# ══════════════════════════════════════════════
+# 🔄 تغيير حجم الشعار تلقائياً ليطابق الباركود
+# ══════════════════════════════════════════════
+# حجم QR: version=2, box_size=6, border=1 → (25+2)*6 = 162 بكسل
+_QR_PX = 162
+
+def resize_logo_to_qr_size(image_bytes: bytes) -> bytes:
+    """
+    يعيد تحجيم صورة الشعار تلقائياً لتتناسب مع حجم الباركود:
+    • إذا كان الشعار أكبر → يُصغَّر
+    • إذا كان الشعار أصغر → يُكبَّر
+    النتيجة دائماً مربع بحجم _QR_PX × _QR_PX بكسل (PNG بخلفية شفافة).
+    """
+    try:
+        from PIL import Image
+        img = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
+        src_w, src_h = img.size
+
+        # احسب نسبة التحجيم للحفاظ على النسبة وملء الإطار
+        scale = _QR_PX / max(src_w, src_h)
+        new_w = int(src_w * scale)
+        new_h = int(src_h * scale)
+        img = img.resize((new_w, new_h), Image.LANCZOS)
+
+        # ضع الصورة في مربع شفاف _QR_PX × _QR_PX (توسيط)
+        canvas = Image.new("RGBA", (_QR_PX, _QR_PX), (255, 255, 255, 0))
+        offset_x = (_QR_PX - new_w) // 2
+        offset_y = (_QR_PX - new_h) // 2
+        canvas.paste(img, (offset_x, offset_y), img)
+
+        buf = io.BytesIO()
+        canvas.save(buf, format="PNG")
+        logger.info(f"✅ تم تغيير حجم الشعار: {src_w}×{src_h} → {_QR_PX}×{_QR_PX} بكسل")
+        return buf.getvalue()
+    except Exception as e:
+        logger.warning(f"⚠️ فشل تغيير حجم الشعار: {e} — سيُحفظ بالحجم الأصلي")
+        return image_bytes
 
 # ══════════════════════════════════════════════
 # ══════════════════════════════════════════════
@@ -3044,7 +3083,9 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         file  = await photo.get_file()
         # تحميل الصورة مباشرة إلى الذاكرة وحفظها في DB
         logo_bytes = await file.download_as_bytearray()
-        db.set_hospital_logo(hospital_name, logo_data=bytes(logo_bytes), mime_type="image/jpeg")
+        # 🔄 تغيير الحجم تلقائياً ليطابق الباركود
+        logo_bytes = resize_logo_to_qr_size(bytes(logo_bytes))
+        db.set_hospital_logo(hospital_name, logo_data=logo_bytes, mime_type="image/png")
         # رسالة النجاح
         await update.message.reply_text(
             f"✅ *تم رفع شعار {hospital_name} بنجاح!*\n\n"
@@ -3495,16 +3536,19 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             if len(raw) < 500:
                 raise ValueError("الصورة صغيرة جداً")
 
-            # معالجة الصورة وحفظها
+            # معالجة الصورة وحفظها مع تغيير الحجم تلقائياً
             img = _Img.open(_Bio(raw)).convert("RGBA")
             bg  = _Img.new("RGB", img.size, (255, 255, 255))
             bg.paste(img, mask=img.split()[3] if img.mode == "RGBA" else None)
-            bg.thumbnail((500, 500), _Img.LANCZOS)
+
+            # تغيير الحجم ليطابق الباركود تلقائياً (تكبير أو تصغير)
+            _raw_resized = resize_logo_to_qr_size(raw)
 
             h = _hash.md5(hospital_name.encode()).hexdigest()[:8]
             s = _re.sub(r'[^\w\u0600-\u06FF]', '_', hospital_name)[:35]
-            save_path = os.path.join(LOGOS_DIR, f"{s}_{h}.jpg")
-            bg.save(save_path, "JPEG", quality=92)
+            save_path = os.path.join(LOGOS_DIR, f"{s}_{h}.png")
+            with open(save_path, "wb") as _f:
+                _f.write(_raw_resized)
 
             db.set_hospital_logo(hospital_name, save_path)
 
