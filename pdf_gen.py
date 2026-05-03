@@ -960,20 +960,60 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
     # ─── شعار المستشفى — نفس حجم الباركود تماماً ──────────────
     if logo_path and os.path.exists(logo_path):
         try:
+            from PIL import Image as PILImage
             lx = LOGO_SLOT['x']      * x_scale
             ly = LOGO_SLOT['rl_y']   * y_scale
             lw = LOGO_SLOT['width']  * x_scale   # نفس منطق التحجيم كـ QR_SLOT
             lh = LOGO_SLOT['height'] * y_scale   # نفس منطق التحجيم كـ QR_SLOT
+
+            # تحجيم الشعار ليملأ نفس مساحة الباركود QR بالضبط مع الحفاظ على النسبة
+            # ومحاذاة في المنتصف داخل الخانة
+            orig = PILImage.open(logo_path).convert('RGBA')
+            orig_w, orig_h = orig.size
+            slot_w_px = int(lw * 3)   # تحويل نقاط → بيكسل (تقريبي)
+            slot_h_px = int(lh * 3)
+
+            scale = min(slot_w_px / orig_w, slot_h_px / orig_h)
+            new_w = int(orig_w * scale)
+            new_h = int(orig_h * scale)
+            resized = orig.resize((new_w, new_h), PILImage.LANCZOS)
+
+            # وضع الشعار في منتصف خلفية بيضاء بحجم الخانة
+            canvas_img = PILImage.new('RGBA', (slot_w_px, slot_h_px), (255, 255, 255, 0))
+            offset_x = (slot_w_px - new_w) // 2
+            offset_y = (slot_h_px - new_h) // 2
+            canvas_img.paste(resized, (offset_x, offset_y), resized)
+
+            _logo_buf = io.BytesIO()
+            canvas_img.save(_logo_buf, 'PNG')
+            _logo_buf.seek(0)
+
+            from reportlab.lib.utils import ImageReader as _IR
             c.drawImage(
-                logo_path,
+                _IR(_logo_buf),
                 lx, ly,
                 width=lw,
                 height=lh,
-                preserveAspectRatio=True,
+                preserveAspectRatio=False,
                 mask='auto',
             )
         except Exception:
-            pass
+            # fallback بسيط إن فشل PIL
+            try:
+                lx = LOGO_SLOT['x']      * x_scale
+                ly = LOGO_SLOT['rl_y']   * y_scale
+                lw = LOGO_SLOT['width']  * x_scale
+                lh = LOGO_SLOT['height'] * y_scale
+                c.drawImage(
+                    logo_path,
+                    lx, ly,
+                    width=lw,
+                    height=lh,
+                    preserveAspectRatio=False,
+                    mask='auto',
+                )
+            except Exception:
+                pass
 
     # ─── رسم باركود QR في موضعه الأصلي ─────────────────────────────
     SEHA_URL = "https://www.sehasaa.com"
