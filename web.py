@@ -219,95 +219,201 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
 </div>
 
 <!-- صفحة النتيجة -->
-<div class="result-page" id="resultPage">
-  <header class="seha-header">
-    <div class="seha-header-title">الإجازات المرضية</div>
-    <div>LOGO_PLACEHOLDER</div>
+<div class="result-page" id="resultPage" dir="rtl" style="min-height:100vh;background:white;font-family:sans-serif;color:#333;">
+
+  <!-- Header -->
+  <header style="display:flex;align-items:center;justify-content:space-between;padding:10px 20px;border-bottom:1px solid #f0f0f0;background:white;position:sticky;top:0;z-index:50;">
+    <div style="display:flex;align-items:center;">
+      <div style="position:relative;width:48px;height:40px;display:flex;align-items:center;justify-content:center;transform:translateX(4px);">
+        <svg width="44" height="32" viewBox="0 0 44 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect x="0" y="28" width="6" height="2" rx="1" fill="#8cb3cf"/>
+          <rect x="2" y="25" width="8" height="2" rx="1" fill="#8cb3cf"/>
+          <rect x="4" y="22" width="10" height="2" rx="1" fill="#8cb3cf"/>
+          <rect x="6" y="19" width="11" height="2" rx="1" fill="#8cb3cf"/>
+          <rect x="8" y="16" width="12" height="2" rx="1" fill="#8cb3cf"/>
+          <rect x="12" y="13" width="14" height="2" rx="1" fill="#8cb3cf"/>
+          <rect x="15" y="10" width="16" height="2" rx="1" fill="#8cb3cf"/>
+          <rect x="18" y="7" width="19" height="2" rx="1" fill="#8cb3cf"/>
+          <rect x="21" y="4" width="22" height="2" rx="1" fill="#8cb3cf"/>
+          <rect x="24" y="1" width="25" height="2" rx="1" fill="#8cb3cf"/>
+        </svg>
+      </div>
+      <div style="height:36px;width:1px;background:#e0e0e0;margin:0 8px;"></div>
+      <div style="text-align:right;display:flex;flex-direction:column;justify-content:center;">
+        <p style="font-size:18px;font-weight:bold;line-height:1;color:#333;margin:0;">صحة</p>
+        <p style="font-size:11px;font-weight:bold;color:#333;margin-top:6px;opacity:0.7;">Seha</p>
+      </div>
+    </div>
+    <button onclick="doReset()" style="display:flex;flex-direction:column;gap:5px;padding:8px;background:none;border:none;cursor:pointer;">
+      <div style="width:28px;height:3px;background:#8cb3cf;border-radius:9999px;"></div>
+      <div style="width:28px;height:3px;background:#8cb3cf;border-radius:9999px;"></div>
+      <div style="width:28px;height:3px;background:#8cb3cf;border-radius:9999px;"></div>
+    </button>
   </header>
 
-  <div class="seha-body">
-    <div class="seha-page-title">الإجازات المرضية</div>
-    <div class="seha-page-subtitle">خدمة الاستعلام عن الإجازات المرضية تتيح لك الاستعلام عن حالة طلبك للإجازة ويمكنك طباعتها عن طريق تطبيق صحي</div>
+  <!-- Main -->
+  <main style="max-width:448px;margin:0 auto;padding:64px 16px 96px;display:flex;flex-direction:column;align-items:center;">
 
-    <!-- النجاح -->
-    <div id="successSection" style="display:none;">
-      <div class="info-card">
-        <div class="info-card-header"></div>
-        <div class="data-row">
-          <div class="data-label">الاسم</div>
-          <div class="data-colon">:</div>
-          <div class="data-value" id="rName">—</div>
-        </div>
-        <div class="data-row">
-          <div class="data-label">تاريخ إصدار التقرير</div>
-          <div class="data-colon">:</div>
-          <div class="data-value" id="rIssued">—</div>
-        </div>
-        <div class="data-row">
-          <div class="data-label">تبدأ من</div>
-          <div class="data-colon">:</div>
-          <div class="data-value" id="rStart">—</div>
-        </div>
-        <div class="data-row">
-          <div class="data-label">وحتى</div>
-          <div class="data-colon">:</div>
-          <div class="data-value" id="rEnd">—</div>
-        </div>
-        <div class="data-row">
-          <div class="data-label">المدة بالأيام</div>
-          <div class="data-colon">:</div>
-          <div class="data-value" id="rDays">—</div>
-        </div>
-        <div class="data-row">
-          <div class="data-label">اسم الطبيب</div>
-          <div class="data-colon">:</div>
-          <div class="data-value" id="rDoctor">—</div>
-        </div>
-        <div class="data-row" style="border-bottom:none;">
-          <div class="data-label">المسمى الوظيفي</div>
-          <div class="data-colon">:</div>
-          <div class="data-value" id="rSpecialty">—</div>
+    <!-- Title Section -->
+    <div style="text-align:center;margin-bottom:56px;">
+      <h1 style="font-size:44px;font-weight:900;color:#2e6da4;margin-bottom:24px;line-height:1;">الإجازات المرضية</h1>
+      <p style="color:#888;font-size:16px;line-height:1.8;padding:0 16px;font-weight:500;">
+        خدمة الاستعلام عن الإجازات المرضية تتيح لك الاستعلام عن حالة طلبك للإجازة ويمكنك طباعتها عن طريق تطبيق صحتي
+      </p>
+    </div>
+
+    <!-- Success Section -->
+    <div id="successSection" style="display:none;width:100%;">
+      <!-- Inquiry Card -->
+      <div style="width:100%;background:white;border:1px solid #eeeeee;border-radius:2px;padding:64px 48px;box-shadow:0 1px 8px rgba(0,0,0,0.02);margin-bottom:56px;">
+        <div style="display:flex;flex-direction:column;gap:64px;">
+          <div style="text-align:center;">
+            <p style="color:#333;font-weight:bold;font-size:20px;margin-bottom:12px;">الاسم:</p>
+            <p style="color:#bbb;font-size:15px;font-weight:500;" id="rName">.</p>
+          </div>
+          <div style="text-align:center;">
+            <p style="color:#333;font-weight:bold;font-size:20px;margin-bottom:12px;">تاريخ إصدار تقرير الإجازة:</p>
+            <p style="color:#bbb;font-size:15px;font-weight:500;" id="rIssued">.</p>
+          </div>
+          <div style="text-align:center;">
+            <p style="color:#333;font-weight:bold;font-size:20px;margin-bottom:12px;">تبدأ من:</p>
+            <p style="color:#bbb;font-size:15px;font-weight:500;" id="rStart">.</p>
+          </div>
+          <div style="text-align:center;">
+            <p style="color:#333;font-weight:bold;font-size:20px;margin-bottom:12px;">وحتى:</p>
+            <p style="color:#bbb;font-size:15px;font-weight:500;" id="rEnd">.</p>
+          </div>
+          <div style="text-align:center;">
+            <p style="color:#333;font-weight:bold;font-size:20px;margin-bottom:12px;">المدة بالأيام:</p>
+            <p style="color:#bbb;font-size:15px;font-weight:500;" id="rDays">.</p>
+          </div>
+          <div style="text-align:center;">
+            <p style="color:#333;font-weight:bold;font-size:20px;margin-bottom:12px;">اسم الطبيب:</p>
+            <p style="color:#bbb;font-size:15px;font-weight:500;" id="rDoctor">.</p>
+          </div>
+          <div style="text-align:center;">
+            <p style="color:#333;font-weight:bold;font-size:20px;margin-bottom:12px;">المسمى الوظيفي:</p>
+            <p style="color:#bbb;font-size:15px;font-weight:500;" id="rSpecialty">.</p>
+          </div>
         </div>
       </div>
-      <div class="btn-group">
-        <button class="btn-primary"    onclick="doReset()">استعلام جديد</button>
-        <button class="btn-secondary"  onclick="doReset()">رجوع للاستعلامات</button>
+
+      <!-- Actions -->
+      <div style="width:100%;display:flex;flex-direction:column;align-items:center;gap:20px;margin-bottom:96px;">
+        <button onclick="doReset()" style="width:200px;background:#337ab7;color:white;font-weight:bold;font-size:16px;padding:14px 0;border-radius:4px;border:none;cursor:pointer;">
+          استعلام جديد
+        </button>
+        <button onclick="doReset()" style="width:200px;background:#337ab7;color:white;font-weight:bold;font-size:16px;padding:14px 0;border-radius:4px;border:none;cursor:pointer;">
+          رجوع للاستعلامات
+        </button>
       </div>
     </div>
 
-    <!-- الخطأ -->
-    <div id="errorSection" style="display:none;">
-      <div class="result-error-card">
-        <div class="result-error-icon">⚠️</div>
-        <div class="result-error-title" id="errTitle">تعذّر الاستعلام</div>
-        <div class="result-error-sub"   id="errSub">تأكد من رمز الخدمة ورقم الهوية وحاول مجدداً.</div>
+    <!-- Error Section -->
+    <div id="errorSection" style="display:none;width:100%;">
+      <div style="width:100%;background:white;border:1px solid #eeeeee;border-radius:2px;padding:48px 32px;box-shadow:0 1px 8px rgba(0,0,0,0.02);margin-bottom:56px;text-align:center;">
+        <div style="font-size:40px;margin-bottom:16px;">⚠️</div>
+        <div style="font-size:18px;font-weight:bold;color:#c62828;margin-bottom:8px;" id="errTitle">تعذّر الاستعلام</div>
+        <div style="font-size:14px;color:#888;line-height:1.6;" id="errSub">تأكد من رمز الخدمة ورقم الهوية وحاول مجدداً.</div>
       </div>
-      <div class="btn-group">
-        <button class="btn-primary"    onclick="doReset()">استعلام جديد</button>
-        <button class="btn-secondary"  onclick="doReset()">رجوع للاستعلامات</button>
+      <div style="width:100%;display:flex;flex-direction:column;align-items:center;gap:20px;margin-bottom:96px;">
+        <button onclick="doReset()" style="width:200px;background:#337ab7;color:white;font-weight:bold;font-size:16px;padding:14px 0;border-radius:4px;border:none;cursor:pointer;">
+          استعلام جديد
+        </button>
+        <button onclick="doReset()" style="width:200px;background:#337ab7;color:white;font-weight:bold;font-size:16px;padding:14px 0;border-radius:4px;border:none;cursor:pointer;">
+          رجوع للاستعلامات
+        </button>
       </div>
     </div>
-  </div>
 
-  <!-- الفوتر -->
-  <footer class="seha-footer">
-    <div class="footer-logo-row">
-      <div class="footer-logo-box">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17L4 12" stroke="#1565c0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+  </main>
+
+  <!-- Footer -->
+  <footer style="background:#337ab7;color:white;padding-top:56px;padding-bottom:48px;">
+    <div style="max-width:1200px;margin:0 auto;padding:0 24px;display:flex;flex-direction:column;align-items:center;text-align:center;">
+
+      <!-- Logo in Footer -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:40px;">
+        <div style="position:relative;width:48px;height:40px;display:flex;align-items:center;justify-content:center;transform:scale(1.1);">
+          <svg width="50" height="36" viewBox="0 0 50 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="18" width="6" height="1.8" rx="0.9" fill="white" fill-opacity="0.8"/>
+            <rect x="6" y="21" width="8" height="1.8" rx="0.9" fill="white" fill-opacity="0.8"/>
+            <rect x="8" y="24" width="10" height="1.8" rx="0.9" fill="white" fill-opacity="0.8"/>
+            <rect x="11" y="27" width="11" height="1.8" rx="0.9" fill="white" fill-opacity="0.8"/>
+            <rect x="14" y="30" width="12" height="1.8" rx="0.9" fill="white" fill-opacity="0.8"/>
+            <rect x="23" y="28" width="14" height="1.8" rx="0.9" fill="white" fill-opacity="0.8"/>
+            <rect x="26" y="24" width="16" height="1.8" rx="0.9" fill="white" fill-opacity="0.8"/>
+            <rect x="29" y="20" width="19" height="1.8" rx="0.9" fill="white" fill-opacity="0.8"/>
+            <rect x="32" y="16" width="22" height="1.8" rx="0.9" fill="white" fill-opacity="0.8"/>
+            <rect x="35" y="12" width="25" height="1.8" rx="0.9" fill="white" fill-opacity="0.8"/>
+            <rect x="38" y="8" width="28" height="1.8" rx="0.9" fill="white" fill-opacity="0.8"/>
+            <rect x="41" y="4" width="31" height="1.8" rx="0.9" fill="white" fill-opacity="0.8"/>
+            <rect x="44" y="0" width="34" height="1.8" rx="0.9" fill="white" fill-opacity="0.8"/>
+          </svg>
+        </div>
+        <div style="text-align:right;">
+          <p style="font-size:28px;font-weight:bold;line-height:1;margin:0;">صحة</p>
+          <p style="font-size:13px;font-weight:300;opacity:0.8;margin-top:4px;">Seha</p>
+        </div>
       </div>
-      <span class="footer-brand">Seha | صحة</span>
+
+      <p style="font-size:13.5px;line-height:1.8;opacity:0.9;max-width:384px;margin-bottom:48px;padding:0 8px;">
+        منصة صحة تخدم جميع المنشآت الطبية من خلال تقديم الخدمات الصحية إلكترونياً لجميع المنشآت الطبية وتسعى إلى توحيد وأتمتة الإجراءات والخدمات بما في ذلك رفع جودة الأداء وخفض التكاليف.
+      </p>
+
+      <div style="width:100%;margin-bottom:48px;">
+        <div style="display:inline-block;position:relative;margin-bottom:24px;">
+          <h3 style="font-size:18px;font-weight:bold;margin:0;">القائمة الرئيسية</h3>
+          <div style="height:2px;background:rgba(255,255,255,0.4);margin-top:4px;width:100%;"></div>
+        </div>
+        <ul style="list-style:none;padding:0;margin:0;font-size:14px;">
+          <li style="padding:12px 0;display:flex;align-items:center;justify-content:center;border-bottom:1px solid rgba(255,255,255,0.1);">
+            <a href="#" style="color:white;text-decoration:none;opacity:0.9;">الخدمات</a>
+          </li>
+          <li style="padding:12px 0;display:flex;align-items:center;justify-content:center;border-bottom:1px solid rgba(255,255,255,0.1);">
+            <a href="#" style="color:white;text-decoration:none;opacity:0.9;">الاستعلامات</a>
+          </li>
+          <li style="padding:12px 0;display:flex;align-items:center;justify-content:center;border-bottom:1px solid rgba(255,255,255,0.1);">
+            <a href="#" style="color:white;text-decoration:none;opacity:0.9;">الأسئلة الشائعة</a>
+          </li>
+          <li style="padding:12px 0;display:flex;align-items:center;justify-content:center;">
+            <a href="#" style="color:white;text-decoration:none;opacity:0.9;">تواصل معنا</a>
+          </li>
+        </ul>
+      </div>
+
+      <div style="width:100%;margin-bottom:48px;">
+        <div style="display:inline-block;position:relative;margin-bottom:32px;">
+          <h3 style="font-size:18px;font-weight:bold;margin:0;">تواصل معنا</h3>
+          <div style="height:2px;background:rgba(255,255,255,0.4);margin-top:4px;width:100%;"></div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:12px;font-size:14px;">
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span style="opacity:0.9;">920002005</span>
+            <span>📞</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span style="opacity:0.9;">contactus@seha.sa</span>
+            <span>✉️</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <span style="opacity:0.9;">920002005</span>
+            <span style="width:20px;height:20px;border-radius:50%;border:1px solid white;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;">W</span>
+          </div>
+          <p style="font-size:11px;opacity:0.7;margin-top:4px;">أوقات العمل: الأحد حتى الخميس 8ص - 11م</p>
+        </div>
+      </div>
+
+      <div style="width:100%;border-top:1px solid rgba(255,255,255,0.1);padding-top:32px;display:flex;flex-direction:column;gap:12px;font-size:11px;opacity:0.6;">
+        <p style="margin:0;">منصة صحة معتمدة من قبل وزارة الصحة 2023 ©</p>
+        <div style="display:flex;justify-content:center;gap:16px;">
+          <a href="#" style="color:white;text-decoration:none;">سياسة الخصوصية</a>
+          <span>|</span>
+          <a href="#" style="color:white;text-decoration:none;">الشروط والأحكام</a>
+        </div>
+      </div>
+
     </div>
-    <div class="footer-desc">منصة صحة تخدم جميع المنشآت الطبية من خلال تقديم الخدمات الصحية إلكترونياً وتسعى إلى توحيد وأتمتة الإجراءات والخدمات الطبية بما في دوره رفع جودة الأداء وخفض التكاليف.</div>
-    <div class="footer-nav-title">القائمة الرئيسية</div>
-    <ul class="footer-nav-links">
-      <li>الخدمات</li><li>الاستعلامات</li><li>الأسئلة الشائعة</li><li>تواصل معنا</li>
-    </ul>
-    <div class="footer-contact-title">تواصل معنا</div>
-    <div class="footer-contact-row"><div class="footer-contact-icon">📞</div><span>920002005</span></div>
-    <div class="footer-contact-row"><div class="footer-contact-icon">✉️</div><span>info@seha.sa</span></div>
-    <div class="footer-contact-row"><div class="footer-contact-icon">💬</div><span>920002005</span></div>
-    <div class="footer-hours">أوقات العمل: الأحد حتى الخميس 8 ص - 11 م</div>
-    <div class="footer-copy">منصة صحة مُعتمدة من قِبَل وزارة الصحة © 2025<br><span style="font-size:10px;">سياسة الخصوصية • شروط الاستخدام • طريق الاستخدام</span></div>
   </footer>
 </div>
 
