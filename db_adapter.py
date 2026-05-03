@@ -241,6 +241,18 @@ def translate_sql(sql: str) -> str:
     # 14-a) BLOB → BYTEA  (PostgreSQL لا يدعم نوع BLOB — يستخدم BYTEA بدلاً منه)
     s = re.sub(r'\bBLOB\b', 'BYTEA', s, flags=re.IGNORECASE)
 
+    # 14-b) INTEGER PRIMARY KEY (بدون AUTOINCREMENT) → BIGINT PRIMARY KEY
+    #        لدعم Telegram user_id الذي يتجاوز حد INTEGER (32-bit) في PostgreSQL
+    s = re.sub(
+        r'\bINTEGER\s+PRIMARY\s+KEY\b(?!\s+AUTOINCREMENT)',
+        'BIGINT PRIMARY KEY',
+        s, flags=re.IGNORECASE,
+    )
+
+    # 14-c) بقية أعمدة INTEGER → BIGINT (لتجنب تجاوز النطاق في أي عمود)
+    #        نتجنب المساس بـ SERIAL PRIMARY KEY الذي تم تحويله مسبقاً
+    s = re.sub(r'\bINTEGER\b(?!\s+PRIMARY)', 'BIGINT', s, flags=re.IGNORECASE)
+
     # 14) PRAGMA ... — إزالة كاملة (لا يدعمها PostgreSQL)
     if re.match(r"\s*PRAGMA\b", s, flags=re.IGNORECASE):
         return ""  # جملة فارغة — سيتم تخطّيها
