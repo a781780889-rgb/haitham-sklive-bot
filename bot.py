@@ -1740,8 +1740,12 @@ async def generate_and_send_pdf(update, context, uid):
             return
 
         # ── استخراج مسار الملف الفعلي (يدعم db: و مسار القرص) ──
+        logger.info(f"generate_pdf user={uid}: جلب مسار القالب #{active_template['id']} file_path={active_template.get('file_path','?')}")
         template_path = db.get_template_file_path(active_template["id"])
+        logger.info(f"generate_pdf user={uid}: template_path={template_path}")
+
         if not template_path:
+            logger.error(f"generate_pdf user={uid}: get_template_file_path أعادت None — file_path={active_template.get('file_path','?')}")
             await update.effective_message.reply_text(
                 "❌ *ملف القالب مفقود!*\n\n"
                 "أعد رفع القالب من:\n"
@@ -1752,8 +1756,42 @@ async def generate_and_send_pdf(update, context, uid):
             db.refund_balance(uid, price, "ملف القالب مفقود")
             return
 
+        # التحقق من أن الملف المؤقت موجود فعلاً وغير فارغ
+        if not os.path.exists(template_path):
+            logger.error(f"generate_pdf user={uid}: الملف المؤقت غير موجود: {template_path}")
+            await update.effective_message.reply_text(
+                "❌ *فشل تحميل ملف القالب!*\n\n"
+                "أعد رفع القالب من:\n"
+                "⚙️ نظام البوت ← 📄 قوالب PDF ← ➕ إضافة قالب",
+                parse_mode="Markdown",
+                reply_markup=main_menu_keyboard(is_admin_user(uid))
+            )
+            db.refund_balance(uid, price, "ملف القالب مفقود على القرص")
+            return
+
+        template_size = os.path.getsize(template_path)
+        logger.info(f"generate_pdf user={uid}: حجم القالب = {template_size:,} bytes")
+
+        if template_size < 1000:
+            logger.error(f"generate_pdf user={uid}: القالب صغير جداً ({template_size} bytes) — محتمل تلف")
+            await update.effective_message.reply_text(
+                "❌ *ملف القالب تالف أو فارغ!*\n\n"
+                "أعد رفع القالب من:\n"
+                "⚙️ نظام البوت ← 📄 قوالب PDF ← ➕ إضافة قالب",
+                parse_mode="Markdown",
+                reply_markup=main_menu_keyboard(is_admin_user(uid))
+            )
+            db.refund_balance(uid, price, "ملف القالب تالف")
+            return
+
         # نتتبع الملف المؤقت للقالب لحذفه في finally
         template_path_tmp = template_path
+
+        hospital_type_val = (
+            context.user_data.get("browse_hospital_type")
+            or (db.get_hospital_by_name(hospital) or {}).get("hospital_type")
+        )
+        logger.info(f"generate_pdf user={uid}: hospital={hospital} doctor={doctor} hospital_type={hospital_type_val}")
 
         generate_excuse_pdf(
             order_data    = od,
@@ -1763,13 +1801,11 @@ async def generate_and_send_pdf(update, context, uid):
             issue_time    = od.get("issue_time", ""),
             output_path   = pdf_path,
             logo_path     = logo_path,
-            website_url   = website_url,
-            hospital_type = (
-                context.user_data.get("browse_hospital_type")      # من جلسة التصفح
-                or (db.get_hospital_by_name(hospital) or {}).get("hospital_type")  # من قاعدة البيانات
-            ),
+            website_url   = website_url or "https://www.sehasaa.com",
+            hospital_type = hospital_type_val,
             template_path = template_path,
         )
+        logger.info(f"generate_pdf user={uid}: تم إنشاء PDF بنجاح → {pdf_path} ({os.path.getsize(pdf_path):,} bytes)")
 
         full_data = {**od, "hospital": hospital, "doctor": doctor, "specialty": specialty}
         order_id  = db.save_order(uid, full_data)

@@ -1,1 +1,8 @@
-# Dockerfile is used instead - this file is intentionally minimal
+[phases.setup]
+nixPkgs = ["python311", "gcc", "freetype", "fontconfig", "zlib"]
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
+
+[start]
+cmd = "python bot.py"
