@@ -2272,7 +2272,8 @@ async def handle_logos(update, context, text, uid):
     if text == "🔍 المستشفيات التي تحتاج شعار":
         # المستشفيات المسجّلة في DB بدون شعار
         hospitals_no_logo = [
-            h for h in hospitals_all
+            {"name": h["name"], "city": h.get("city", "")}
+            for h in hospitals_all
             if not has_logo(h)
         ]
         # ✅ إضافة المستشفيات من KSA_HOSPITALS غير المسجّلة في DB أصلاً
@@ -2281,7 +2282,7 @@ async def handle_logos(update, context, text, uid):
             for cat in ["حكومي", "خاص", "مجمعات"]:
                 for hname in city_data.get(cat, []):
                     if hname not in db_names:
-                        hospitals_no_logo.append({"name": hname, "city": city, "logo_path": None})
+                        hospitals_no_logo.append({"name": hname, "city": city})
                         db_names.add(hname)
         if not hospitals_no_logo:
             await update.message.reply_text(
@@ -2291,22 +2292,88 @@ async def handle_logos(update, context, text, uid):
         else:
             context.user_data["state"] = "admin_logo_no_logo_select"
             context.user_data["logo_action"] = "upload"
+            context.user_data["no_logo_list"] = hospitals_no_logo
+            context.user_data["no_logo_page"] = 0
+            # ✅ عرض بصفحات (25 مستشفى لكل صفحة) لتجنب تجاوز حد تيليغرام
+            PAGE = 25
+            total_pages = max(1, (len(hospitals_no_logo) + PAGE - 1) // PAGE)
+            page_items = hospitals_no_logo[:PAGE]
             rows = [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]]
-            for h in hospitals_no_logo:
+            for h in page_items:
                 rows.append([KeyboardButton(f"⬜ {h['name']} — {h.get('city', '')}")])
+            if total_pages > 1:
+                rows.append([KeyboardButton(f"التالي ▶️ (2/{total_pages})")])
             await update.message.reply_text(
-                f"🔍 *المستشفيات التي تحتاج شعار ({len(hospitals_no_logo)}):*\n\n"
+                f"🔍 *المستشفيات التي تحتاج شعار ({len(hospitals_no_logo)}):*\n"
+                f"📄 الصفحة 1 من {total_pages}\n\n"
                 f"اختر المستشفى لرفع شعاره:",
                 parse_mode="Markdown",
                 reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
             )
         return
 
-    # ── اختيار مستشفى من قائمة "تحتاج شعار"
+    # ── اختيار مستشفى من قائمة "تحتاج شعار" (مع دعم التنقل بين الصفحات)
     if state == "admin_logo_no_logo_select":
+        PAGE = 25
+        hospitals_no_logo = context.user_data.get("no_logo_list", [])
+        cur_page = context.user_data.get("no_logo_page", 0)
+        total_pages = max(1, (len(hospitals_no_logo) + PAGE - 1) // PAGE)
+
+        # ── زر التالي
+        if text.startswith("التالي ▶️"):
+            cur_page = min(total_pages - 1, cur_page + 1)
+            context.user_data["no_logo_page"] = cur_page
+            start = cur_page * PAGE
+            page_items = hospitals_no_logo[start:start + PAGE]
+            rows = [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]]
+            for h in page_items:
+                rows.append([KeyboardButton(f"⬜ {h['name']} — {h.get('city', '')}")])
+            nav = []
+            if cur_page > 0:
+                nav.append(KeyboardButton(f"◀️ السابق ({cur_page}/{total_pages})"))
+            if cur_page < total_pages - 1:
+                nav.append(KeyboardButton(f"التالي ▶️ ({cur_page + 2}/{total_pages})"))
+            if nav:
+                rows.append(nav)
+            await update.message.reply_text(
+                f"🔍 *المستشفيات التي تحتاج شعار ({len(hospitals_no_logo)}):*\n"
+                f"📄 الصفحة {cur_page + 1} من {total_pages}\n\n"
+                f"اختر المستشفى لرفع شعاره:",
+                parse_mode="Markdown",
+                reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+            )
+            return
+
+        # ── زر السابق
+        if text.startswith("◀️ السابق"):
+            cur_page = max(0, cur_page - 1)
+            context.user_data["no_logo_page"] = cur_page
+            start = cur_page * PAGE
+            page_items = hospitals_no_logo[start:start + PAGE]
+            rows = [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]]
+            for h in page_items:
+                rows.append([KeyboardButton(f"⬜ {h['name']} — {h.get('city', '')}")])
+            nav = []
+            if cur_page > 0:
+                nav.append(KeyboardButton(f"◀️ السابق ({cur_page}/{total_pages})"))
+            if cur_page < total_pages - 1:
+                nav.append(KeyboardButton(f"التالي ▶️ ({cur_page + 2}/{total_pages})"))
+            if nav:
+                rows.append(nav)
+            await update.message.reply_text(
+                f"🔍 *المستشفيات التي تحتاج شعار ({len(hospitals_no_logo)}):*\n"
+                f"📄 الصفحة {cur_page + 1} من {total_pages}\n\n"
+                f"اختر المستشفى لرفع شعاره:",
+                parse_mode="Markdown",
+                reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+            )
+            return
+
+        # ── اختيار مستشفى
         clean = text.replace("⬜ ", "").strip()
         if " — " in clean:
             clean = clean.split(" — ")[0].strip()
+        # ابحث في DB أولاً
         matched = next((h for h in hospitals_all if h["name"] == clean), None)
         if not matched:
             results = db.search_hospitals(clean)
@@ -2323,13 +2390,17 @@ async def handle_logos(update, context, text, uid):
                 db.add_hospital(ksa_match[0], ksa_match[1], ksa_match[2])
                 hospitals_all_fresh = db.get_all_hospitals()
                 matched = next((h for h in hospitals_all_fresh if h["name"] == clean), None)
+        # fallback: نبني dict بسيط من اسم المستشفى فقط
+        if not matched and clean:
+            matched = {"name": clean, "city": ""}
         if matched:
-            context.user_data["logo_hospital"] = matched["name"]
-            context.user_data["logo_target"]   = matched["name"]
+            hospital_name = matched["name"] if isinstance(matched, dict) else matched
+            context.user_data["logo_hospital"] = hospital_name
+            context.user_data["logo_target"]   = hospital_name
             context.user_data["state"] = "admin_logo_upload"
             context.user_data["logo_came_from_no_logo"] = True
             await update.message.reply_text(
-                f"✅ المستشفى: *{matched['name']}*\n\n"
+                f"✅ المستشفى: *{hospital_name}*\n\n"
                 f"اختر طريقة إضافة الشعار:",
                 parse_mode="Markdown",
                 reply_markup=InlineKeyboardMarkup([
