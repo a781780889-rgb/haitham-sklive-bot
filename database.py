@@ -780,16 +780,18 @@ def increment_doctor_orders(doctor_name, hospital_name):
 def add_pdf_template(name, hospital_name, file_path=None, file_data: bytes = None):
     """
     يضيف قالب PDF.
-    - file_data: بيانات PDF مباشرة (مُخزَّنة في DB)
+    - file_data: بيانات PDF مباشرة (مخزنة في DB)
     - file_path: مسار على القرص (للتوافق القديم)
-    يُعيد ID القالب الجديد.
+    يعيد ID القالب الجديد.
+
+    الاصلاح: استخدام اتصال واحد لجميع العمليات بما فيها حفظ BLOB
+    لتجنب تعارض قفل SQLite عند فتح اتصالات متعددة على نفس الملف.
     """
     conn = get_conn()
     try:
         row = conn.execute("SELECT id FROM hospitals WHERE name=?", (hospital_name,)).fetchone()
         hospital_id = row["id"] if row else None
 
-        # حفظ في DB أولاً لنحصل على ID
         cur = conn.execute(
             "INSERT INTO pdf_templates (name, hospital_id, file_path) VALUES (?,?,?)",
             (name, hospital_id, file_path or "pending")
@@ -797,20 +799,52 @@ def add_pdf_template(name, hospital_name, file_path=None, file_data: bytes = Non
         conn.commit()
         tpl_id = cur.lastrowid
 
-        # حفظ البيانات في file_storage
-        if _FILE_STORAGE_AVAILABLE and file_data:
+        if not tpl_id:
+            logger.error("add_pdf_template: فشل الحصول على ID القالب الجديد")
+            return None
+
+        if _FILE_STORAGE_AVAILABLE:
             fkey = template_key(tpl_id)
-            save_file(fkey, file_data, f"{name}.pdf", "application/pdf", "template")
-            conn.execute("UPDATE pdf_templates SET file_path=? WHERE id=?", (f"db:{fkey}", tpl_id))
-            conn.commit()
-        elif file_path and _FILE_STORAGE_AVAILABLE and os.path.exists(file_path):
-            # رحّل من القرص إلى DB
-            fkey = template_key(tpl_id)
-            save_file_from_path(fkey, file_path, "application/pdf", "template")
-            conn.execute("UPDATE pdf_templates SET file_path=? WHERE id=?", (f"db:{fkey}", tpl_id))
-            conn.commit()
+            blob = None
+            if file_data:
+                blob = file_data
+            elif file_path and os.path.exists(file_path):
+                try:
+                    with open(file_path, "rb") as _f:
+                        blob = _f.read()
+                except Exception as _e:
+                    logger.error(f"add_pdf_template: فشل قراءة الملف {file_path}: {_e}")
+
+            if blob:
+                conn.execute("""
+                    INSERT INTO file_blobs
+                        (file_key, file_name, mime_type, data, size_bytes, category, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+                    ON CONFLICT(file_key) DO UPDATE SET
+                        file_name  = excluded.file_name,
+                        mime_type  = excluded.mime_type,
+                        data       = excluded.data,
+                        size_bytes = excluded.size_bytes,
+                        category   = excluded.category,
+                        updated_at = datetime('now')
+                """, (fkey, f"{name}.pdf", "application/pdf", blob, len(blob), "template"))
+                conn.execute(
+                    "UPDATE pdf_templates SET file_path=? WHERE id=?",
+                    (f"db:{fkey}", tpl_id)
+                )
+                conn.commit()
+                logger.info(f"add_pdf_template: قالب #{tpl_id} '{name}' - {len(blob):,} bytes محفوظ")
+            else:
+                logger.warning(f"add_pdf_template: لا توجد بيانات للقالب #{tpl_id}")
 
         return tpl_id
+    except Exception as _exc:
+        logger.error(f"add_pdf_template error: {_exc}", exc_info=True)
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
     finally:
         conn.close()
 

@@ -1665,7 +1665,8 @@ async def generate_and_send_pdf(update, context, uid):
         return
 
     await update.effective_message.reply_text("⏳ جاري إنشاء ملف PDF...", reply_markup=back_keyboard())
-    pdf_path_temp = None
+    pdf_path_temp     = None
+    template_path_tmp = None   # ملف مؤقت للقالب يُحذف في finally
 
     try:
         logo_path = db.get_hospital_logo(hospital)
@@ -1699,6 +1700,9 @@ async def generate_and_send_pdf(update, context, uid):
             db.refund_balance(uid, price, "ملف القالب مفقود")
             return
 
+        # نتتبع الملف المؤقت للقالب لحذفه في finally
+        template_path_tmp = template_path
+
         generate_excuse_pdf(
             order_data    = od,
             hospital      = hospital,
@@ -1721,7 +1725,7 @@ async def generate_and_send_pdf(update, context, uid):
         context.user_data["pdf_issued"] = True
         context.user_data["pdf_order_id"] = order_id
         db.update_order_pdf(order_id, pdf_path)
-        db.update_balance(uid, -price)
+        # ✅ تم الخصم مسبقاً بـ try_deduct_balance — لا نخصم مرة ثانية
         db.increment_doctor_orders(doctor, hospital)
         db.log_activity(uid, "order_created", f"طلب #{order_id} — {hospital}")
 
@@ -1792,10 +1796,16 @@ async def generate_and_send_pdf(update, context, uid):
     finally:
         # ✅ تحرير قفل المعالجة دائماً
         _processing_lock.pop(uid, None)
-        # ✅ حذف الملف المؤقت بأمان
+        # ✅ حذف ملف PDF المؤقت بأمان
         try:
             if pdf_path_temp and os.path.exists(pdf_path_temp):
                 os.remove(pdf_path_temp)
+        except Exception:
+            pass
+        # ✅ حذف الملف المؤقت للقالب (كان مُنزَّلاً من DB إلى /tmp)
+        try:
+            if template_path_tmp and os.path.exists(template_path_tmp):
+                os.remove(template_path_tmp)
         except Exception:
             pass
 
