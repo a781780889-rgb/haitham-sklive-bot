@@ -8,6 +8,7 @@ __pycache__/
 logos/
 signatures/
 templates/*.pdf
+!templates/default_template.pdf
 /tmp/
 *.jpg
 *.png

@@ -871,7 +871,16 @@ def get_active_template():
             row = conn.execute(
                 "SELECT * FROM pdf_templates ORDER BY id DESC LIMIT 1"
             ).fetchone()
-        return dict(row) if row else None
+        if row:
+            return dict(row)
+        # لا يوجد قالب في DB — نُعيد قالباً وهمياً يُشير للملف الافتراضي
+        _base = os.path.dirname(os.path.abspath(__file__))
+        for fname in ["default_template.pdf", "templates NEE.pdf"]:
+            fp = os.path.join(_base, "templates", fname)
+            if os.path.exists(fp) and os.path.getsize(fp) > 1000:
+                logger.info(f"get_active_template: لا يوجد قالب في DB — استخدام الافتراضي: {fp}")
+                return {"id": 0, "name": "افتراضي", "file_path": fp, "is_active": 1}
+        return None
     finally:
         conn.close()
 
@@ -888,33 +897,59 @@ def set_active_template(template_id):
 
 def get_template_file_path(template_id: int) -> str | None:
     """يُعيد مسار مؤقت لملف القالب (يُنزَّل من DB إذا لزم)"""
+    # id=0 يعني قالب افتراضي من القرص مباشرة
+    if template_id == 0:
+        return _fallback_template_path()
+
     conn = get_conn()
     try:
         row = conn.execute(
             "SELECT file_path FROM pdf_templates WHERE id=?", (template_id,)
         ).fetchone()
         if not row:
-            return None
+            return _fallback_template_path()
         fp = row["file_path"] or ""
 
-        # مخزون في DB
+        # مخزون في DB بصيغة db:key
         if fp.startswith("db:") and _FILE_STORAGE_AVAILABLE:
             fkey = fp[3:]
-            return get_file_as_temp(fkey, ".pdf")
+            result = get_file_as_temp(fkey, ".pdf")
+            if result:
+                return result
+            logger.warning(f"get_template_file_path: فشل استرجاع {fkey} من file_storage — جاري الـ fallback")
+            return _fallback_template_path()
 
-        # مسار على القرص
-        if os.path.exists(fp):
+        # مسار على القرص مباشرة
+        if fp and fp != "pending" and os.path.exists(fp):
             return fp
 
         # محاولة من file_storage مباشرة
         if _FILE_STORAGE_AVAILABLE:
             fkey = template_key(template_id)
             if file_exists(fkey):
-                return get_file_as_temp(fkey, ".pdf")
+                result = get_file_as_temp(fkey, ".pdf")
+                if result:
+                    return result
 
-        return None
+        logger.warning(f"get_template_file_path: لم يُعثر على بيانات للقالب #{template_id} (file_path={fp!r}) — جاري الـ fallback")
+        return _fallback_template_path()
     finally:
         conn.close()
+
+
+def _fallback_template_path() -> str | None:
+    """يبحث عن قالب PDF افتراضي على القرص عند غياب DB"""
+    _base = os.path.dirname(os.path.abspath(__file__))
+    candidates = [
+        os.path.join(_base, "templates", "default_template.pdf"),
+        os.path.join(_base, "templates", "templates NEE.pdf"),
+    ]
+    for path in candidates:
+        if os.path.exists(path) and os.path.getsize(path) > 1000:
+            logger.info(f"_fallback_template_path: استخدام القالب الافتراضي: {path}")
+            return path
+    logger.error("_fallback_template_path: لا يوجد أي قالب PDF على القرص!")
+    return None
 
 
 def delete_template(template_id):

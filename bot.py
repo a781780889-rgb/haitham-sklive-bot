@@ -1890,10 +1890,12 @@ async def generate_and_send_pdf(update, context, uid):
                 os.remove(pdf_path_temp)
         except Exception:
             pass
-        # ✅ حذف الملف المؤقت للقالب (كان مُنزَّلاً من DB إلى /tmp)
+        # ✅ حذف الملف المؤقت للقالب (فقط إذا كان في /tmp وليس ملفاً دائماً)
         try:
             if template_path_tmp and os.path.exists(template_path_tmp):
-                os.remove(template_path_tmp)
+                # لا نحذف الملفات الدائمة من مجلد templates/
+                if template_path_tmp.startswith(tempfile.gettempdir()):
+                    os.remove(template_path_tmp)
         except Exception:
             pass
 
