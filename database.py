@@ -1006,6 +1006,15 @@ def save_order(user_id, data):
     conn = get_conn()
     try:
         gsl = generate_gsl_code()
+        # تحويل days_count لرقم صحيح دائماً (يمنع InvalidTextRepresentation في PostgreSQL)
+        raw_days = data.get("days_count", 1)
+        try:
+            days_int = int(raw_days)
+        except (ValueError, TypeError):
+            import re as _re
+            m = _re.search(r'\d+', str(raw_days))
+            days_int = int(m.group()) if m else 1
+
         cur = conn.execute("""
             INSERT INTO orders
             (user_id, hospital, doctor, specialty, full_name, id_number, birth_year,
@@ -1016,7 +1025,7 @@ def save_order(user_id, data):
             user_id, data.get("hospital"), data.get("doctor"), data.get("specialty"),
             data.get("full_name"), data.get("id_number"), data.get("birth_year"),
             data.get("phone"), data.get("workplace"), data.get("nationality"),
-            data.get("city"), data.get("excuse_date"), data.get("days_count"),
+            data.get("city"), data.get("excuse_date"), days_int,
             data.get("issue_time"), data.get("issue_date_input"), data.get("exit_date"), gsl
         ))
         conn.commit()

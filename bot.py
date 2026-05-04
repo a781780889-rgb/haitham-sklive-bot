@@ -1825,6 +1825,9 @@ async def generate_and_send_pdf(update, context, uid):
         )
         logger.info(f"generate_pdf user={uid}: تم إنشاء PDF بنجاح → {pdf_path} ({os.path.getsize(pdf_path):,} bytes)")
 
+        # ✅ تأكد أن days_count رقم صحيح قبل الحفظ في PostgreSQL
+        od["days_count"] = safe_int(od.get("days_count", 1))
+
         full_data = {**od, "hospital": hospital, "doctor": doctor, "specialty": specialty}
         order_id  = db.save_order(uid, full_data)
         # ✅ قفل الطلب — منع إعادة الإصدار
