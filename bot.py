@@ -23,6 +23,9 @@ from telegram.ext import (
 
 import asyncio
 import database as db
+import pending_review as pr
+from pending_review import init_pending_tables
+import review_handlers as rh
 from external_api import send_leave_to_external_api
 from pdf_gen import (
     generate_excuse_pdf,
@@ -389,10 +392,11 @@ def main_menu_keyboard(is_admin: bool = False):
         [KeyboardButton("📝 إرسال طلب جديد /go")],
         [KeyboardButton("📋 طلباتي"),         KeyboardButton("🧾 اشحن رصيدك")],
         [KeyboardButton("🌐 نظام المواقع"),   KeyboardButton("🏥 نظام المستشفيات")],
+        [KeyboardButton("➕ اقتراح مستشفى"),  KeyboardButton("👨‍⚕️ اقتراح طبيب")],
         [KeyboardButton("🏠 القائمة الرئيسية")],
     ]
     if is_admin:
-        keyboard.insert(3, [KeyboardButton("⚙️ نظام البوت"), KeyboardButton("🎛️ لوحة التحكم")])
+        keyboard.insert(4, [KeyboardButton("⚙️ نظام البوت"), KeyboardButton("🎛️ لوحة التحكم")])
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def dashboard_keyboard():
@@ -579,7 +583,10 @@ def payment_methods_keyboard():
     return ReplyKeyboardMarkup(rows, resize_keyboard=True)
 
 def admin_keyboard():
+    pending_count = pr.get_pending_count()
+    review_label = f"🔍 مراجعة الطلبات 🔴 {pending_count}" if pending_count > 0 else "🔍 مراجعة الطلبات"
     return ReplyKeyboardMarkup([
+        [KeyboardButton(review_label)],
         [KeyboardButton("📄 قوالب PDF"),     KeyboardButton("🖼️ شعارات المستشفيات")],
         [KeyboardButton("🏥 إدارة المستشفيات"), KeyboardButton("👨‍⚕️ إدارة الأطباء")],
         [KeyboardButton("👥 المستخدمين"),    KeyboardButton("📊 الطلبات")],
@@ -898,6 +905,52 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"يمكنك إدارة المستشفيات من لوحة الإدارة ⚙️",
             parse_mode="Markdown", reply_markup=back_keyboard()
         )
+        return
+
+    # ── اقتراح مستشفى من مستخدم عادي ──
+    if text == "➕ اقتراح مستشفى":
+        context.user_data["state"] = "user_add_hospital_name"
+        await update.message.reply_text(
+            "🏥 *اقتراح مستشفى جديد*\n\n"
+            "سيظهر المستشفى لك فوراً للاستخدام الشخصي.\n"
+            "بعد مراجعة الإدارة سيُتاح للجميع.\n\n"
+            "✏️ أرسل اسم المستشفى:",
+            parse_mode="Markdown", reply_markup=back_keyboard()
+        )
+        return
+
+    # ── اقتراح طبيب من مستخدم عادي ──
+    if text == "👨‍⚕️ اقتراح طبيب":
+        # عرض قائمة المستشفيات المتاحة للمستخدم
+        hospitals_visible = pr.get_all_hospitals_visible_to_user(uid)
+        if not hospitals_visible:
+            await update.message.reply_text("⚠️ لا توجد مستشفيات متاحة حالياً.")
+            return
+        context.user_data["state"] = "user_add_doctor_hospital"
+        rows = [[KeyboardButton("⬅️ رجوع")]]
+        for i in range(0, min(len(hospitals_visible), 30), 2):
+            row = [KeyboardButton(hospitals_visible[i]["name"])]
+            if i + 1 < len(hospitals_visible):
+                row.append(KeyboardButton(hospitals_visible[i+1]["name"]))
+            rows.insert(-1, row)
+        await update.message.reply_text(
+            "👨‍⚕️ *اقتراح طبيب جديد*\n\n"
+            "سيظهر الطبيب لك فوراً للاستخدام الشخصي.\n"
+            "بعد مراجعة الإدارة سيُتاح للجميع.\n\n"
+            "🏥 اختر المستشفى:",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+        )
+        return
+
+    # ── معالجة مراحل اقتراح مستشفى ──
+    if state in ["user_add_hospital_name", "user_add_hospital_city", "user_add_hospital_type"]:
+        await rh.handle_user_add_hospital(update, context, text, uid, name, ADMIN_IDS)
+        return
+
+    # ── معالجة مراحل اقتراح طبيب ──
+    if state in ["user_add_doctor_hospital", "user_add_doctor_name", "user_add_doctor_specialty"]:
+        await rh.handle_user_add_doctor(update, context, text, uid, name, ADMIN_IDS)
         return
 
     # ── لوحة الإدارة ──
@@ -1297,6 +1350,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ══════════════════════════════════════════════
 # دوال مساعدة للمستخدم
 # ══════════════════════════════════════════════
+
+
+async def cmd_pending(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """أمر /pending — يعرض قائمة المراجعة للمسؤولين"""
+    uid  = update.effective_user.id
+    name = update.effective_user.full_name or "مستخدم"
+    if not is_admin_user(uid):
+        await update.message.reply_text("❌ هذا الأمر للمسؤولين فقط.")
+        return
+    await rh.show_admin_review_panel(update, context, uid)
 
 
 async def cmd_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2011,6 +2074,16 @@ async def handle_admin_router(update, context, text, uid, name):
                 await update.message.reply_text("❌ الرسالة فارغة. أرسل: `بث رسالتك`", parse_mode="Markdown")
         else:
             await update.message.reply_text("📢 أرسل: `بث [رسالتك]`", parse_mode="Markdown")
+        return
+
+    # ── مراجعة الطلبات المعلقة ──
+    if state == "admin" and (text.startswith("🔍 مراجعة الطلبات")):
+        await rh.show_admin_review_panel(update, context, uid)
+        return
+
+    # ── أمر /pending لعرض قائمة المراجعة ──
+    if text == "/pending" and is_admin_user(uid):
+        await rh.show_admin_review_panel(update, context, uid)
         return
 
     # القائمة الرئيسية للإدارة
@@ -3711,6 +3784,15 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     name  = update.effective_user.full_name or "مستخدم"
     data  = query.data
 
+    # ── نظام المراجعة الإدارية ──
+    if data.startswith("review_") and is_admin_user(uid):
+        handled = await rh.handle_review_callback(query, uid, data, context.bot, ADMIN_IDS)
+        if handled:
+            return
+    elif data.startswith("review_") and not is_admin_user(uid):
+        await query.answer("❌ هذا الإجراء للمسؤولين فقط.", show_alert=True)
+        return
+
     if data == "cmd_new_order":
         context.user_data.clear()
         context.user_data["state"] = "choose_city"
@@ -4031,6 +4113,7 @@ def _start_web_server():
 
 def main():
     db.init_db()
+    init_pending_tables()  # تهيئة جداول نظام المراجعة
     # ── تثبيت الرابط الرسمي للموقع عند كل تشغيل ───────────────────────
     db.set_setting("website_url", "https://www.sehasaa.com/#/inquiries/slenquiry")
     # ──────────────────────────────────────────────────────────────────
@@ -4049,6 +4132,7 @@ def main():
         .build()
     )
     app.add_handler(CommandHandler("start",    start))
+    app.add_handler(CommandHandler("pending",  cmd_pending))
     app.add_handler(CommandHandler("balance",  cmd_balance))
     app.add_handler(CommandHandler("myorders", cmd_myorders))
     app.add_handler(CommandHandler("help",     cmd_help))
