@@ -696,8 +696,7 @@ async def refresh_city_logo_keyboard(message, context):
 def hospitals_select_keyboard(hospitals: list):
     keyboard = [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]]
     for h in hospitals:
-        has_logo = has_logo(h)
-        label = f"✅ {h['name']}" if has_logo else h['name']
+        label = f"✅ {h['name']}" if has_logo(h) else h['name']
         keyboard.append([KeyboardButton(label)])
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
