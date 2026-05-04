@@ -345,10 +345,127 @@ def smart_parse(text: str) -> dict:
 
         result[key] = _process_value(key, value)
 
+    # ── المرحلة 1b: تحليل الأسطر بدون نقطتين (label value) ──
+    _extract_label_value_no_colon(text, result)
+
     # ── المرحلة 2: بحث بالأنماط في النص الحر ────────────────
     _extract_inline(text, result)
 
+    # ── المرحلة 3: تحليل النص الحر الكامل إذا بقيت حقول فارغة ─
+    _extract_freeform(text, result)
+
     return result
+
+
+def _extract_label_value_no_colon(text: str, result: dict):
+    """
+    يعالج الأسطر التي تحتوي على تسمية الحقل ثم القيمة بدون نقطتين.
+    مثال:
+        الاسم هيثم عبده قائد
+        جهة العمل شركة أرامكو
+        تاريخ الاجازه 12/4/2026
+    """
+    lines = text.splitlines()
+    for line in lines:
+        line = line.strip().lstrip('-•*·◄►▶').strip()
+        if not line or ':' in line or '：' in line:
+            continue  # سبق معالجتها
+
+        # جرب مطابقة كل alias معروف مع بداية السطر
+        nl = _norm_text(line)
+        matched_key = None
+        matched_alias_len = 0
+
+        for alias_norm, key in _NORM_ALIASES.items():
+            if nl.startswith(alias_norm):
+                rest = line[len(alias_norm):].strip()
+                # تأكد أن هناك قيمة بعد التسمية
+                if rest and len(alias_norm) > matched_alias_len:
+                    matched_key = key
+                    matched_alias_len = len(alias_norm)
+                    matched_value = rest
+
+        if matched_key and matched_key not in result:
+            result[matched_key] = _process_value(matched_key, matched_value)
+
+
+def _extract_freeform(text: str, result: dict):
+    """
+    يحلل النص الحر الكامل ويحاول استخراج الحقول المتبقية.
+    يُعالج الحالات مثل:
+        هيثم عبده قائد
+        الرياض
+        ٢٦٦٣٦٣٦٣٧   سعودي
+        ١٢_٤-2026
+    """
+    lines = [l.strip() for l in text.splitlines() if l.strip()]
+
+    for line in lines:
+        line_w = to_western(line)
+
+        # رقم الهوية (10 أرقام تبدأ بـ 1 أو 2)
+        if 'id_number' not in result:
+            m = re.search(r'\b([12]\d{9})\b', line_w)
+            if m:
+                result['id_number'] = m.group(1)
+
+        # التاريخ في أي صيغة
+        if 'excuse_date' not in result:
+            # استبدل _ بـ - للتواريخ مثل ١٢_٤-2026
+            line_for_date = re.sub(r'_', '-', line_w)
+            d = parse_any_date(line_for_date)
+            if d:
+                result['excuse_date'] = d
+
+    # استخراج الاسم الكامل: السطر الذي لا يحتوي على أرقام ولا تاريخ ولا مدينة معروفة
+    if 'full_name' not in result:
+        _cities = {'الرياض', 'جدة', 'مكة', 'مكه', 'المدينة', 'المدينه', 'الدمام', 'القصيم',
+                   'الطائف', 'تبوك', 'حائل', 'أبها', 'ابها', 'نجران', 'جازان', 'ينبع',
+                   'الجبيل', 'الخبر', 'الاحساء', 'الأحساء', 'بريدة', 'خميس مشيط',
+                   'riyadh', 'jeddah', 'mecca', 'dammam'}
+        _nationalities_words = {'سعودي', 'سعودية', 'سعوديه', 'مصري', 'يمني', 'هندي',
+                                 'باكستاني', 'سوري', 'أردني', 'اردني', 'فلسطيني', 'لبناني'}
+
+        for line in lines:
+            line_w = to_western(line)
+            # تجاهل السطور التي تحتوي على أرقام أو مدن أو جنسيات
+            if re.search(r'\d', line_w):
+                continue
+            nl = _norm_text(line)
+            if any(_norm_text(c) in nl for c in _cities):
+                continue
+            if any(_norm_text(n) in nl for n in _nationalities_words):
+                continue
+            # تجاهل إذا كانت التسمية معروفة
+            if _match_field(line):
+                continue
+            # الاسم يجب أن يكون كلمتين على الأقل
+            words = line.split()
+            if len(words) >= 2:
+                result['full_name'] = line.strip()
+                break
+
+    # استخراج المدينة / جهة العمل من السطور المتبقية
+    _cities_map = {
+        'الرياض': 'الرياض', 'جده': 'جدة', 'جدة': 'جدة',
+        'مكه': 'مكة', 'مكة': 'مكة', 'المدينة': 'المدينة المنورة', 'المدينه': 'المدينة المنورة',
+        'الدمام': 'الدمام', 'القصيم': 'القصيم', 'الطائف': 'الطائف',
+        'تبوك': 'تبوك', 'حائل': 'حائل', 'أبها': 'أبها', 'ابها': 'أبها',
+        'نجران': 'نجران', 'جازان': 'جازان', 'ينبع': 'ينبع',
+        'الجبيل': 'الجبيل', 'الخبر': 'الخبر', 'الاحساء': 'الأحساء',
+        'الأحساء': 'الأحساء', 'بريدة': 'بريدة',
+    }
+    for line in lines:
+        if re.search(r'\d', to_western(line)):
+            continue
+        nl = _norm_text(line)
+        for city_key, city_val in _cities_map.items():
+            if _norm_text(city_key) in nl:
+                if 'city' not in result:
+                    result['city'] = city_val
+                if 'workplace' not in result:
+                    result['workplace'] = line.strip()
+                break
 
 
 def _process_value(key: str, value: str) -> str:
@@ -469,8 +586,8 @@ _REQUIRED = [
     {'key': 'id_number',   'label': 'رقم الهوية'},
     {'key': 'workplace',   'label': 'جهة العمل'},
     {'key': 'nationality', 'label': 'الجنسية'},
-    {'key': 'city',        'label': 'المدينة التابعة لجهة العمل'},
     {'key': 'excuse_date', 'label': 'تاريخ الإجازة'},
+    # city, hospital, doctor → تُحدَّد عبر الأزرار التفاعلية ولا تُطلب هنا
 ]
 
 def get_missing(data: dict) -> list[dict]:
