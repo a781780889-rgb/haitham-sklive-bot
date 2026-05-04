@@ -602,6 +602,7 @@ def logos_keyboard():
     return ReplyKeyboardMarkup([
         [KeyboardButton("➕ رفع شعار مستشفى")],
         [KeyboardButton("🏙️ رفع شعار (تصفح بالمدينة)")],
+        [KeyboardButton("🔍 المستشفيات التي تحتاج شعار")],
         [KeyboardButton("🤖 تحميل الشعارات تلقائياً من الإنترنت")],
         [KeyboardButton("📋 عرض الشعارات الحالية")],
         [KeyboardButton("🗑 حذف شعار")],
@@ -1569,6 +1570,7 @@ async def handle_back(update, context, uid, name, state):
             reply_markup=ReplyKeyboardMarkup([
                 [KeyboardButton("🗺 تصفح بالمنطقة والمدينة")],
                 [KeyboardButton("📋 كل المستشفيات")],
+                [KeyboardButton("⚠️ المستشفيات بدون أطباء")],
                 [KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")],
             ], resize_keyboard=True))
     elif state == "admin_doc_list_city":
@@ -1583,6 +1585,38 @@ async def handle_back(update, context, uid, name, state):
         rows.append([KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")])
         await update.message.reply_text(f"🏙️ *مدن {region}:*", parse_mode="Markdown",
             reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True))
+    elif state == "admin_doc_no_doctors_select":
+        context.user_data["state"] = "admin_doctors"
+        await update.message.reply_text(
+            "👨‍⚕️ *إدارة الأطباء*\n\nاختر طريقة البحث عن المستشفى:",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup([
+                [KeyboardButton("🗺 تصفح بالمنطقة والمدينة")],
+                [KeyboardButton("📋 كل المستشفيات")],
+                [KeyboardButton("⚠️ المستشفيات بدون أطباء")],
+                [KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")],
+            ], resize_keyboard=True)
+        )
+    elif state == "admin_doc_after_add":
+        context.user_data["state"] = "admin_doctors"
+        context.user_data.pop("doc_came_from_no_doctors_prev", None)
+        await update.message.reply_text(
+            "👨‍⚕️ *إدارة الأطباء*\n\nاختر طريقة البحث عن المستشفى:",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup([
+                [KeyboardButton("🗺 تصفح بالمنطقة والمدينة")],
+                [KeyboardButton("📋 كل المستشفيات")],
+                [KeyboardButton("⚠️ المستشفيات بدون أطباء")],
+                [KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")],
+            ], resize_keyboard=True)
+        )
+    elif state == "admin_logo_no_logo_select":
+        context.user_data["state"] = "admin_logos"
+        context.user_data.pop("logo_came_from_no_logo", None)
+        await update.message.reply_text(
+            "🖼️ *شعارات المستشفيات*",
+            parse_mode="Markdown", reply_markup=logos_keyboard()
+        )
     elif state and state.startswith("admin_"):
         context.user_data["state"] = "admin"
         await update.message.reply_text("⚙️ *لوحة الإدارة*", parse_mode="Markdown", reply_markup=admin_keyboard())
@@ -2051,7 +2085,7 @@ async def handle_admin_router(update, context, text, uid, name):
 
     # ── شعارات ──
     if state in ["admin_logos", "admin_logo_select_hospital", "admin_logo_upload",
-                 "admin_logo_browse_region", "admin_logo_browse_city"]:
+                 "admin_logo_browse_region", "admin_logo_browse_city", "admin_logo_no_logo_select"]:
         await handle_logos(update, context, text, uid)
         return
 
@@ -2065,7 +2099,7 @@ async def handle_admin_router(update, context, text, uid, name):
     # ── أطباء ──
     if state in ["admin_doctors", "admin_doctor_select_hospital", "admin_doctor_add_name",
                  "admin_doctor_add_specialty", "admin_doc_browse_region", "admin_doc_browse_city",
-                 "admin_doc_list_city"]:
+                 "admin_doc_list_city", "admin_doc_no_doctors_select", "admin_doc_after_add"]:
         await handle_admin_doctors(update, context, text, uid)
         return
 
@@ -2214,6 +2248,65 @@ async def handle_templates(update, context, text, uid):
 async def handle_logos(update, context, text, uid):
     state = context.user_data.get("state")
     hospitals_all = db.get_all_hospitals()
+
+    # ── المستشفيات التي تحتاج شعار
+    if text == "🔍 المستشفيات التي تحتاج شعار":
+        # المستشفيات المسجّلة في DB بدون شعار
+        hospitals_no_logo = [
+            h for h in hospitals_all
+            if not (h.get("logo_path") and os.path.exists(h.get("logo_path", "")))
+        ]
+        if not hospitals_no_logo:
+            await update.message.reply_text(
+                "✅ *جميع المستشفيات المسجّلة لديها شعار!*",
+                parse_mode="Markdown", reply_markup=logos_keyboard()
+            )
+        else:
+            context.user_data["state"] = "admin_logo_no_logo_select"
+            context.user_data["logo_action"] = "upload"
+            rows = [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]]
+            for h in hospitals_no_logo:
+                rows.append([KeyboardButton(f"⬜ {h['name']} — {h.get('city', '')}")])
+            await update.message.reply_text(
+                f"🔍 *المستشفيات التي تحتاج شعار ({len(hospitals_no_logo)}):*\n\n"
+                f"اختر المستشفى لرفع شعاره:",
+                parse_mode="Markdown",
+                reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+            )
+        return
+
+    # ── اختيار مستشفى من قائمة "تحتاج شعار"
+    if state == "admin_logo_no_logo_select":
+        clean = text.replace("⬜ ", "").strip()
+        if " — " in clean:
+            clean = clean.split(" — ")[0].strip()
+        matched = next((h for h in hospitals_all if h["name"] == clean), None)
+        if not matched:
+            results = db.search_hospitals(clean)
+            matched = results[0] if results else None
+        if matched:
+            context.user_data["logo_hospital"] = matched["name"]
+            context.user_data["logo_target"]   = matched["name"]
+            context.user_data["state"] = "admin_logo_upload"
+            context.user_data["logo_came_from_no_logo"] = True
+            await update.message.reply_text(
+                f"✅ المستشفى: *{matched['name']}*\n\n"
+                f"اختر طريقة إضافة الشعار:",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton(
+                        "🔍 بحث عن الشعار في جوجل",
+                        callback_data="search_logo_curr"
+                    )],
+                    [InlineKeyboardButton(
+                        "📤 رفع صورة يدوياً",
+                        callback_data="manual_logo_curr"
+                    )],
+                ])
+            )
+        else:
+            await update.message.reply_text("❌ لم يُتعرف على المستشفى.", reply_markup=logos_keyboard())
+        return
 
     # ── رفع شعار — قائمة قاعدة البيانات (الطريقة القديمة)
     if text == "➕ رفع شعار مستشفى":
@@ -2681,6 +2774,7 @@ async def handle_admin_doctors(update, context, text, uid):
         return ReplyKeyboardMarkup([
             [KeyboardButton("🗺 تصفح بالمنطقة والمدينة")],
             [KeyboardButton("📋 كل المستشفيات")],
+            [KeyboardButton("⚠️ المستشفيات بدون أطباء")],
             [KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")],
         ], resize_keyboard=True)
 
@@ -2698,6 +2792,52 @@ async def handle_admin_doctors(update, context, text, uid):
             await update.message.reply_text(
                 "🏥 *اختر المستشفى:*",
                 parse_mode="Markdown", reply_markup=doctors_admin_keyboard(hospitals)
+            )
+        elif text == "⚠️ المستشفيات بدون أطباء":
+            # جمع جميع المستشفيات من DB + KSA_HOSPITALS التي ليس لها أطباء
+            hospitals_db = db.get_all_hospitals()
+            # المستشفيات المسجّلة في DB بدون أطباء
+            hospitals_no_docs = [
+                h for h in hospitals_db
+                if len(db.get_doctors_by_hospital_name(h["name"], active_only=False)) == 0
+            ]
+            if not hospitals_no_docs:
+                await update.message.reply_text(
+                    "✅ *جميع المستشفيات المسجّلة لديها أطباء!*",
+                    parse_mode="Markdown", reply_markup=doctors_main_keyboard()
+                )
+            else:
+                context.user_data["state"] = "admin_doc_no_doctors_select"
+                rows = [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]]
+                for h in hospitals_no_docs:
+                    rows.append([KeyboardButton(f"⬜ {h['name']} — {h.get('city', '')}")])
+                await update.message.reply_text(
+                    f"⚠️ *المستشفيات بدون أطباء ({len(hospitals_no_docs)}):*\n\n"
+                    f"اختر المستشفى لإضافة أطباء له:",
+                    parse_mode="Markdown",
+                    reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+                )
+        return
+
+    # ── اختيار مستشفى من قائمة "بدون أطباء"
+    if state == "admin_doc_no_doctors_select":
+        # تنظيف النص من الأيقونة والمدينة
+        clean = text.replace("⬜ ", "").strip()
+        if " — " in clean:
+            clean = clean.split(" — ")[0].strip()
+        hospitals_db = db.get_all_hospitals()
+        matched = next((h for h in hospitals_db if h["name"] == clean), None)
+        if matched:
+            context.user_data["doctor_hospital_id"]   = matched["id"]
+            context.user_data["doctor_hospital_name"] = matched["name"]
+            context.user_data["state"] = "admin_doctor_add_name"
+            context.user_data["doc_came_from_no_doctors"] = True
+            doctors = db.get_doctors_by_hospital_name(matched["name"], active_only=False)
+            await update.message.reply_text(
+                f"🏥 *{matched['name']}*\n📍 {matched.get('city', '')}\n\n"
+                f"📋 *الأطباء الحاليون:* لا يوجد أطباء\n\n"
+                f"✏️ أرسل اسم الطبيب الجديد:",
+                parse_mode="Markdown", reply_markup=back_keyboard()
             )
         return
 
@@ -2820,12 +2960,61 @@ async def handle_admin_doctors(update, context, text, uid):
         doctor_name   = context.user_data.get("doctor_name", "")
         hospital_id   = context.user_data.get("doctor_hospital_id")
         hospital_name = context.user_data.get("doctor_hospital_name", "")
+        came_from_no_doctors = context.user_data.pop("doc_came_from_no_doctors", False)
         db.add_doctor(hospital_id, doctor_name, text)
-        context.user_data["state"] = "admin"
+
+        # إشعار بالإضافة
         await update.message.reply_text(
-            f"✅ تم إضافة *د.{doctor_name}* — {text}\nالمستشفى: {hospital_name}",
-            parse_mode="Markdown", reply_markup=admin_keyboard()
+            f"✅ تم إضافة *د.{doctor_name}* — {text}\nالمستشفى: {hospital_name}\n\n"
+            f"هل تريد إضافة طبيب آخر لنفس المستشفى؟",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup([
+                [KeyboardButton(f"➕ إضافة طبيب آخر لـ {hospital_name}")],
+                [KeyboardButton("🔙 العودة لقائمة المستشفيات بدون أطباء")] if came_from_no_doctors else [KeyboardButton("⬅️ رجوع")],
+            ], resize_keyboard=True)
         )
+
+        if came_from_no_doctors:
+            context.user_data["state"] = "admin_doc_after_add"
+            context.user_data["doc_came_from_no_doctors_prev"] = True
+        else:
+            context.user_data["state"] = "admin"
+
+    # ── بعد إضافة طبيب — عرض خيارات المتابعة
+    if state == "admin_doc_after_add":
+        hospital_name = context.user_data.get("doctor_hospital_name", "")
+        if text == f"➕ إضافة طبيب آخر لـ {hospital_name}":
+            context.user_data["state"] = "admin_doctor_add_name"
+            context.user_data["doc_came_from_no_doctors"] = context.user_data.get("doc_came_from_no_doctors_prev", False)
+            await update.message.reply_text(
+                f"✏️ أرسل اسم الطبيب الجديد لـ *{hospital_name}*:",
+                parse_mode="Markdown", reply_markup=back_keyboard()
+            )
+        elif text == "🔙 العودة لقائمة المستشفيات بدون أطباء":
+            # تحديث القائمة تلقائياً — نُزيل المستشفيات التي أصبح لها أطباء
+            hospitals_db = db.get_all_hospitals()
+            hospitals_no_docs = [
+                h for h in hospitals_db
+                if len(db.get_doctors_by_hospital_name(h["name"], active_only=False)) == 0
+            ]
+            context.user_data.pop("doc_came_from_no_doctors_prev", None)
+            if not hospitals_no_docs:
+                context.user_data["state"] = "admin_doctors"
+                await update.message.reply_text(
+                    "✅ *رائع! جميع المستشفيات المسجّلة أصبح لها أطباء.*",
+                    parse_mode="Markdown", reply_markup=doctors_main_keyboard()
+                )
+            else:
+                context.user_data["state"] = "admin_doc_no_doctors_select"
+                rows = [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]]
+                for h in hospitals_no_docs:
+                    rows.append([KeyboardButton(f"⬜ {h['name']} — {h.get('city', '')}")])
+                await update.message.reply_text(
+                    f"⚠️ *المستشفيات بدون أطباء ({len(hospitals_no_docs)}):*\n\n"
+                    f"اختر المستشفى لإضافة أطباء له:",
+                    parse_mode="Markdown",
+                    reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+                )
 
 # ══════════════════════════════════════════════
 # إدارة المستخدمين
@@ -3209,13 +3398,39 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"سيتم استخدامه تلقائياً في الإجازات الطبية.",
             parse_mode="Markdown"
         )
-        # ✅ أعد عرض قائمة المدينة مع تحديث الأيقونات فوراً
-        if not await refresh_city_logo_keyboard(update.message, context):
-            context.user_data["state"] = "admin_logos"
-            await update.message.reply_text(
-                "🖼️ *شعارات المستشفيات*",
-                parse_mode="Markdown", reply_markup=logos_keyboard()
-            )
+        came_from_no_logo = context.user_data.pop("logo_came_from_no_logo", False)
+        # ✅ إن كان قادماً من قائمة "تحتاج شعار"، أعد عرضها محدّثة
+        if came_from_no_logo:
+            hospitals_all_fresh = db.get_all_hospitals()
+            hospitals_no_logo = [
+                h for h in hospitals_all_fresh
+                if not (h.get("logo_path") and os.path.exists(h.get("logo_path", "")))
+            ]
+            if not hospitals_no_logo:
+                context.user_data["state"] = "admin_logos"
+                await update.message.reply_text(
+                    "🎉 *رائع! جميع المستشفيات المسجّلة أصبح لها شعار.*",
+                    parse_mode="Markdown", reply_markup=logos_keyboard()
+                )
+            else:
+                context.user_data["state"] = "admin_logo_no_logo_select"
+                rows = [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]]
+                for h in hospitals_no_logo:
+                    rows.append([KeyboardButton(f"⬜ {h['name']} — {h.get('city', '')}")])
+                await update.message.reply_text(
+                    f"🔍 *المستشفيات التي تحتاج شعار ({len(hospitals_no_logo)}):*\n\n"
+                    f"اختر المستشفى لرفع شعاره:",
+                    parse_mode="Markdown",
+                    reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+                )
+        else:
+            # ✅ أعد عرض قائمة المدينة مع تحديث الأيقونات فوراً
+            if not await refresh_city_logo_keyboard(update.message, context):
+                context.user_data["state"] = "admin_logos"
+                await update.message.reply_text(
+                    "🖼️ *شعارات المستشفيات*",
+                    parse_mode="Markdown", reply_markup=logos_keyboard()
+                )
         return
 
     if state == "charge_await_screenshot":
@@ -3681,7 +3896,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                         InlineKeyboardButton("✅ قبول", callback_data="cancel_logo_search"),
                     ]])
                 )
-            context.user_data["state"] = "admin_logos"
+            # لا نغيّر state هنا حتى يتمكن cancel_logo_search من اكتشاف logo_came_from_no_logo
 
         except Exception as e:
             await query.message.reply_text(
@@ -3706,6 +3921,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
         context.user_data["logo_hospital"] = hospital_name
         context.user_data["state"] = "admin_logo_upload"
+        # الحفاظ على logo_came_from_no_logo إن كان موجوداً
         await query.message.reply_text(
             f"📤 *أرسل صورة شعار:*\n{hospital_name}\n\n(PNG أو JPG):",
             parse_mode="Markdown", reply_markup=back_keyboard()
@@ -3714,13 +3930,39 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     # ── إلغاء بحث الشعار
     elif data == "cancel_logo_search":
         await query.answer()
-        # ✅ أعد عرض قائمة المدينة مع تحديث الأيقونات فوراً
-        if not await refresh_city_logo_keyboard(query.message, context):
-            context.user_data["state"] = "admin_logos"
-            await query.message.reply_text(
-                "✅ تمّ. العودة لإدارة الشعارات.",
-                reply_markup=logos_keyboard()
-            )
+        came_from_no_logo = context.user_data.pop("logo_came_from_no_logo", False)
+        if came_from_no_logo:
+            # تحديث قائمة "تحتاج شعار" تلقائياً
+            hospitals_all_fresh = db.get_all_hospitals()
+            hospitals_no_logo = [
+                h for h in hospitals_all_fresh
+                if not (h.get("logo_path") and os.path.exists(h.get("logo_path", "")))
+            ]
+            if not hospitals_no_logo:
+                context.user_data["state"] = "admin_logos"
+                await query.message.reply_text(
+                    "🎉 *رائع! جميع المستشفيات المسجّلة أصبح لها شعار.*",
+                    parse_mode="Markdown", reply_markup=logos_keyboard()
+                )
+            else:
+                context.user_data["state"] = "admin_logo_no_logo_select"
+                rows = [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]]
+                for h in hospitals_no_logo:
+                    rows.append([KeyboardButton(f"⬜ {h['name']} — {h.get('city', '')}")])
+                await query.message.reply_text(
+                    f"🔍 *المستشفيات التي تحتاج شعار ({len(hospitals_no_logo)}):*\n\n"
+                    f"اختر المستشفى لرفع شعاره:",
+                    parse_mode="Markdown",
+                    reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+                )
+        else:
+            # ✅ أعد عرض قائمة المدينة مع تحديث الأيقونات فوراً
+            if not await refresh_city_logo_keyboard(query.message, context):
+                context.user_data["state"] = "admin_logos"
+                await query.message.reply_text(
+                    "✅ تمّ. العودة لإدارة الشعارات.",
+                    reply_markup=logos_keyboard()
+                )
 
     elif data == "cancel_order":
         # ✅ منع الإلغاء بعد إصدار PDF
