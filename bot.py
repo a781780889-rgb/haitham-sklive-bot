@@ -728,7 +728,8 @@ def doctors_admin_keyboard(hospitals):
 def settings_keyboard():
     return ReplyKeyboardMarkup([
         [KeyboardButton("💲 تعديل سعر الطلب")],
-        [KeyboardButton("🌐 تعديل رابط الموقع")],
+        [KeyboardButton("🌐 تعديل رابط التحقق")],
+        [KeyboardButton("🔲 تغيير صورة الباركود")],
         [KeyboardButton("📋 عرض جميع الإعدادات")],
         [KeyboardButton("⬅️ رجوع")],
     ], resize_keyboard=True)
@@ -1805,6 +1806,17 @@ async def generate_and_send_pdf(update, context, uid):
         # نتتبع الملف المؤقت للقالب لحذفه في finally
         template_path_tmp = template_path
 
+        # ── جلب الباركود المخصص إن وجد ──
+        custom_qr_path = None
+        custom_qr_tmp  = None
+        try:
+            from file_storage import get_file_as_temp, file_exists
+            if file_exists("custom_qr_image"):
+                custom_qr_tmp  = get_file_as_temp("custom_qr_image", suffix=".png")
+                custom_qr_path = custom_qr_tmp
+        except Exception:
+            pass
+
         hospital_type_val = (
             context.user_data.get("browse_hospital_type")
             or (db.get_hospital_by_name(hospital) or {}).get("hospital_type")
@@ -1812,17 +1824,24 @@ async def generate_and_send_pdf(update, context, uid):
         logger.info(f"generate_pdf user={uid}: hospital={hospital} doctor={doctor} hospital_type={hospital_type_val}")
 
         generate_excuse_pdf(
-            order_data    = od,
-            hospital      = hospital,
-            doctor        = doctor,
-            specialty     = specialty,
-            issue_time    = od.get("issue_time", ""),
-            output_path   = pdf_path,
-            logo_path     = logo_path,
-            website_url   = website_url or "https://www.sehasaa.com",
-            hospital_type = hospital_type_val,
-            template_path = template_path,
+            order_data      = od,
+            hospital        = hospital,
+            doctor          = doctor,
+            specialty       = specialty,
+            issue_time      = od.get("issue_time", ""),
+            output_path     = pdf_path,
+            logo_path       = logo_path,
+            website_url     = website_url or "https://www.sehasaa.com",
+            custom_qr_path  = custom_qr_path,
+            hospital_type   = hospital_type_val,
+            template_path   = template_path,
         )
+        # حذف الملف المؤقت للـ QR المخصص
+        if custom_qr_tmp and os.path.exists(custom_qr_tmp):
+            try:
+                os.remove(custom_qr_tmp)
+            except Exception:
+                pass
         logger.info(f"generate_pdf user={uid}: تم إنشاء PDF بنجاح → {pdf_path} ({os.path.getsize(pdf_path):,} bytes)")
 
         # ✅ تأكد أن days_count رقم صحيح قبل الحفظ في PostgreSQL
@@ -2207,7 +2226,7 @@ async def handle_admin_router(update, context, text, uid, name):
         return
 
     # ── إعدادات ──
-    if state in ["admin_settings", "admin_setting_price", "admin_setting_url"]:
+    if state in ["admin_settings", "admin_setting_price", "admin_setting_url", "admin_qr_upload"]:
         await handle_admin_settings(update, context, text, uid)
         return
 
@@ -3487,11 +3506,12 @@ async def handle_admin_settings(update, context, text, uid):
             await update.message.reply_text("❌ أرسل رقماً صحيحاً مثل: 10 أو 7.5", reply_markup=back_keyboard())
         return
 
-    if text == "🌐 تعديل رابط الموقع":
+    if text == "🌐 تعديل رابط التحقق":
         context.user_data["state"] = "admin_setting_url"
         current = db.get_setting("website_url")
         await update.message.reply_text(
-            f"🌐 *الرابط الحالي:*\n`{current}`\n\nأرسل الرابط الجديد:",
+            f"🌐 *رابط التحقق الحالي:*\n`{current}`\n\n"
+            f"أرسل الرابط الجديد (سيُستخدم في الباركود وروابط PDF):",
             parse_mode="Markdown", reply_markup=back_keyboard()
         )
         return
@@ -3500,7 +3520,46 @@ async def handle_admin_settings(update, context, text, uid):
         db.set_setting("website_url", text.strip())
         context.user_data["state"] = "admin_settings"
         await update.message.reply_text(
-            f"✅ تم تحديث رابط الموقع إلى:\n`{text.strip()}`",
+            f"✅ تم تحديث رابط التحقق إلى:\n`{text.strip()}`\n\n"
+            f"📌 سيظهر الرابط الجديد في الباركود QR لكل PDF ينتجه البوت.",
+            parse_mode="Markdown", reply_markup=settings_keyboard()
+        )
+        return
+
+    if text == "🔲 تغيير صورة الباركود":
+        context.user_data["state"] = "admin_qr_upload"
+        current_url = db.get_setting("website_url", "https://www.sehasaa.com")
+        qr_exists = False
+        try:
+            from file_storage import file_exists
+            qr_exists = file_exists("custom_qr_image")
+        except Exception:
+            pass
+        status_text = "✅ يوجد باركود مخصص مرفوع حالياً." if qr_exists else "ℹ️ لا يوجد باركود مخصص — يُولَّد تلقائياً من الرابط."
+        await update.message.reply_text(
+            f"🔲 *تغيير صورة الباركود*\n\n"
+            f"{status_text}\n\n"
+            f"📤 *أرسل صورة الباركود الجديد* (PNG/JPG) وسيُستبدل تلقائياً في جميع ملفات PDF.\n\n"
+            f"أو اضغط *«حذف الباركود المخصص»* للعودة للتوليد التلقائي من الرابط:\n`{current_url}`",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup([
+                [KeyboardButton("🗑 حذف الباركود المخصص")],
+                [KeyboardButton("⬅️ رجوع")],
+            ], resize_keyboard=True)
+        )
+        return
+
+    if state == "admin_qr_upload" and text == "🗑 حذف الباركود المخصص":
+        try:
+            from file_storage import delete_file
+            delete_file("custom_qr_image")
+        except Exception:
+            pass
+        context.user_data["state"] = "admin_settings"
+        current_url = db.get_setting("website_url", "https://www.sehasaa.com")
+        await update.message.reply_text(
+            f"✅ *تم حذف الباركود المخصص.*\n\n"
+            f"سيُولَّد الباركود الآن تلقائياً من رابط التحقق:\n`{current_url}`",
             parse_mode="Markdown", reply_markup=settings_keyboard()
         )
         return
@@ -3556,6 +3615,27 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     state = context.user_data.get("state", "")
     uid   = update.effective_user.id
+
+    if state == "admin_qr_upload":
+        # حفظ الباركود المخصص في قاعدة البيانات
+        photo = update.message.photo[-1]
+        file  = await photo.get_file()
+        qr_bytes = await file.download_as_bytearray()
+        try:
+            from file_storage import save_file
+            save_file("custom_qr_image", bytes(qr_bytes), file_name="custom_qr.png", mime_type="image/png", category="qr")
+        except Exception as e:
+            await update.message.reply_text(f"❌ فشل حفظ الباركود: {e}")
+            return
+        context.user_data["state"] = "admin_settings"
+        await update.message.reply_text(
+            "✅ *تم رفع الباركود المخصص بنجاح!*\n\n"
+            "📌 سيُستخدم هذا الباركود في جميع ملفات PDF التي ينتجها البوت.\n"
+            "يمكنك حذفه من الإعدادات للعودة للتوليد التلقائي.",
+            parse_mode="Markdown",
+            reply_markup=settings_keyboard()
+        )
+        return
 
     if state == "admin_logo_upload":
         hospital_name = context.user_data.get("logo_hospital", "")

@@ -829,7 +829,7 @@ def _get_page_size(template_path):
 # إنشاء طبقة النصوص والصور
 # ══════════════════════════════════════════════════════════════
 
-def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_path, website_url="https://www.sehasaa.com"):
+def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_path, website_url="https://www.sehasaa.com", custom_qr_path=None):
     """
     طبقة شفافة تُرسم فوق القالب:
     • نصوص إنجليزية → Times-Roman / Times-Bold  (مدمج في ReportLab)
@@ -1016,55 +1016,63 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
                 pass
 
     # ─── رسم باركود QR في موضعه الأصلي ─────────────────────────────
-    SEHA_URL = "https://www.sehasaa.com"
+    # استخدام الرابط من الإعدادات (website_url) بدلاً من رابط ثابت
+    _qr_url = str(website_url or "https://www.sehasaa.com").strip()
+
     qx = QR_SLOT['x']      * x_scale
     qy = QR_SLOT['rl_y']   * y_scale
     qw = QR_SLOT['width']  * x_scale
     qh = QR_SLOT['height'] * y_scale
 
-    # توليد صورة QR ورسمها مباشرةً على الـ canvas
-    try:
-        import qrcode
-        from reportlab.lib.utils import ImageReader
-        _qr = qrcode.QRCode(version=2, box_size=6, border=1,
-                            error_correction=qrcode.constants.ERROR_CORRECT_M)
-        _qr.add_data(SEHA_URL)
-        _qr.make(fit=True)
-        _qr_img = _qr.make_image(fill_color="black", back_color="white")
-        _buf = io.BytesIO()
-        _qr_img.save(_buf, 'PNG')
-        _buf.seek(0)
-        c.drawImage(ImageReader(_buf), qx, qy, width=qw, height=qh, mask='auto')
-    except Exception:
-        # fallback: مستطيل أبيض إن فشل توليد QR
-        c.setFillColorRGB(1, 1, 1)
-        c.setStrokeColorRGB(1, 1, 1)
-        c.setLineWidth(0)
-        c.rect(qx, qy, qw, qh, stroke=0, fill=1)
+    # إن كان هناك باركود مخصص مرفوع من الإدارة — استخدمه مباشرة
+    _qr_drawn = False
+    if custom_qr_path and os.path.exists(custom_qr_path):
+        try:
+            from reportlab.lib.utils import ImageReader
+            c.drawImage(ImageReader(custom_qr_path), qx, qy, width=qw, height=qh, mask='auto')
+            _qr_drawn = True
+        except Exception:
+            pass
 
-    # ─── annotations قابلة للنقر فوق الروابط المطبوعة في القالب ───
-    # رابط سطر Arabic  "www.seha.sa/#/inquiries/slenquiry" في القالب
+    # إن لم يكن هناك باركود مخصص — ولّد QR ديناميكياً من الرابط
+    if not _qr_drawn:
+        try:
+            import qrcode
+            from reportlab.lib.utils import ImageReader
+            _qr = qrcode.QRCode(version=2, box_size=6, border=1,
+                                error_correction=qrcode.constants.ERROR_CORRECT_M)
+            _qr.add_data(_qr_url)
+            _qr.make(fit=True)
+            _qr_img = _qr.make_image(fill_color="black", back_color="white")
+            _buf = io.BytesIO()
+            _qr_img.save(_buf, 'PNG')
+            _buf.seek(0)
+            c.drawImage(ImageReader(_buf), qx, qy, width=qw, height=qh, mask='auto')
+        except Exception:
+            c.setFillColorRGB(1, 1, 1)
+            c.setStrokeColorRGB(1, 1, 1)
+            c.setLineWidth(0)
+            c.rect(qx, qy, qw, qh, stroke=0, fill=1)
+
+    # ─── annotations قابلة للنقر — جميعها تشير إلى _qr_url ───
     ar_link_y0 = 333.0 * y_scale
     ar_link_y1 = 347.0 * y_scale
     ar_link_x0 = 157.0 * x_scale
     ar_link_x1 = 300.0 * x_scale
-    c.linkURL(SEHA_URL, (ar_link_x0, ar_link_y0, ar_link_x1, ar_link_y1), relative=0)
+    c.linkURL(_qr_url, (ar_link_x0, ar_link_y0, ar_link_x1, ar_link_y1), relative=0)
 
-    # رابط سطر English "www.seha.sa/#/inquiries/slenquiry" في القالب
     en_link_y0 = 290.0 * y_scale
     en_link_y1 = 302.0 * y_scale
     en_link_x0 = 157.0 * x_scale
     en_link_x1 = 300.0 * x_scale
-    c.linkURL(SEHA_URL, (en_link_x0, en_link_y0, en_link_x1, en_link_y1), relative=0)
+    c.linkURL(_qr_url, (en_link_x0, en_link_y0, en_link_x1, en_link_y1), relative=0)
 
-    # رابط "sehaseinquiresslendquiry.com" النص المطبوع في القالب (قابل للنسخ)
     try:
-        _website_url = str(website_url or "https://www.sehasaa.com").strip()
         site_y0 = 264.0 * y_scale
         site_y1 = 278.0 * y_scale
         site_x0 = 142.0 * x_scale
         site_x1 = 258.0 * x_scale
-        c.linkURL(_website_url, (site_x0, site_y0, site_x1, site_y1), relative=0)
+        c.linkURL(_qr_url, (site_x0, site_y0, site_x1, site_y1), relative=0)
     except Exception:
         pass
 
@@ -1080,6 +1088,7 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
                         license_number=None,
                         hospital_type=None,
                         website_url="https://www.sehasaa.com",
+                        custom_qr_path=None,
                         template_path=None):
     """
     ينشئ PDF إجازة مرضية بإحداثيات مطابقة لملف صحة المرجعي.
@@ -1230,7 +1239,7 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
 
     try:
         _create_overlay(page_w, page_h, field_values, None, logo_path, overlay_tmp,
-                        website_url=website_url)
+                        website_url=website_url, custom_qr_path=custom_qr_path)
 
         template_reader = PdfReader(template_path)
         overlay_reader  = PdfReader(overlay_tmp)
