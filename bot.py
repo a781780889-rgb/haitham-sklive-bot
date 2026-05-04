@@ -23,9 +23,6 @@ from telegram.ext import (
 
 import asyncio
 import database as db
-import pending_review as pr
-from pending_review import init_pending_tables
-import review_handlers as rh
 from external_api import send_leave_to_external_api
 from pdf_gen import (
     generate_excuse_pdf,
@@ -130,6 +127,25 @@ from hospitals_data import (
 # ══════════════════════════════════════════════
 # دوال مساعدة
 # ══════════════════════════════════════════════
+
+def has_logo(hospital: dict) -> bool:
+    """
+    يتحقق من وجود شعار للمستشفى — يدعم المسارات على القرص وكذلك
+    الشعارات المخزّنة في قاعدة البيانات (logo_path يبدأ بـ db:).
+    """
+    lp = hospital.get("logo_path", "") or ""
+    if not lp:
+        return False
+    # شعار مخزّن في DB
+    if lp.startswith("db:"):
+        try:
+            from file_storage import file_exists
+            return file_exists(lp[3:])
+        except Exception:
+            return True  # نفترض الوجود إن تعذّر التحقق
+    # شعار على القرص
+    return os.path.exists(lp)
+
 
 def md_escape(text: str) -> str:
     """يُهرّب رموز Markdown الخاصة."""
@@ -392,11 +408,10 @@ def main_menu_keyboard(is_admin: bool = False):
         [KeyboardButton("📝 إرسال طلب جديد /go")],
         [KeyboardButton("📋 طلباتي"),         KeyboardButton("🧾 اشحن رصيدك")],
         [KeyboardButton("🌐 نظام المواقع"),   KeyboardButton("🏥 نظام المستشفيات")],
-        [KeyboardButton("➕ اقتراح مستشفى"),  KeyboardButton("👨‍⚕️ اقتراح طبيب")],
         [KeyboardButton("🏠 القائمة الرئيسية")],
     ]
     if is_admin:
-        keyboard.insert(4, [KeyboardButton("⚙️ نظام البوت"), KeyboardButton("🎛️ لوحة التحكم")])
+        keyboard.insert(3, [KeyboardButton("⚙️ نظام البوت"), KeyboardButton("🎛️ لوحة التحكم")])
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def dashboard_keyboard():
@@ -583,10 +598,7 @@ def payment_methods_keyboard():
     return ReplyKeyboardMarkup(rows, resize_keyboard=True)
 
 def admin_keyboard():
-    pending_count = pr.get_pending_count()
-    review_label = f"🔍 مراجعة الطلبات 🔴 {pending_count}" if pending_count > 0 else "🔍 مراجعة الطلبات"
     return ReplyKeyboardMarkup([
-        [KeyboardButton(review_label)],
         [KeyboardButton("📄 قوالب PDF"),     KeyboardButton("🖼️ شعارات المستشفيات")],
         [KeyboardButton("🏥 إدارة المستشفيات"), KeyboardButton("👨‍⚕️ إدارة الأطباء")],
         [KeyboardButton("👥 المستخدمين"),    KeyboardButton("📊 الطلبات")],
@@ -642,7 +654,7 @@ def logo_city_hospitals_keyboard(city: str, hospitals_db: list):
     rows = []
     for name in combined:
         has_logo = name in db_names and any(
-            h.get("logo_path") and os.path.exists(h.get("logo_path", ""))
+            has_logo(h)
             for h in hospitals_db if h["name"] == name
         )
         label = f"✅ {name}" if has_logo else name
@@ -669,7 +681,7 @@ async def refresh_city_logo_keyboard(message, context):
     rows = [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]]
     for name in combined:
         db_h     = next((h for h in db_city if h["name"] == name), None)
-        has_logo = db_h and db_h.get("logo_path") and os.path.exists(db_h.get("logo_path", ""))
+        has_logo = db_h and has_logo(db_h)
         label    = f"✅ {name}" if has_logo else name
         rows.append([KeyboardButton(label)])
     context.user_data["state"] = "admin_logo_select_hospital"
@@ -684,7 +696,7 @@ async def refresh_city_logo_keyboard(message, context):
 def hospitals_select_keyboard(hospitals: list):
     keyboard = [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]]
     for h in hospitals:
-        has_logo = h.get("logo_path") and os.path.exists(h.get("logo_path", ""))
+        has_logo = has_logo(h)
         label = f"✅ {h['name']}" if has_logo else h['name']
         keyboard.append([KeyboardButton(label)])
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
@@ -888,7 +900,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == "🏥 نظام المستشفيات":
         from hospitals_data import count_hospitals
         hospitals = db.get_all_hospitals()
-        with_logo = sum(1 for h in hospitals if h.get("logo_path") and os.path.exists(h.get("logo_path", "")))
+        with_logo = sum(1 for h in hospitals if has_logo(h))
         gov = sum(1 for h in hospitals if h.get("hospital_type") == "حكومي")
         prv = len(hospitals) - gov
         stats = count_hospitals()
@@ -905,52 +917,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"يمكنك إدارة المستشفيات من لوحة الإدارة ⚙️",
             parse_mode="Markdown", reply_markup=back_keyboard()
         )
-        return
-
-    # ── اقتراح مستشفى من مستخدم عادي ──
-    if text == "➕ اقتراح مستشفى":
-        context.user_data["state"] = "user_add_hospital_name"
-        await update.message.reply_text(
-            "🏥 *اقتراح مستشفى جديد*\n\n"
-            "سيظهر المستشفى لك فوراً للاستخدام الشخصي.\n"
-            "بعد مراجعة الإدارة سيُتاح للجميع.\n\n"
-            "✏️ أرسل اسم المستشفى:",
-            parse_mode="Markdown", reply_markup=back_keyboard()
-        )
-        return
-
-    # ── اقتراح طبيب من مستخدم عادي ──
-    if text == "👨‍⚕️ اقتراح طبيب":
-        # عرض قائمة المستشفيات المتاحة للمستخدم
-        hospitals_visible = pr.get_all_hospitals_visible_to_user(uid)
-        if not hospitals_visible:
-            await update.message.reply_text("⚠️ لا توجد مستشفيات متاحة حالياً.")
-            return
-        context.user_data["state"] = "user_add_doctor_hospital"
-        rows = [[KeyboardButton("⬅️ رجوع")]]
-        for i in range(0, min(len(hospitals_visible), 30), 2):
-            row = [KeyboardButton(hospitals_visible[i]["name"])]
-            if i + 1 < len(hospitals_visible):
-                row.append(KeyboardButton(hospitals_visible[i+1]["name"]))
-            rows.insert(-1, row)
-        await update.message.reply_text(
-            "👨‍⚕️ *اقتراح طبيب جديد*\n\n"
-            "سيظهر الطبيب لك فوراً للاستخدام الشخصي.\n"
-            "بعد مراجعة الإدارة سيُتاح للجميع.\n\n"
-            "🏥 اختر المستشفى:",
-            parse_mode="Markdown",
-            reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
-        )
-        return
-
-    # ── معالجة مراحل اقتراح مستشفى ──
-    if state in ["user_add_hospital_name", "user_add_hospital_city", "user_add_hospital_type"]:
-        await rh.handle_user_add_hospital(update, context, text, uid, name, ADMIN_IDS)
-        return
-
-    # ── معالجة مراحل اقتراح طبيب ──
-    if state in ["user_add_doctor_hospital", "user_add_doctor_name", "user_add_doctor_specialty"]:
-        await rh.handle_user_add_doctor(update, context, text, uid, name, ADMIN_IDS)
         return
 
     # ── لوحة الإدارة ──
@@ -1350,16 +1316,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ══════════════════════════════════════════════
 # دوال مساعدة للمستخدم
 # ══════════════════════════════════════════════
-
-
-async def cmd_pending(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """أمر /pending — يعرض قائمة المراجعة للمسؤولين"""
-    uid  = update.effective_user.id
-    name = update.effective_user.full_name or "مستخدم"
-    if not is_admin_user(uid):
-        await update.message.reply_text("❌ هذا الأمر للمسؤولين فقط.")
-        return
-    await rh.show_admin_review_panel(update, context, uid)
 
 
 async def cmd_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -2076,16 +2032,6 @@ async def handle_admin_router(update, context, text, uid, name):
             await update.message.reply_text("📢 أرسل: `بث [رسالتك]`", parse_mode="Markdown")
         return
 
-    # ── مراجعة الطلبات المعلقة ──
-    if state == "admin" and (text.startswith("🔍 مراجعة الطلبات")):
-        await rh.show_admin_review_panel(update, context, uid)
-        return
-
-    # ── أمر /pending لعرض قائمة المراجعة ──
-    if text == "/pending" and is_admin_user(uid):
-        await rh.show_admin_review_panel(update, context, uid)
-        return
-
     # القائمة الرئيسية للإدارة
     if state == "admin":
         if text == "📄 قوالب PDF":
@@ -2327,8 +2273,16 @@ async def handle_logos(update, context, text, uid):
         # المستشفيات المسجّلة في DB بدون شعار
         hospitals_no_logo = [
             h for h in hospitals_all
-            if not (h.get("logo_path") and os.path.exists(h.get("logo_path", "")))
+            if not has_logo(h)
         ]
+        # ✅ إضافة المستشفيات من KSA_HOSPITALS غير المسجّلة في DB أصلاً
+        db_names = {h["name"] for h in hospitals_all}
+        for city, city_data in CITY_HOSPITALS.items():
+            for cat in ["حكومي", "خاص", "مجمعات"]:
+                for hname in city_data.get(cat, []):
+                    if hname not in db_names:
+                        hospitals_no_logo.append({"name": hname, "city": city, "logo_path": None})
+                        db_names.add(hname)
         if not hospitals_no_logo:
             await update.message.reply_text(
                 "✅ *جميع المستشفيات المسجّلة لديها شعار!*",
@@ -2357,6 +2311,18 @@ async def handle_logos(update, context, text, uid):
         if not matched:
             results = db.search_hospitals(clean)
             matched = results[0] if results else None
+        # ✅ إضافة المستشفى تلقائياً من KSA_HOSPITALS إن لم يكن في DB
+        if not matched:
+            all_flat = []
+            for city, city_data in CITY_HOSPITALS.items():
+                for cat in ["حكومي", "خاص", "مجمعات"]:
+                    for hname in city_data.get(cat, []):
+                        all_flat.append((hname, city, cat))
+            ksa_match = next((x for x in all_flat if x[0] == clean), None)
+            if ksa_match:
+                db.add_hospital(ksa_match[0], ksa_match[1], ksa_match[2])
+                hospitals_all_fresh = db.get_all_hospitals()
+                matched = next((h for h in hospitals_all_fresh if h["name"] == clean), None)
         if matched:
             context.user_data["logo_hospital"] = matched["name"]
             context.user_data["logo_target"]   = matched["name"]
@@ -2455,7 +2421,7 @@ async def handle_logos(update, context, text, uid):
             rows = [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]]
             for name in combined_names:
                 db_h = next((h for h in db_city if h["name"] == name), None)
-                has_logo = db_h and db_h.get("logo_path") and os.path.exists(db_h.get("logo_path", ""))
+                has_logo = db_h and has_logo(db_h)
                 label = f"✅ {name}" if has_logo else name
                 rows.append([KeyboardButton(label)])
             await update.message.reply_text(
@@ -2514,8 +2480,8 @@ async def handle_logos(update, context, text, uid):
 
     # ── عرض الشعارات الحالية
     elif text == "📋 عرض الشعارات الحالية":
-        with_logo = [h for h in hospitals_all if h.get("logo_path") and os.path.exists(h.get("logo_path", ""))]
-        without   = [h for h in hospitals_all if not (h.get("logo_path") and os.path.exists(h.get("logo_path", "")))]
+        with_logo = [h for h in hospitals_all if has_logo(h)]
+        without   = [h for h in hospitals_all if not (has_logo(h))]
         msg = "📋 *الشعارات الحالية:*\n\n"
         if with_logo:
             msg += f"✅ *لديها شعار ({len(with_logo)}):*\n" + "\n".join([f"• {h['name']} — {h.get('city','')}" for h in with_logo]) + "\n\n"
@@ -2532,7 +2498,7 @@ async def handle_logos(update, context, text, uid):
 
     # ── حذف شعار
     elif text == "🗑 حذف شعار":
-        with_logo = [h for h in hospitals_all if h.get("logo_path") and os.path.exists(h.get("logo_path", ""))]
+        with_logo = [h for h in hospitals_all if has_logo(h)]
         if with_logo:
             context.user_data["state"] = "admin_logo_select_hospital"
             context.user_data["logo_action"] = "delete"
@@ -2622,7 +2588,7 @@ async def show_hospitals_admin(update):
     lines = []
     for h in hospitals:
         status = "✅" if h.get("status") == "active" else "⏸"
-        logo   = "🖼" if h.get("logo_path") and os.path.exists(h.get("logo_path", "")) else ""
+        logo   = "🖼" if has_logo(h) else ""
         lines.append(f"{status}{logo} {md_escape(h['name'])} — {md_escape(h['city'])} ({md_escape(h.get('hospital_type',''))})")
 
     # إرسال العنوان أولاً
@@ -2728,7 +2694,7 @@ async def handle_admin_hospitals(update, context, text, uid):
             for name in combined:
                 db_h = next((h for h in db_city if h["name"] == name), None)
                 status = "✅" if db_h and db_h.get("status") == "active" else ("⏸" if db_h else "⬜")
-                logo = "🖼" if db_h and db_h.get("logo_path") and os.path.exists(db_h.get("logo_path","")) else ""
+                logo = "🖼" if db_h and has_logo(db_h) else ""
                 rows.append([KeyboardButton(f"{status}{logo} {name}")])
             city_data = CITY_HOSPITALS.get(text, {})
             gov_c = len(city_data.get("حكومي", []))
@@ -2772,7 +2738,7 @@ async def handle_admin_hospitals(update, context, text, uid):
                 hospitals_db = db.get_all_hospitals()
                 matched = next((h for h in hospitals_db if h["name"] == clean), None)
         if matched:
-            logo = "✅ لديه شعار" if matched.get("logo_path") and os.path.exists(matched.get("logo_path","")) else "⬜ بدون شعار"
+            logo = "✅ لديه شعار" if has_logo(matched) else "⬜ بدون شعار"
             status = "✅ مفعّل" if matched.get("status") == "active" else "⏸ متوقف"
             doctors = db.get_doctors_by_hospital_name(clean, active_only=False)
             doc_list = "\n".join([f"  • د.{d['name']} — {d['specialty']}" for d in doctors]) or "  لا يوجد أطباء"
@@ -3477,7 +3443,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             hospitals_all_fresh = db.get_all_hospitals()
             hospitals_no_logo = [
                 h for h in hospitals_all_fresh
-                if not (h.get("logo_path") and os.path.exists(h.get("logo_path", "")))
+                if not (has_logo(h))
             ]
             if not hospitals_no_logo:
                 context.user_data["state"] = "admin_logos"
@@ -3784,15 +3750,6 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     name  = update.effective_user.full_name or "مستخدم"
     data  = query.data
 
-    # ── نظام المراجعة الإدارية ──
-    if data.startswith("review_") and is_admin_user(uid):
-        handled = await rh.handle_review_callback(query, uid, data, context.bot, ADMIN_IDS)
-        if handled:
-            return
-    elif data.startswith("review_") and not is_admin_user(uid):
-        await query.answer("❌ هذا الإجراء للمسؤولين فقط.", show_alert=True)
-        return
-
     if data == "cmd_new_order":
         context.user_data.clear()
         context.user_data["state"] = "choose_city"
@@ -4018,7 +3975,7 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             hospitals_all_fresh = db.get_all_hospitals()
             hospitals_no_logo = [
                 h for h in hospitals_all_fresh
-                if not (h.get("logo_path") and os.path.exists(h.get("logo_path", "")))
+                if not (has_logo(h))
             ]
             if not hospitals_no_logo:
                 context.user_data["state"] = "admin_logos"
@@ -4113,7 +4070,6 @@ def _start_web_server():
 
 def main():
     db.init_db()
-    init_pending_tables()  # تهيئة جداول نظام المراجعة
     # ── تثبيت الرابط الرسمي للموقع عند كل تشغيل ───────────────────────
     db.set_setting("website_url", "https://www.sehasaa.com/#/inquiries/slenquiry")
     # ──────────────────────────────────────────────────────────────────
@@ -4132,7 +4088,6 @@ def main():
         .build()
     )
     app.add_handler(CommandHandler("start",    start))
-    app.add_handler(CommandHandler("pending",  cmd_pending))
     app.add_handler(CommandHandler("balance",  cmd_balance))
     app.add_handler(CommandHandler("myorders", cmd_myorders))
     app.add_handler(CommandHandler("help",     cmd_help))

@@ -530,22 +530,12 @@ def get_user_activity(user_id, limit=10):
 
 # ── المستشفيات ──
 
-def get_all_hospitals(active_only=False, public_only=True):
-    """
-    يعيد المستشفيات.
-    public_only=True  → العناصر العامة فقط (الافتراضي)
-    public_only=False → جميع العناصر بما فيها الخاصة (للإدارة)
-    """
+def get_all_hospitals(active_only=False):
     conn = get_conn()
     try:
-        conditions = []
-        if active_only:
-            conditions.append("status='active'")
-        if public_only:
-            conditions.append("(visibility='public' OR visibility IS NULL)")
         sql = "SELECT * FROM hospitals"
-        if conditions:
-            sql += " WHERE " + " AND ".join(conditions)
+        if active_only:
+            sql += " WHERE status='active'"
         sql += " ORDER BY city, name"
         rows = conn.execute(sql).fetchall()
         return [dict(r) for r in rows]
@@ -553,22 +543,12 @@ def get_all_hospitals(active_only=False, public_only=True):
         conn.close()
 
 
-def get_hospitals_by_city(city, public_only=True):
-    """
-    يعيد مستشفيات مدينة معينة.
-    public_only=True → العامة فقط | False → جميعها (للإدارة)
-    """
+def get_hospitals_by_city(city):
     conn = get_conn()
     try:
-        if public_only:
-            rows = conn.execute(
-                "SELECT * FROM hospitals WHERE city=? AND status='active' AND (visibility='public' OR visibility IS NULL)",
-                (city,)
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT * FROM hospitals WHERE city=? AND status='active'", (city,)
-            ).fetchall()
+        rows = conn.execute(
+            "SELECT * FROM hospitals WHERE city=? AND status='active'", (city,)
+        ).fetchall()
         return [dict(r) for r in rows]
     finally:
         conn.close()
@@ -585,16 +565,10 @@ def search_hospitals(query):
         conn.close()
 
 
-def get_hospital_by_name(name, include_private=False):
+def get_hospital_by_name(name):
     conn = get_conn()
     try:
-        if include_private:
-            row = conn.execute("SELECT * FROM hospitals WHERE name=?", (name,)).fetchone()
-        else:
-            row = conn.execute(
-                "SELECT * FROM hospitals WHERE name=? AND (visibility='public' OR visibility IS NULL)",
-                (name,)
-            ).fetchone()
+        row = conn.execute("SELECT * FROM hospitals WHERE name=?", (name,)).fetchone()
         return dict(row) if row else None
     finally:
         conn.close()
