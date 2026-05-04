@@ -1726,11 +1726,25 @@ async def generate_and_send_pdf(update, context, uid):
         pdf_path_temp = os.path.join(tempfile.gettempdir(), f"excuse_{uid}_{int(datetime.now().timestamp())}.pdf")
         pdf_path = pdf_path_temp
 
+        # ── تشخيص البيئة ──
+        import sys, platform
+        _base_dir = os.path.dirname(os.path.abspath(__file__))
+        _tpl_default = os.path.join(_base_dir, "templates", "default_template.pdf")
+        _tpl_exists  = os.path.exists(_tpl_default)
+        _tpl_size    = os.path.getsize(_tpl_default) if _tpl_exists else 0
+        logger.info(
+            f"[DIAG] python={sys.version[:10]} os={platform.system()} "
+            f"base={_base_dir} default_tpl_exists={_tpl_exists} size={_tpl_size}"
+        )
+
         # ── جلب القالب من قاعدة البيانات ──
         active_template = db.get_active_template()
+        logger.info(f"[DIAG] active_template={active_template}")
         if not active_template:
             await update.effective_message.reply_text(
                 "❌ *لا يوجد قالب PDF!*\n\n"
+                f"📁 القالب الافتراضي على القرص: `{'موجود ✅' if _tpl_exists else 'مفقود ❌'}`\n"
+                f"📏 الحجم: `{_tpl_size:,} bytes`\n\n"
                 "يجب رفع قالب أولاً من:\n"
                 "⚙️ نظام البوت ← 📄 قوالب PDF ← ➕ إضافة قالب",
                 parse_mode="Markdown",
@@ -1747,9 +1761,13 @@ async def generate_and_send_pdf(update, context, uid):
         if not template_path:
             logger.error(f"generate_pdf user={uid}: get_template_file_path أعادت None — file_path={active_template.get('file_path','?')}")
             await update.effective_message.reply_text(
-                "❌ *ملف القالب مفقود!*\n\n"
-                "أعد رفع القالب من:\n"
-                "⚙️ نظام البوت ← 📄 قوالب PDF ← ➕ إضافة قالب",
+                f"❌ *ملف القالب مفقود!*\n\n"
+                f"🔍 *تشخيص:*\n"
+                f"• القالب في DB: `{active_template.get('file_path','?')}`\n"
+                f"• القالب الافتراضي: `{'موجود ✅' if _tpl_exists else 'مفقود ❌'}`\n"
+                f"• الحجم: `{_tpl_size:,} bytes`\n\n"
+                f"أعد رفع القالب من:\n"
+                f"⚙️ نظام البوت ← 📄 قوالب PDF ← ➕ إضافة قالب",
                 parse_mode="Markdown",
                 reply_markup=main_menu_keyboard(is_admin_user(uid))
             )
@@ -1872,13 +1890,19 @@ async def generate_and_send_pdf(update, context, uid):
         # ملف pdf يُحذف في finally
 
     except Exception as e:
-        logger.error(f"PDF error user={uid}: {e}", exc_info=True)
+        import traceback
+        err_details = traceback.format_exc()
+        logger.error(f"PDF error user={uid}: {e}\n{err_details}")
         # ✅ إعادة الرصيد تلقائياً عند الفشل
         db.refund_balance(uid, price, f"فشل PDF — {type(e).__name__}")
+        # إرسال تفاصيل الخطأ للمستخدم (مؤقتاً للتشخيص)
+        short_err = str(e)[:300]
+        err_type  = type(e).__name__
         await update.effective_message.reply_text(
-            "❌ *حدث خطأ أثناء إنشاء الملف.*\n\n"
-            "💰 تم إعادة رصيدك تلقائياً.\n"
-            "تأكد من رفع قالب PDF من لوحة الإدارة أو تواصل مع الدعم.",
+            f"❌ *حدث خطأ أثناء إنشاء الملف.*\n\n"
+            f"💰 تم إعادة رصيدك تلقائياً.\n\n"
+            f"🔍 *تفاصيل الخطأ (للدعم الفني):*\n"
+            f"`{err_type}: {short_err}`",
             parse_mode="Markdown", reply_markup=back_keyboard()
         )
     finally:
