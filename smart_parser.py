@@ -1,11 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-smart_parser.py — محرك الاستيعاب الذكي للبيانات
-═══════════════════════════════════════════════════
-يستقبل رسالة المستخدم بأي لغة أو ترتيب أو صيغة،
-ويستخرج منها حقول الطلب مع دعم كامل للتواريخ
-الهجرية والميلادية بجميع صيغها.
+smart_parser.py — محرك الاستيعاب الذكي للبيانات v2
 """
 
 import re
@@ -22,6 +18,62 @@ _AR2W = str.maketrans(
 
 def to_western(text: str) -> str:
     return str(text).translate(_AR2W) if text else text
+
+
+# ═══════════════════════════════════════════════
+# تنظيف النصوص — إزالة الرموز والبوادئ الزائدة
+# ═══════════════════════════════════════════════
+
+def clean_value(value: str) -> str:
+    """
+    ينظّف قيمة الحقل:
+    - يزيل الرموز من البداية والنهاية (/ \\ | : ، , . -)
+    - يزيل البوادئ القصيرة متبوعة بـ / مثل "ك /" أو "اسمك /"
+    - يوحّد المسافات
+    """
+    if not value:
+        return value
+    v = value.strip()
+    # إزالة نمط مثل "ك /" أو "اسمك /" في البداية
+    v = re.sub(r'^[\u0600-\u06FF\w]{0,8}\s*/\s*', '', v, flags=re.UNICODE)
+    # إزالة "/" أو "\" أو "|" أو ":" من البداية وحدها
+    v = re.sub(r'^[/\\|:،,\s]+', '', v)
+    # إزالة الرموز من النهاية
+    v = re.sub(r'[/\\|:،,\s.]+$', '', v)
+    # تنظيف المسافات الزائدة
+    v = re.sub(r'\s{2,}', ' ', v).strip()
+    return v
+
+
+def clean_name(name: str) -> str:
+    """
+    تنظيف خاص للاسم:
+    - يزيل الألقاب القصيرة (حرف واحد أو كلمة) متبوعة بـ /
+      مثل: ك/ أو د/ أو أ/ أو م/ أو ه/
+    - يزيل كلمات مثل "اسمك", "اسمي", "الاسم" من البداية
+    - لا يحذف حروف من داخل الاسم الحقيقي
+    """
+    if not name:
+        return name
+    n = name.strip()
+
+    # إزالة بادئة قصيرة (حرف واحد فقط) متبوعة بـ / ثم مسافة
+    # مثل: "ك / شهد" → "شهد"  |  "د/ محمد" → "محمد"
+    n = re.sub(r'^[\u0600-\u06FF]\s*/\s*', '', n, flags=re.UNICODE)
+
+    # إزالة كلمات مثل: اسمك / اسمي / الاسم / دكتور / أستاذ متبوعة بـ / أو مسافة
+    n = re.sub(
+        r'^(دكتور|دكتورة|أستاذ|مهندس|اسم[كيه]?|الاسم\s*الكامل|الاسم)\s*[:/،,]?\s*',
+        '', n, flags=re.UNICODE
+    )
+
+    # إزالة "/" من البداية
+    n = re.sub(r'^[/\\|:\s]+', '', n)
+    # إزالة الرموز من النهاية
+    n = re.sub(r'[/\\|:\s.،,]+$', '', n)
+    # توحيد المسافات
+    n = re.sub(r'\s{2,}', ' ', n).strip()
+    return n
 
 
 # ═══════════════════════════════════════════════
@@ -63,24 +115,20 @@ _HIJRI_AR: dict[str, int] = {
 _HIJRI_SORTED = sorted(_HIJRI_AR.items(), key=lambda x: -len(x[0]))
 
 # ═══════════════════════════════════════════════
-# جداول تحويل هجري ← ميلادي (أم القرى — مختصر)
+# جداول تحويل هجري ← ميلادي
 # ═══════════════════════════════════════════════
 def _hijri_to_greg(h_year: int, h_month: int, h_day: int) -> Optional[datetime]:
-    """تحويل بسيط بالصيغة الحسابية (كافٍ للتواريخ من 1400 – 1460)."""
     try:
-        # استخدم hijri إن كان متاحاً
         from hijri_converter import Hijri
         g = Hijri(h_year, h_month, h_day).to_gregorian()
         return datetime(g.year, g.month, g.day)
     except Exception:
         pass
     try:
-        # استخدم pdf_gen كـ fallback
         from pdf_gen import hijri_to_gregorian
         return hijri_to_gregorian(h_year, h_month, h_day)
     except Exception:
         pass
-    # تحويل حسابي مُبسَّط (دقة ±1 يوم في بعض الأشهر)
     try:
         jd = int((11 * h_year + 3) / 30) + 354 * h_year + 30 * h_month
         jd -= int((h_month - 1) / 2) + h_day + 1948440 - 385
@@ -103,22 +151,13 @@ def _hijri_to_greg(h_year: int, h_month: int, h_day: int) -> Optional[datetime]:
 # مُحلِّل التواريخ الشامل
 # ═══════════════════════════════════════════════
 def parse_any_date(raw: str) -> Optional[str]:
-    """
-    يقبل أي صيغة تاريخ ويُعيد DD/MM/YYYY ميلادي أو None.
-
-    يدعم:
-      • أرقام فقط:  31/3/2026 | 31-3-2026 | 2026-03-31
-      • ميلادي بالعربي: 31 مارس 2026
-      • ميلادي بالإنجليزي: 31 March 2026 | March 31, 2026
-      • هجري بالعربي: 12 رمضان 1447 | ١٢ رمضان ١٤٤٧
-      • هجري بالأرقام فقط: 12/10/1447 (يُكشف تلقائياً)
-    """
     if not raw:
         return None
     t = to_western(str(raw)).strip()
     t = re.sub(r'[،,]', ' ', t)
+    # استبدال _ بـ - (مثل ١٢_٤-2026)
+    t = re.sub(r'_', '-', t)
 
-    # ─── هجري باسم الشهر ───────────────────────────────────────
     for month_ar, month_num in _HIJRI_SORTED:
         pattern = rf'(\d{{1,2}})\s+{re.escape(month_ar)}\s*(\d{{4}})?'
         m = re.search(pattern, t, re.IGNORECASE | re.UNICODE)
@@ -129,7 +168,6 @@ def parse_any_date(raw: str) -> Optional[str]:
             if dt:
                 return dt.strftime('%d/%m/%Y')
 
-    # ─── ميلادي باسم الشهر (عربي / إنجليزي) ───────────────────
     for month_str, month_num in _GREG_SORTED:
         pat1 = rf'(\d{{1,2}})\s+{re.escape(month_str)}\s*,?\s*(\d{{4}})?'
         pat2 = rf'{re.escape(month_str)}\s+(\d{{1,2}})\s*,?\s*(\d{{4}})?'
@@ -146,35 +184,31 @@ def parse_any_date(raw: str) -> Optional[str]:
                 except ValueError:
                     pass
 
-    # ─── أرقام فقط ─────────────────────────────────────────────
     num_patterns = [
-        r'(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})',   # DD/MM/YYYY
-        r'(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})',   # YYYY/MM/DD
-        r'(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})$',  # DD/MM/YY
+        r'(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})',
+        r'(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})',
+        r'(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2})$',
     ]
     for pat in num_patterns:
         m = re.search(pat, t)
         if m:
             g = m.groups()
-            if len(g[0]) == 4:          # YYYY-MM-DD
+            if len(g[0]) == 4:
                 year, mon, day = int(g[0]), int(g[1]), int(g[2])
-            elif len(g[2]) == 2:        # DD/MM/YY
+            elif len(g[2]) == 2:
                 day, mon, year = int(g[0]), int(g[1]), 2000 + int(g[2])
-            else:                       # DD/MM/YYYY
+            else:
                 day, mon, year = int(g[0]), int(g[1]), int(g[2])
 
-            # اكتشاف هجري تلقائي: السنة بين 1400-1460
             if 1400 <= year <= 1460:
                 dt = _hijri_to_greg(year, mon, day)
                 if dt:
                     return dt.strftime('%d/%m/%Y')
-            # ميلادي عادي
             if 1 <= mon <= 12 and 1 <= day <= 31:
                 try:
                     dt = datetime(year, mon, day)
                     return dt.strftime('%d/%m/%Y')
                 except ValueError:
-                    # تبديل day/month إذا كان month > 12
                     try:
                         dt = datetime(year, day, mon)
                         return dt.strftime('%d/%m/%Y')
@@ -185,11 +219,6 @@ def parse_any_date(raw: str) -> Optional[str]:
 
 
 def parse_date_range(raw: str):
-    """
-    يستخرج فترة (بداية, نهاية) أو تاريخ واحد من نص.
-    يُعيد tuple: (start_str, end_str, days_count)
-    """
-    # بحث عن فاصل النطاق: "من ... إلى ..." أو "... - ..."
     separators = [
         r'من\s+(.+?)\s+(?:إلى|الى|حتى|ل)\s+(.+)',
         r'(.+?)\s+(?:إلى|الى|حتى|to)\s+(.+)',
@@ -210,7 +239,6 @@ def parse_date_range(raw: str):
                 except ValueError:
                     pass
 
-    # تاريخ واحد
     single = parse_any_date(raw)
     if single:
         return single, single, 1
@@ -219,32 +247,48 @@ def parse_date_range(raw: str):
 
 
 # ═══════════════════════════════════════════════
-# خريطة المرادفات الشاملة للحقول
+# خريطة المرادفات الشاملة للحقول (موسّعة)
 # ═══════════════════════════════════════════════
-# كل مجموعة: (مفتاح_الحقل, [كلمات مفتاحية للتعرف])
 _FIELD_ALIASES: list[tuple[str, list[str]]] = [
     ('full_name', [
         'الاسم الكامل', 'الاسم الرباعي', 'اسم المريض', 'اسم الموظف',
         'الاسم', 'name', 'full name', 'patient name', 'employee name',
         'الأسم', 'الإسم', 'إسم', 'أسم',
+        # جديد — صيغ المستخدمين
+        'اسمك', 'اسمي', 'اسمه', 'اسمها', 'الاسم الكريم',
+        'المستفيد', 'العميل', 'صاحب الطلب',
+        'client', 'beneficiary', 'patient',
     ]),
     ('id_number', [
         'رقم الهوية الوطنية', 'رقم الهوية أو الإقامة', 'رقم الهوية',
         'رقم الإقامة', 'رقم الاقامة', 'الهوية الوطنية', 'الهوية',
         'رقم الوثيقة', 'هوية', 'إقامة', 'اقامة',
         'id number', 'national id', 'iqama', 'id', 'identity',
+        # جديد
+        'رقم الهويه', 'الهويه', 'السجل المدني', 'رقم السجل',
+        'رقم الجواز', 'الجواز', 'passport', 'civil id', 'civil registry',
+        'national identity', 'رقم الوثيقه',
     ]),
     ('workplace', [
         'جهة العمل', 'جهه العمل', 'الجهة الحكومية', 'اسم الشركة',
         'اسم المنشأة', 'صاحب العمل', 'المؤسسة', 'الشركة', 'العمل',
         'employer', 'company', 'organization', 'workplace', 'work',
+        # جديد
+        'مقر العمل', 'جهه العمل', 'الوظيفة', 'مكان العمل',
+        'الجهة', 'المنشاة', 'مكان الخدمة', 'جهة الخدمة',
+        'الجهه', 'الشركه',
     ]),
     ('nationality', [
         'الجنسية', 'الجنسيه', 'nationality', 'جنسية', 'جنسيه',
+        # جديد
+        'جنسيتك', 'جنسيتي', 'الجنس', 'country',
     ]),
     ('city', [
         'المدينة التابعة لجهة العمل', 'المدينة التابعة', 'مدينة العمل',
         'المدينة', 'المدينه', 'city', 'مدينة', 'مدينه',
+        # جديد
+        'المدينه التابعه', 'المدينة التابعه لجهة العمل',
+        'مدينه العمل', 'موقع العمل', 'منطقة العمل',
     ]),
     ('excuse_date', [
         'تاريخ الإجازة', 'تاريخ الاجازة', 'تاريخ الإجازه',
@@ -254,11 +298,20 @@ _FIELD_ALIASES: list[tuple[str, list[str]]] = [
         'يوم الغياب', 'يوم الإجازة',
         'leave date', 'vacation date', 'sick leave', 'leave start',
         'date of leave', 'excuse date',
+        # جديد
+        'تاريخ الاجازه', 'تاريخ بدء الإجازة', 'تاريخ بدء الاجازة',
+        'يوم الاجازة', 'يوم الاجازه', 'تاريخ الغياب',
+        'تاريخ الميلاد بالميلادي', 'تاريخ العذر بالميلادي',
+        'العذر يبدأ', 'العذر يبدا', 'leave from', 'sick day',
     ]),
     ('days_count', [
         'عدد الأيام', 'عدد الايام', 'الأيام', 'الايام', 'المدة',
         'عدد أيام الإجازة', 'مدة الإجازة',
         'days', 'number of days', 'duration',
+        # جديد
+        'عدد أيام العذر', 'مدة العذر', 'عدد الايام المطلوبة',
+        'أيام الإجازة', 'ايام الاجازة', 'مدة الاجازة',
+        'عدد ايام العذر', 'days count',
     ]),
     ('birth_year', [
         'تاريخ الميلاد', 'سنة الميلاد', 'الميلاد',
@@ -267,6 +320,9 @@ _FIELD_ALIASES: list[tuple[str, list[str]]] = [
     ('phone', [
         'رقم الجوال', 'الجوال', 'رقم الهاتف', 'الهاتف', 'رقم التليفون',
         'phone', 'mobile', 'tel', 'telephone',
+        # جديد
+        'رقم الموبايل', 'الموبايل', 'رقم التواصل', 'رقم الاتصال',
+        'رقم جوال', 'جوال', 'هاتف',
     ]),
     ('issue_time', [
         'وقت الإصدار', 'وقت الاصدار', 'الوقت',
@@ -295,12 +351,9 @@ for _key, _aliases in _FIELD_ALIASES:
 
 
 def _match_field(label: str) -> Optional[str]:
-    """يُطابق تسمية الحقل ويُعيد المفتاح أو None."""
     nl = _norm_text(label)
-    # مطابقة كاملة
     if nl in _NORM_ALIASES:
         return _NORM_ALIASES[nl]
-    # مطابقة جزئية (البداية أو النهاية)
     for alias_norm, key in _NORM_ALIASES.items():
         if nl.startswith(alias_norm) or alias_norm.startswith(nl):
             return key
@@ -311,14 +364,6 @@ def _match_field(label: str) -> Optional[str]:
 # الدالة الرئيسية: تحليل الرسالة الحرة
 # ═══════════════════════════════════════════════
 def smart_parse(text: str) -> dict:
-    """
-    يحلل أي رسالة نصية (عربي/إنجليزي، منظمة/حرة، سطر واحد/أسطر)
-    ويستخرج حقول الطلب.
-
-    يُعيد dict بمفاتيح:
-      full_name, id_number, workplace, nationality, city,
-      excuse_date, days_count, birth_year, phone, issue_time, issue_date_input
-    """
     if not text:
         return {}
 
@@ -331,7 +376,6 @@ def smart_parse(text: str) -> dict:
         line = line.strip().lstrip('-•*·◄►▶').strip()
         if ':' not in line and '：' not in line:
             continue
-        # دعم النقطتين العربية كذلك
         sep = ':' if ':' in line else '：'
         parts = line.split(sep, 1)
         label = parts[0].strip()
@@ -351,10 +395,28 @@ def smart_parse(text: str) -> dict:
     # ── المرحلة 2: بحث بالأنماط في النص الحر ────────────────
     _extract_inline(text, result)
 
-    # ── المرحلة 3: تحليل النص الحر الكامل إذا بقيت حقول فارغة ─
+    # ── المرحلة 3: تحليل النص الحر الكامل إذا بقيت حقول فارغة
     _extract_freeform(text, result)
 
+    # ── المرحلة 4: تنظيف نهائي لجميع القيم ─────────────────
+    _clean_all_values(result)
+
     return result
+
+
+def _clean_all_values(result: dict):
+    """تنظيف نهائي لجميع قيم الحقول المستخرجة."""
+    for key in list(result.keys()):
+        val = result[key]
+        if not isinstance(val, str):
+            continue
+        if key == 'full_name':
+            result[key] = clean_name(val)
+        elif key not in ('excuse_date', 'exit_date', 'issue_date_input'):
+            result[key] = clean_value(val)
+        # تنظيف عام للقيم الفارغة
+        if not result[key]:
+            del result[key]
 
 
 def _extract_label_value_no_colon(text: str, result: dict):
@@ -369,17 +431,16 @@ def _extract_label_value_no_colon(text: str, result: dict):
     for line in lines:
         line = line.strip().lstrip('-•*·◄►▶').strip()
         if not line or ':' in line or '：' in line:
-            continue  # سبق معالجتها
+            continue
 
-        # جرب مطابقة كل alias معروف مع بداية السطر
         nl = _norm_text(line)
         matched_key = None
         matched_alias_len = 0
+        matched_value = ''
 
         for alias_norm, key in _NORM_ALIASES.items():
             if nl.startswith(alias_norm):
                 rest = line[len(alias_norm):].strip()
-                # تأكد أن هناك قيمة بعد التسمية
                 if rest and len(alias_norm) > matched_alias_len:
                     matched_key = key
                     matched_alias_len = len(alias_norm)
@@ -411,45 +472,45 @@ def _extract_freeform(text: str, result: dict):
 
         # التاريخ في أي صيغة
         if 'excuse_date' not in result:
-            # استبدل _ بـ - للتواريخ مثل ١٢_٤-2026
             line_for_date = re.sub(r'_', '-', line_w)
             d = parse_any_date(line_for_date)
             if d:
                 result['excuse_date'] = d
 
-    # استخراج الاسم الكامل: السطر الذي لا يحتوي على أرقام ولا تاريخ ولا مدينة معروفة
+    # استخراج الاسم الكامل
     if 'full_name' not in result:
-        _cities = {'الرياض', 'جدة', 'مكة', 'مكه', 'المدينة', 'المدينه', 'الدمام', 'القصيم',
-                   'الطائف', 'تبوك', 'حائل', 'أبها', 'ابها', 'نجران', 'جازان', 'ينبع',
-                   'الجبيل', 'الخبر', 'الاحساء', 'الأحساء', 'بريدة', 'خميس مشيط',
-                   'riyadh', 'jeddah', 'mecca', 'dammam'}
-        _nationalities_words = {'سعودي', 'سعودية', 'سعوديه', 'مصري', 'يمني', 'هندي',
-                                 'باكستاني', 'سوري', 'أردني', 'اردني', 'فلسطيني', 'لبناني'}
+        _cities_set = {'الرياض', 'جدة', 'جده', 'مكة', 'مكه', 'المدينة', 'المدينه',
+                       'الدمام', 'القصيم', 'الطائف', 'تبوك', 'حائل', 'أبها', 'ابها',
+                       'نجران', 'جازان', 'ينبع', 'الجبيل', 'الخبر', 'الاحساء',
+                       'الأحساء', 'بريدة', 'خميس مشيط', 'riyadh', 'jeddah'}
+        _nat_words = {'سعودي', 'سعودية', 'سعوديه', 'مصري', 'يمني', 'هندي',
+                      'باكستاني', 'سوري', 'أردني', 'اردني', 'فلسطيني', 'لبناني'}
 
         for line in lines:
             line_w = to_western(line)
-            # تجاهل السطور التي تحتوي على أرقام أو مدن أو جنسيات
             if re.search(r'\d', line_w):
                 continue
             nl = _norm_text(line)
-            if any(_norm_text(c) in nl for c in _cities):
+            if any(_norm_text(c) in nl for c in _cities_set):
                 continue
-            if any(_norm_text(n) in nl for n in _nationalities_words):
+            if any(_norm_text(n) in nl for n in _nat_words):
                 continue
-            # تجاهل إذا كانت التسمية معروفة
             if _match_field(line):
                 continue
-            # الاسم يجب أن يكون كلمتين على الأقل
             words = line.split()
             if len(words) >= 2:
-                result['full_name'] = line.strip()
-                break
+                # تنظيف الاسم من أي بوادئ زائدة
+                candidate = clean_name(line.strip())
+                if candidate and len(candidate.split()) >= 2:
+                    result['full_name'] = candidate
+                    break
 
-    # استخراج المدينة / جهة العمل من السطور المتبقية
+    # استخراج المدينة/جهة العمل
     _cities_map = {
         'الرياض': 'الرياض', 'جده': 'جدة', 'جدة': 'جدة',
-        'مكه': 'مكة', 'مكة': 'مكة', 'المدينة': 'المدينة المنورة', 'المدينه': 'المدينة المنورة',
-        'الدمام': 'الدمام', 'القصيم': 'القصيم', 'الطائف': 'الطائف',
+        'مكه': 'مكة', 'مكة': 'مكة', 'المدينة': 'المدينة المنورة',
+        'المدينه': 'المدينة المنورة', 'الدمام': 'الدمام',
+        'القصيم': 'القصيم', 'الطائف': 'الطائف',
         'تبوك': 'تبوك', 'حائل': 'حائل', 'أبها': 'أبها', 'ابها': 'أبها',
         'نجران': 'نجران', 'جازان': 'جازان', 'ينبع': 'ينبع',
         'الجبيل': 'الجبيل', 'الخبر': 'الخبر', 'الاحساء': 'الأحساء',
@@ -464,19 +525,21 @@ def _extract_freeform(text: str, result: dict):
                 if 'city' not in result:
                     result['city'] = city_val
                 if 'workplace' not in result:
-                    result['workplace'] = line.strip()
+                    result['workplace'] = clean_value(line.strip())
                 break
 
 
 def _process_value(key: str, value: str) -> str:
-    """يُعالج قيمة الحقل حسب نوعه."""
-    value = value.strip()
+    """يُعالج قيمة الحقل حسب نوعه مع تنظيف فوري."""
+    value = clean_value(value.strip())
+
+    if key == 'full_name':
+        return clean_name(value)
 
     if key == 'excuse_date':
         start, end, days = parse_date_range(value)
         if start:
-            # نُخزّن البداية في excuse_date والنهاية في exit_date والأيام في days_count
-            return start  # الـ caller يتولى الـ end و days
+            return start
         return value
 
     if key in ('issue_date_input',):
@@ -488,7 +551,6 @@ def _process_value(key: str, value: str) -> str:
         return m.group() if m else value
 
     if key == 'id_number':
-        # إزالة المسافات والشرطات من رقم الهوية
         return re.sub(r'[\s\-]', '', to_western(value))
 
     if key == 'phone':
@@ -512,7 +574,7 @@ def _extract_inline(text: str, result: dict):
         if m:
             result['phone'] = m.group(1)
 
-    # الجنسية — قائمة سريعة
+    # الجنسية — قائمة شاملة
     if 'nationality' not in result:
         nationalities = {
             'سعودي': 'سعودي', 'سعوديه': 'سعودي', 'سعودية': 'سعودي',
@@ -524,10 +586,11 @@ def _extract_inline(text: str, result: dict):
             'اردني': 'أردني', 'أردني': 'أردني', 'أردنية': 'أردني',
             'فلسطيني': 'فلسطيني', 'فلسطينية': 'فلسطيني',
             'لبناني': 'لبناني', 'لبنانية': 'لبناني',
-            'sudanese': 'سوداني', 'سوداني': 'سوداني',
-            'ethiopian': 'إثيوبي', 'اثيوبي': 'إثيوبي',
+            'سوداني': 'سوداني', 'سودانية': 'سوداني',
+            'اثيوبي': 'إثيوبي', 'إثيوبي': 'إثيوبي',
             'saudi': 'سعودي', 'egyptian': 'مصري', 'yemeni': 'يمني',
             'pakistani': 'باكستاني', 'indian': 'هندي',
+            'sudanese': 'سوداني', 'ethiopian': 'إثيوبي',
         }
         nt = _norm_text(text)
         for nat_key, nat_val in nationalities.items():
@@ -540,15 +603,8 @@ def _extract_inline(text: str, result: dict):
 # استخراج موسّع: تاريخ الإجازة مع نهاية وأيام
 # ═══════════════════════════════════════════════
 def smart_parse_full(text: str) -> dict:
-    """
-    نسخة موسّعة من smart_parse تُعيد أيضاً:
-      exit_date: نهاية الإجازة (DD/MM/YYYY)
-      days_count: عدد الأيام (محسوب)
-    """
     result = smart_parse(text)
 
-    # معالجة تاريخ الإجازة للاستخراج الكامل للنطاق
-    # ابحث عن قيمة تاريخ الإجازة في النص الأصلي
     date_raw = None
     for line in text.splitlines():
         line = line.strip().lstrip('-•*·').strip()
@@ -580,23 +636,19 @@ def smart_parse_full(text: str) -> dict:
 # ═══════════════════════════════════════════════
 # تقييم اكتمال البيانات
 # ═══════════════════════════════════════════════
-# الحقول الإلزامية (كما في bot.py)
 _REQUIRED = [
     {'key': 'full_name',   'label': 'الاسم الكامل'},
     {'key': 'id_number',   'label': 'رقم الهوية'},
     {'key': 'workplace',   'label': 'جهة العمل'},
     {'key': 'nationality', 'label': 'الجنسية'},
     {'key': 'excuse_date', 'label': 'تاريخ الإجازة'},
-    # city, hospital, doctor → تُحدَّد عبر الأزرار التفاعلية ولا تُطلب هنا
 ]
 
 def get_missing(data: dict) -> list[dict]:
-    """يُعيد قائمة الحقول الإلزامية الناقصة."""
     return [f for f in _REQUIRED if not data.get(f['key'])]
 
 
 def build_missing_prompt(data: dict) -> str:
-    """ينشئ رسالة ذكية تطلب الحقول الناقصة فقط."""
     missing = get_missing(data)
     if not missing:
         return ''
@@ -611,14 +663,9 @@ def build_missing_prompt(data: dict) -> str:
 # بناء ملخص الطلب النهائي
 # ═══════════════════════════════════════════════
 def build_smart_preview(data: dict, ctx: dict = None) -> str:
-    """
-    يُنشئ ملخص الطلب بالصيغة المطلوبة مع عدد الأيام المحسوب.
-    ctx: user_data من telegram context (اختياري)
-    """
     ctx = ctx or {}
     od = data
 
-    # حساب عدد الأيام وتاريخ النهاية
     start_raw = od.get('excuse_date', '')
     days_raw  = od.get('days_count', '1')
     end_raw   = od.get('exit_date', '')
@@ -628,7 +675,6 @@ def build_smart_preview(data: dict, ctx: dict = None) -> str:
     except Exception:
         days_int = 1
 
-    # تنسيق التواريخ
     start_fmt = _fmt(start_raw)
     if end_raw:
         end_fmt = _fmt(end_raw)
@@ -641,7 +687,6 @@ def build_smart_preview(data: dict, ctx: dict = None) -> str:
     else:
         end_fmt = '—'
 
-    # مدة الإجازة بالكلمات
     if days_int == 1:
         duration_str = 'يوم واحد'
     elif days_int == 2:
@@ -656,11 +701,14 @@ def build_smart_preview(data: dict, ctx: dict = None) -> str:
     hospital = ctx.get('selected_hospital', od.get('hospital', ''))
     doctor   = ctx.get('selected_doctor', od.get('doctor', ''))
 
+    # تنظيف الاسم قبل العرض
+    display_name = clean_name(od.get('full_name', '—')) or '—'
+
     preview = (
         f'━━━━━━━━━━━━━━━━━━━━\n'
         f'📋 *بيانات طلب الإجازة*\n'
         f'━━━━━━━━━━━━━━━━━━━━\n'
-        f'👤 *الاسم:*           {od.get("full_name", "—")}\n'
+        f'👤 *الاسم:*           {display_name}\n'
         f'🪪 *رقم الهوية:*     {od.get("id_number", "—")}\n'
         f'🏢 *جهة العمل:*      {od.get("workplace", "—")}\n'
         f'🌍 *الجنسية:*        {od.get("nationality", "—")}\n'
@@ -684,7 +732,6 @@ def build_smart_preview(data: dict, ctx: dict = None) -> str:
 
 
 def _fmt(date_str: str) -> str:
-    """يُنسّق التاريخ بالصيغة DD/MM/YYYY."""
     if not date_str:
         return '—'
     for fmt in ['%d/%m/%Y', '%d-%m-%Y', '%Y-%m-%d']:

@@ -783,6 +783,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if text in ["❌ إلغاء"]:
+        if context.user_data.get("pdf_issued"):
+            await update.message.reply_text(
+                "✅ *تم إصدار الطلب بالفعل ولا يمكن إلغاؤه.*",
+                parse_mode="Markdown",
+                reply_markup=main_menu_keyboard(is_admin_user(uid))
+            )
+            return
         context.user_data.clear()
         await update.message.reply_text(
             "❌ تم الإلغاء.\n\n" + build_main_menu_text(uid, name),
@@ -1175,7 +1182,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             labels_map = {
                 'full_name': 'الاسم', 'id_number': 'رقم الهوية',
                 'workplace': 'جهة العمل', 'nationality': 'الجنسية',
-                'city': 'المدينة', 'excuse_date': 'تاريخ الإجازة',
+                'excuse_date': 'تاريخ الإجازة',
+                # city/hospital/doctor → تُحدَّد عبر الأزرار ولا تُعرض هنا
             }
             for key, label in labels_map.items():
                 if od.get(key):
@@ -1608,7 +1616,34 @@ async def ask_patient_data(update, context):
 
 # ── إنشاء وإرسال PDF ──
 
+# قاموس لتتبع الطلبات قيد المعالجة (منع race condition)
+_processing_lock: dict[int, bool] = {}
+
 async def generate_and_send_pdf(update, context, uid):
+    # ══════════════════════════════════════════════
+    # ✅ منع التكرار — إذا كان الطلب صدر بالفعل أو قيد المعالجة
+    # ══════════════════════════════════════════════
+    if context.user_data.get("pdf_issued"):
+        await update.effective_message.reply_text(
+            "✅ *تم إصدار هذا الطلب بالفعل!*\n\n"
+            "لا يمكن إصداره مجدداً.\n"
+            "اضغط 🏠 القائمة الرئيسية لطلب جديد.",
+            parse_mode="Markdown",
+            reply_markup=main_menu_keyboard(is_admin_user(uid))
+        )
+        return
+
+    if _processing_lock.get(uid):
+        await update.effective_message.reply_text(
+            "⏳ *جاري إنشاء الملف بالفعل...*\n"
+            "يرجى الانتظار.",
+            parse_mode="Markdown"
+        )
+        return
+
+    # قفل المعالجة لهذا المستخدم
+    _processing_lock[uid] = True
+
     od        = context.user_data.get("order_data", {})
     hospital  = context.user_data.get("selected_hospital", "—")
     doctor    = context.user_data.get("selected_doctor", "—")
@@ -1682,6 +1717,9 @@ async def generate_and_send_pdf(update, context, uid):
 
         full_data = {**od, "hospital": hospital, "doctor": doctor, "specialty": specialty}
         order_id  = db.save_order(uid, full_data)
+        # ✅ قفل الطلب — منع إعادة الإصدار
+        context.user_data["pdf_issued"] = True
+        context.user_data["pdf_order_id"] = order_id
         db.update_order_pdf(order_id, pdf_path)
         db.update_balance(uid, -price)
         db.increment_doctor_orders(doctor, hospital)
@@ -1752,6 +1790,8 @@ async def generate_and_send_pdf(update, context, uid):
             parse_mode="Markdown", reply_markup=back_keyboard()
         )
     finally:
+        # ✅ تحرير قفل المعالجة دائماً
+        _processing_lock.pop(uid, None)
         # ✅ حذف الملف المؤقت بأمان
         try:
             if pdf_path_temp and os.path.exists(pdf_path_temp):
@@ -3673,6 +3713,10 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             )
 
     elif data == "cancel_order":
+        # ✅ منع الإلغاء بعد إصدار PDF
+        if context.user_data.get("pdf_issued"):
+            await query.answer("✅ تم الإصدار بالفعل ولا يمكن إلغاؤه.", show_alert=True)
+            return
         context.user_data.clear()
         await query.message.reply_text(
             "❌ *تم إلغاء الطلب.*",
