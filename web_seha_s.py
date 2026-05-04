@@ -285,7 +285,7 @@ def _header(check_hdr):
     <div class="hdr-sep"></div>
     {check_hdr}
   </div>
-  <a href="/services" style="width:30px;text-decoration:none;color:#2d5fa6;font-size:12px;font-weight:600;text-align:center;line-height:1.2">خدمات</a>
+  <div style="width:30px"></div>
 </header>"""
 
 def _footer(check_ftr):
@@ -539,28 +539,6 @@ def get_html():
 @app.route("/verify/<path:gsl_code>")
 def index(gsl_code=None):
     return get_html()
-
-
-# ──────────────────────────────────────────────────────────────
-# صفحة الخدمات التفاعلية
-# ──────────────────────────────────────────────────────────────
-_SERVICES_HTML_CACHE = None
-
-def get_services_html():
-    global _SERVICES_HTML_CACHE
-    if _SERVICES_HTML_CACHE is None:
-        services_path = os.path.join(_THIS_DIR, "seha_services.html")
-        if os.path.exists(services_path):
-            with open(services_path, "r", encoding="utf-8") as f:
-                _SERVICES_HTML_CACHE = f.read()
-        else:
-            _SERVICES_HTML_CACHE = "<h1>صفحة الخدمات غير متاحة</h1>"
-    return _SERVICES_HTML_CACHE
-
-@app.route("/services")
-@app.route("/خدمات")
-def services_page():
-    return get_services_html()
 
 
 @app.route("/api/verify")
