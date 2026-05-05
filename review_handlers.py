@@ -19,6 +19,25 @@ import pending_review as pr
 logger = logging.getLogger(__name__)
 
 # ══════════════════════════════════════════════
+# مساعد: لوحة مفاتيح رئيسية بدون استيراد دائري
+# ══════════════════════════════════════════════
+
+def _main_menu_keyboard(context, uid: int):
+    """يعيد لوحة المفاتيح الرئيسية بدون استيراد دائري من bot.py"""
+    import database as _db
+    is_admin = _db.is_admin(uid)
+    keyboard = [
+        [KeyboardButton("📝 إرسال طلب جديد /go")],
+        [KeyboardButton("📋 طلباتي"), KeyboardButton("🧾 اشحن رصيدك")],
+        [KeyboardButton("🌐 نظام المواقع"), KeyboardButton("🏥 نظام المستشفيات")],
+        [KeyboardButton("➕ إضافة مستشفى"), KeyboardButton("➕ إضافة طبيب")],
+        [KeyboardButton("🏠 القائمة الرئيسية")],
+    ]
+    if is_admin:
+        keyboard.insert(4, [KeyboardButton("⚙️ نظام البوت"), KeyboardButton("🎛️ لوحة التحكم")])
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+# ══════════════════════════════════════════════
 # نص عرض العدد في زر الإدارة
 # ══════════════════════════════════════════════
 
@@ -112,12 +131,13 @@ async def show_pending_list(bot_or_query, admin_id: int, page: int = 0):
 
     # إرسال للمسؤول
     try:
-        await bot_or_query.send_message(
-            chat_id=admin_id, text=text,
+        # إذا كان Message object
+        await bot_or_query.reply_text(
+            text=text,
             parse_mode="Markdown", reply_markup=keyboard
         )
-    except Exception:
-        # ربما استدعاء من callback query
+    except AttributeError:
+        # إذا كان CallbackQuery
         try:
             await bot_or_query.edit_message_text(
                 text=text, parse_mode="Markdown", reply_markup=keyboard
@@ -137,13 +157,11 @@ async def handle_review_callback(query, uid: int, data: str, bot, admin_ids: lis
     """
     if data == "review_list_pending":
         await show_pending_list(query.message, uid, page=0)
-        await query.answer()
         return True
 
     if data.startswith("review_page:"):
         page = int(data.split(":")[1])
         await show_pending_list(query.message, uid, page=page)
-        await query.answer()
         return True
 
     if data.startswith("review_approve:"):
@@ -293,18 +311,18 @@ async def handle_user_add_hospital(update, context, text: str, uid: int,
             # إرسال إشعار للإدارة
             item = pr.get_pending_item_by_id(pending_id)
             if item:
-                bot = update.get_bot()
+                from telegram.ext import Application
+                bot = context.bot
                 await notify_admins_new_pending(bot, admin_ids, pending_id, item)
 
         # إعادة ضبط الحالة
         context.user_data.pop("new_hosp_name", None)
         context.user_data.pop("new_hosp_city", None)
         context.user_data["state"] = "main"
-        from bot import main_menu_keyboard, build_main_menu_text, is_admin_user
         await update.message.reply_text(
-            build_main_menu_text(uid, user_name),
+            "🏠 *تم الرجوع للقائمة الرئيسية.*",
             parse_mode="Markdown",
-            reply_markup=main_menu_keyboard(is_admin_user(uid))
+            reply_markup=_main_menu_keyboard(context, uid)
         )
 
 
@@ -374,18 +392,17 @@ async def handle_user_add_doctor(update, context, text: str, uid: int,
             )
             item = pr.get_pending_item_by_id(pending_id)
             if item:
-                bot = update.get_bot()
+                bot = context.bot
                 await notify_admins_new_pending(bot, admin_ids, pending_id, item)
 
         context.user_data.pop("user_doc_hospital_id", None)
         context.user_data.pop("user_doc_hospital_name", None)
         context.user_data.pop("user_doc_name", None)
         context.user_data["state"] = "main"
-        from bot import main_menu_keyboard, build_main_menu_text, is_admin_user
         await update.message.reply_text(
-            build_main_menu_text(uid, user_name),
+            "🏠 *تم الرجوع للقائمة الرئيسية.*",
             parse_mode="Markdown",
-            reply_markup=main_menu_keyboard(is_admin_user(uid))
+            reply_markup=_main_menu_keyboard(context, uid)
         )
 
 

@@ -24,6 +24,12 @@ from telegram.ext import (
 import asyncio
 import database as db
 from external_api import send_leave_to_external_api
+
+# ══════════════════════════════════════════════
+# نظام المراجعة الإدارية (مدمج)
+# ══════════════════════════════════════════════
+import pending_review as pr
+import review_handlers as rh
 from pdf_gen import (
     generate_excuse_pdf,
     parse_hijri_date_input,
@@ -408,10 +414,11 @@ def main_menu_keyboard(is_admin: bool = False):
         [KeyboardButton("📝 إرسال طلب جديد /go")],
         [KeyboardButton("📋 طلباتي"),         KeyboardButton("🧾 اشحن رصيدك")],
         [KeyboardButton("🌐 نظام المواقع"),   KeyboardButton("🏥 نظام المستشفيات")],
+        [KeyboardButton("➕ إضافة مستشفى"),   KeyboardButton("➕ إضافة طبيب")],
         [KeyboardButton("🏠 القائمة الرئيسية")],
     ]
     if is_admin:
-        keyboard.insert(3, [KeyboardButton("⚙️ نظام البوت"), KeyboardButton("🎛️ لوحة التحكم")])
+        keyboard.insert(4, [KeyboardButton("⚙️ نظام البوت"), KeyboardButton("🎛️ لوحة التحكم")])
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def dashboard_keyboard():
@@ -598,14 +605,16 @@ def payment_methods_keyboard():
     return ReplyKeyboardMarkup(rows, resize_keyboard=True)
 
 def admin_keyboard():
+    count = pr.get_pending_count()
+    badge = f" 🔴{count}" if count > 0 else ""
     return ReplyKeyboardMarkup([
         [KeyboardButton("📄 قوالب PDF"),     KeyboardButton("🖼️ شعارات المستشفيات")],
         [KeyboardButton("🏥 إدارة المستشفيات"), KeyboardButton("👨‍⚕️ إدارة الأطباء")],
         [KeyboardButton("👥 المستخدمين"),    KeyboardButton("📊 الطلبات")],
         [KeyboardButton("💰 المعاملات المالية"), KeyboardButton("🎫 أكواد الشحن")],
         [KeyboardButton("📈 الإحصائيات"),   KeyboardButton("⚙️ الإعدادات")],
-        [KeyboardButton("🔔 الإشعارات"),    KeyboardButton("⬅️ رجوع")],
-        [KeyboardButton("🏠 القائمة الرئيسية")],
+        [KeyboardButton(f"🔍 لوحة المراجعة{badge}"),  KeyboardButton("🔔 الإشعارات")],
+        [KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")],
     ], resize_keyboard=True)
 
 def templates_keyboard():
@@ -901,22 +910,87 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from hospitals_data import count_hospitals
         hospitals = db.get_all_hospitals()
         with_logo = sum(1 for h in hospitals if has_logo(h))
-        gov = sum(1 for h in hospitals if h.get("hospital_type") == "حكومي")
-        prv = len(hospitals) - gov
         stats = count_hospitals()
         region_lines = "\n".join([f"  • {r}: {c}" for r, c in stats["by_region"].items()])
+        # عرض العناصر الخاصة للمستخدم
+        my_pending = pr.get_pending_items("pending")
+        my_items = [i for i in my_pending if i["added_by_id"] == uid]
+        my_text = ""
+        if my_items:
+            my_text = f"\n⏳ *عناصرك المعلقة بانتظار المراجعة: {len(my_items)}*\n"
         await update.message.reply_text(
             f"🏥 *نظام المستشفيات*\n\n"
-            f"📊 *إحصائيات النظام المركزي:*\n"
+            f"📊 *إحصائيات النظام:*\n"
             f"🗂 إجمالي المدن: *{stats['cities_count']}*\n"
             f"🏥 إجمالي المستشفيات: *{stats['total']}*\n"
-            f"🏛 حكومية: *{stats['by_type']['حكومي']}* | 🏢 خاصة: *{stats['by_type']['خاص']}* | 🏗 مجمعات: *{stats['by_type']['مجمعات']}*\n\n"
+            f"🏛 حكومية: *{stats['by_type']['حكومي']}* | 🏢 خاصة: *{stats['by_type']['خاص']}*\n\n"
             f"📍 *حسب المنطقة:*\n{region_lines}\n\n"
-            f"📁 *قاعدة البيانات الفعلية:*\n"
-            f"🏥 مسجّلة: *{len(hospitals)}* | 🖼 بشعار: *{with_logo}*\n\n"
-            f"يمكنك إدارة المستشفيات من لوحة الإدارة ⚙️",
-            parse_mode="Markdown", reply_markup=back_keyboard()
+            f"📁 *قاعدة البيانات:*\n"
+            f"🏥 مسجّلة: *{len(hospitals)}* | 🖼 بشعار: *{with_logo}*"
+            f"{my_text}\n\n"
+            f"💡 يمكنك إضافة مستشفى أو طبيب جديد باستخدام الأزرار أدناه:",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup([
+                [KeyboardButton("➕ إضافة مستشفى"), KeyboardButton("➕ إضافة طبيب")],
+                [KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")],
+            ], resize_keyboard=True)
         )
+        return
+
+    # ── إضافة مستشفى من مستخدم عادي ──
+    if text == "➕ إضافة مستشفى" or state in [
+        "user_add_hospital_name", "user_add_hospital_city", "user_add_hospital_type"
+    ]:
+        if text == "➕ إضافة مستشفى":
+            context.user_data["state"] = "user_add_hospital_name"
+            await update.message.reply_text(
+                "🏥 *إضافة مستشفى جديد*\n\n"
+                "📌 سيُضاف المستشفى بشكل *خاص* ومؤقت:\n"
+                "  • يظهر لك فوراً ويمكنك استخدامه\n"
+                "  • يُرسل للإدارة للمراجعة والاعتماد\n"
+                "  • عند الاعتماد يصبح متاحاً للجميع\n\n"
+                "✏️ أرسل *اسم المستشفى*:",
+                parse_mode="Markdown",
+                reply_markup=ReplyKeyboardMarkup(
+                    [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]],
+                    resize_keyboard=True
+                )
+            )
+            return
+        await rh.handle_user_add_hospital(update, context, text, uid, name, ADMIN_IDS)
+        return
+
+    # ── إضافة طبيب من مستخدم عادي ──
+    if text == "➕ إضافة طبيب" or state in [
+        "user_add_doctor_hospital", "user_add_doctor_name", "user_add_doctor_specialty"
+    ]:
+        if text == "➕ إضافة طبيب":
+            # عرض قائمة المستشفيات المرئية للمستخدم
+            context.user_data["state"] = "user_add_doctor_hospital"
+            hospitals_visible = pr.get_all_hospitals_visible_to_user(uid)
+            if not hospitals_visible:
+                await update.message.reply_text(
+                    "⚠️ لا توجد مستشفيات مسجّلة بعد. أضف مستشفى أولاً.",
+                    reply_markup=back_keyboard()
+                )
+                return
+            rows = [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]]
+            for h in hospitals_visible[:40]:
+                lbl = h["name"]
+                if h.get("visibility") == "private":
+                    lbl += " 🔒"
+                rows.append([KeyboardButton(lbl)])
+            await update.message.reply_text(
+                "👨‍⚕️ *إضافة طبيب جديد*\n\n"
+                "📌 سيُضاف الطبيب بشكل *خاص* ومؤقت بانتظار مراجعة الإدارة.\n\n"
+                "🏥 اختر المستشفى:",
+                parse_mode="Markdown",
+                reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+            )
+            return
+        # إزالة 🔒 من نص الاختيار إن وُجد
+        clean_text = text.replace(" 🔒", "").strip()
+        await rh.handle_user_add_doctor(update, context, clean_text, uid, name, ADMIN_IDS)
         return
 
     # ── لوحة الإدارة ──
@@ -930,6 +1004,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "⚙️ *لوحة الإدارة*\n\nاختر القسم:", parse_mode="Markdown",
                 reply_markup=admin_keyboard()
             )
+        return
+
+    # ── لوحة المراجعة الإدارية ──
+    if text.startswith("🔍 لوحة المراجعة"):
+        if not is_admin_user(uid):
+            await update.message.reply_text("❌ هذا القسم للمسؤولين فقط.")
+            return
+        await rh.show_admin_review_panel(update, context, uid)
         return
 
     # ── لوحة التحكم (Dashboard) ──
@@ -1394,6 +1476,14 @@ async def cmd_verify(update: Update, context: ContextTypes.DEFAULT_TYPE):
             InlineKeyboardButton("🌐 فتح موقع التحقق", url=website_url),
         ]])
     )
+
+async def cmd_pending(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/pending - لوحة مراجعة الإدارة"""
+    uid = update.effective_user.id
+    if not is_admin_user(uid):
+        await update.message.reply_text("❌ هذا الأمر للمسؤولين فقط.")
+        return
+    await rh.show_admin_review_panel(update, context, uid)
 
 async def show_my_orders(update, uid):
     orders = db.get_user_orders(uid)
@@ -3615,6 +3705,47 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     state = context.user_data.get("state", "")
     uid   = update.effective_user.id
+    name  = update.effective_user.full_name or "مستخدم"
+
+    # ══════════════════════════════════════════════
+    # رفع شعار مستشفى كعنصر خاص مؤقت (للمستخدم العادي)
+    # ══════════════════════════════════════════════
+    if state == "user_logo_upload":
+        hospital_name = context.user_data.get("user_logo_hospital", "")
+        if not hospital_name:
+            await update.message.reply_text("❌ انتهت الجلسة، حاول مجدداً.")
+            return
+        photo = update.message.photo[-1]
+        file  = await photo.get_file()
+        logo_bytes = await file.download_as_bytearray()
+        logo_bytes = resize_logo_to_qr_size(bytes(logo_bytes))
+        result = pr.add_private_logo(hospital_name, logo_bytes, "image/png", uid, name)
+        if result["already_exists"]:
+            await update.message.reply_text(
+                f"⏳ شعار *{hospital_name}* مُقدَّم مسبقاً وبانتظار مراجعة الإدارة.",
+                parse_mode="Markdown"
+            )
+        else:
+            pending_id = result["pending_id"]
+            await update.message.reply_text(
+                f"✅ *تم إرسال شعار المستشفى للمراجعة!*\n\n"
+                f"🖼 شعار: *{hospital_name}*\n\n"
+                f"⏳ يمكنك استخدامه الآن في طلباتك بشكل خاص.\n"
+                f"🔔 سيُعلَمك عند اعتماده من الإدارة.",
+                parse_mode="Markdown"
+            )
+            # إشعار الإدارة
+            item = pr.get_pending_item_by_id(pending_id)
+            if item:
+                await rh.notify_admins_new_pending(context.bot, ADMIN_IDS, pending_id, item)
+        context.user_data.pop("user_logo_hospital", None)
+        context.user_data["state"] = "main"
+        await update.message.reply_text(
+            build_main_menu_text(uid, name),
+            parse_mode="Markdown",
+            reply_markup=main_menu_keyboard(is_admin_user(uid))
+        )
+        return
 
     if state == "admin_qr_upload":
         # حفظ الباركود المخصص في قاعدة البيانات
@@ -3965,6 +4096,14 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     name  = update.effective_user.full_name or "مستخدم"
     data  = query.data
 
+    # ══════════════════════════════════════════════
+    # نظام المراجعة الإدارية — يُعالج أولاً
+    # ══════════════════════════════════════════════
+    if is_admin_user(uid) and data.startswith("review_"):
+        handled = await rh.handle_review_callback(query, uid, data, context.bot, ADMIN_IDS)
+        if handled:
+            return
+
     if data == "cmd_new_order":
         context.user_data.clear()
         context.user_data["state"] = "choose_city"
@@ -4285,6 +4424,8 @@ def _start_web_server():
 
 def main():
     db.init_db()
+    # ── تهيئة جداول نظام المراجعة ──────────────────────────────────────
+    pr.init_pending_tables()
     # ── تثبيت الرابط الرسمي للموقع عند كل تشغيل ───────────────────────
     db.set_setting("website_url", "https://www.sehasaa.com/#/inquiries/slenquiry")
     # ──────────────────────────────────────────────────────────────────
@@ -4307,6 +4448,7 @@ def main():
     app.add_handler(CommandHandler("myorders", cmd_myorders))
     app.add_handler(CommandHandler("help",     cmd_help))
     app.add_handler(CommandHandler("verify",   cmd_verify))
+    app.add_handler(CommandHandler("pending",  cmd_pending))
     app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
