@@ -1076,6 +1076,40 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
     except Exception:
         pass
 
+    # ─── رسم نص الرابط + خط أزرق أسفله بعرض النص بالضبط ────────
+    try:
+        _url_text  = _qr_url
+        _url_font  = FONT_REG
+        _url_size  = 9.5 * min(x_scale, y_scale)
+        _url_cx    = 226.45 * x_scale
+        _url_rl_y  = 271.0  * y_scale
+        _url_color = (0.0, 0.0, 0.8)
+
+        _url_w  = pdfmetrics.stringWidth(_url_text, _url_font, _url_size)
+        _url_x0 = _url_cx - _url_w / 2
+        _url_x1 = _url_cx + _url_w / 2
+
+        # تغطية أي خط فوق الرابط وأسفله بمستطيل أبيض شامل
+        c.setFillColorRGB(1, 1, 1)
+        c.rect(80 * x_scale, 263.0 * y_scale,
+               320 * x_scale, 22 * y_scale, stroke=0, fill=1)
+
+        # رسم النص
+        c.setFont(_url_font, _url_size)
+        c.setFillColorRGB(*_url_color)
+        c.drawCentredString(_url_cx, _url_rl_y, _url_text)
+
+        # رسم الخط أسفل النص مباشرة بنفس عرض النص بالضبط
+        c.setStrokeColorRGB(*_url_color)
+        c.setLineWidth(0.8)
+        c.line(_url_x0, _url_rl_y - 1.5, _url_x1, _url_rl_y - 1.5)
+
+        c.linkURL(_qr_url,
+                  (_url_x0, _url_rl_y - 2, _url_x1, _url_rl_y + _url_size),
+                  relative=0)
+    except Exception:
+        pass
+
     c.save()
 
 
