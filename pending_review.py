@@ -142,8 +142,19 @@ def add_private_doctor(hospital_id: int, hospital_name: str, name: str, specialt
                        added_by_id: int, added_by_name: str) -> dict:
     """
     يضيف طبيباً كعنصر خاص مؤقت.
+    إذا كان hospital_id=None يُنشئ المستشفى تلقائياً كعنصر خاص.
     يعيد: {"pending_id": int, "doctor_id": int, "already_exists": bool}
     """
+    # إذا لم يكن هناك hospital_id (مستشفى يدوي) — أنشئه أولاً
+    if hospital_id is None and hospital_name:
+        hosp_result = add_private_hospital(
+            hospital_name, "", "حكومي", added_by_id, added_by_name
+        )
+        if hosp_result.get("already_exists") and hosp_result.get("hospital_id"):
+            hospital_id = hosp_result["hospital_id"]
+        elif hosp_result.get("hospital_id"):
+            hospital_id = hosp_result["hospital_id"]
+
     conn = get_conn()
     try:
         # فحص التكرار في العناصر العامة

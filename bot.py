@@ -966,7 +966,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ── إضافة طبيب من مستخدم عادي ──
     if text == "➕ إضافة طبيب" or state in [
-        "user_add_doctor_hospital", "user_add_doctor_name", "user_add_doctor_specialty"
+        "user_add_doctor_hospital", "user_add_doctor_hospital_manual",
+        "user_add_doctor_name", "user_add_doctor_specialty"
     ]:
         if text == "➕ إضافة طبيب":
             context.user_data["state"] = "user_add_doctor_hospital"
@@ -981,7 +982,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     ], resize_keyboard=True)
                 )
                 return
-            rows = [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]]
+            rows = [
+                [KeyboardButton("✏️ أدخل اسم المستشفى يدوياً")],
+                [KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")],
+            ]
             for h in hospitals_visible[:40]:
                 lbl = h["name"]
                 if h.get("visibility") == "private":
@@ -991,7 +995,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "👨‍⚕️ *إضافة طبيب جديد*\n\n"
                 "📌 سيُضاف الطبيب بشكل *خاص* ومؤقت بانتظار مراجعة الإدارة.\n\n"
                 "🔒 = مستشفى خاص بك لم يُعتمد بعد\n\n"
-                "🏥 اختر المستشفى:",
+                "🏥 اختر المستشفى أو اضغط ✏️ لإدخاله يدوياً:",
                 parse_mode="Markdown",
                 reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
             )

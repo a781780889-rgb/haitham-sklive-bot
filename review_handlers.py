@@ -340,15 +340,54 @@ async def handle_user_add_doctor(update, context, text: str, uid: int,
     if state == "user_add_doctor_hospital":
         # اختيار المستشفى (اسم نصي)
         hosp = pr.get_all_hospitals_visible_to_user(uid)
+
+        # تحقق من زر "✏️ أدخل اسم المستشفى يدوياً"
+        if text == "✏️ أدخل اسم المستشفى يدوياً":
+            context.user_data["state"] = "user_add_doctor_hospital_manual"
+            await update.message.reply_text(
+                "✏️ *أدخل اسم المستشفى يدوياً:*",
+                parse_mode="Markdown",
+                reply_markup=back_kb()
+            )
+            return
+
         matched = next((h for h in hosp if h["name"] == text), None)
         if not matched:
-            await update.message.reply_text("⚠️ المستشفى غير موجود، اختر من القائمة.")
+            # عرض خيار الإدخال اليدوي بدلاً من رفض الطلب
+            rows = [[KeyboardButton("✏️ أدخل اسم المستشفى يدوياً")]]
+            for h in hosp[:30]:
+                lbl = h["name"]
+                if h.get("visibility") == "private":
+                    lbl += " 🔒"
+                rows.append([KeyboardButton(lbl)])
+            rows.append([KeyboardButton("⬅️ رجوع")])
+            await update.message.reply_text(
+                f"⚠️ *المستشفى غير موجود في القائمة.*\n\n"
+                f"يمكنك اختيار مستشفى من القائمة أو الضغط على ✏️ لإدخاله يدوياً:",
+                parse_mode="Markdown",
+                reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+            )
             return
         context.user_data["user_doc_hospital_id"] = matched["id"]
         context.user_data["user_doc_hospital_name"] = matched["name"]
         context.user_data["state"] = "user_add_doctor_name"
         await update.message.reply_text(
             f"🏥 *{matched['name']}*\n\n✏️ أرسل اسم الطبيب:",
+            parse_mode="Markdown", reply_markup=back_kb()
+        )
+        return
+
+    # ── إدخال اسم المستشفى يدوياً (لإضافة الطبيب) ──
+    if state == "user_add_doctor_hospital_manual":
+        if not text or len(text) < 3:
+            await update.message.reply_text("⚠️ اسم المستشفى قصير جداً، أعد الإدخال:")
+            return
+        # نحفظ الاسم اليدوي بدون id (سيُضاف كمستشفى مؤقت تلقائياً)
+        context.user_data["user_doc_hospital_id"] = None
+        context.user_data["user_doc_hospital_name"] = text
+        context.user_data["state"] = "user_add_doctor_name"
+        await update.message.reply_text(
+            f"🏥 *{text}*\n\n✏️ أرسل اسم الطبيب:",
             parse_mode="Markdown", reply_markup=back_kb()
         )
         return
