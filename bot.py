@@ -415,10 +415,11 @@ def main_menu_keyboard(is_admin: bool = False):
         [KeyboardButton("📋 طلباتي"),         KeyboardButton("🧾 اشحن رصيدك")],
         [KeyboardButton("🌐 نظام المواقع"),   KeyboardButton("🏥 نظام المستشفيات")],
         [KeyboardButton("➕ إضافة مستشفى"),   KeyboardButton("➕ إضافة طبيب")],
+        [KeyboardButton("🖼 إضافة شعار مستشفى")],
         [KeyboardButton("🏠 القائمة الرئيسية")],
     ]
     if is_admin:
-        keyboard.insert(4, [KeyboardButton("⚙️ نظام البوت"), KeyboardButton("🎛️ لوحة التحكم")])
+        keyboard.insert(5, [KeyboardButton("⚙️ نظام البوت"), KeyboardButton("🎛️ لوحة التحكم")])
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 def dashboard_keyboard():
@@ -928,10 +929,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"📁 *قاعدة البيانات:*\n"
             f"🏥 مسجّلة: *{len(hospitals)}* | 🖼 بشعار: *{with_logo}*"
             f"{my_text}\n\n"
-            f"💡 يمكنك إضافة مستشفى أو طبيب جديد باستخدام الأزرار أدناه:",
+            f"💡 يمكنك إضافة مستشفى أو طبيب أو شعار باستخدام الأزرار أدناه:",
             parse_mode="Markdown",
             reply_markup=ReplyKeyboardMarkup([
                 [KeyboardButton("➕ إضافة مستشفى"), KeyboardButton("➕ إضافة طبيب")],
+                [KeyboardButton("🖼 إضافة شعار مستشفى")],
                 [KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")],
             ], resize_keyboard=True)
         )
@@ -965,13 +967,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "user_add_doctor_hospital", "user_add_doctor_name", "user_add_doctor_specialty"
     ]:
         if text == "➕ إضافة طبيب":
-            # عرض قائمة المستشفيات المرئية للمستخدم
             context.user_data["state"] = "user_add_doctor_hospital"
             hospitals_visible = pr.get_all_hospitals_visible_to_user(uid)
             if not hospitals_visible:
                 await update.message.reply_text(
-                    "⚠️ لا توجد مستشفيات مسجّلة بعد. أضف مستشفى أولاً.",
-                    reply_markup=back_keyboard()
+                    "⚠️ لا توجد مستشفيات مسجّلة بعد.\n"
+                    "أضف مستشفى أولاً ثم عاود المحاولة.",
+                    reply_markup=ReplyKeyboardMarkup([
+                        [KeyboardButton("➕ إضافة مستشفى")],
+                        [KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")],
+                    ], resize_keyboard=True)
                 )
                 return
             rows = [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]]
@@ -983,14 +988,71 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 "👨‍⚕️ *إضافة طبيب جديد*\n\n"
                 "📌 سيُضاف الطبيب بشكل *خاص* ومؤقت بانتظار مراجعة الإدارة.\n\n"
+                "🔒 = مستشفى خاص بك لم يُعتمد بعد\n\n"
                 "🏥 اختر المستشفى:",
                 parse_mode="Markdown",
                 reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
             )
             return
-        # إزالة 🔒 من نص الاختيار إن وُجد
         clean_text = text.replace(" 🔒", "").strip()
         await rh.handle_user_add_doctor(update, context, clean_text, uid, name, ADMIN_IDS)
+        return
+
+    # ── إضافة شعار مستشفى من مستخدم عادي ──
+    if text == "🖼 إضافة شعار مستشفى" or state == "user_logo_select_hospital":
+        if text == "🖼 إضافة شعار مستشفى":
+            context.user_data["state"] = "user_logo_select_hospital"
+            hospitals_visible = pr.get_all_hospitals_visible_to_user(uid)
+            if not hospitals_visible:
+                await update.message.reply_text(
+                    "⚠️ لا توجد مستشفيات مسجّلة بعد.\n"
+                    "أضف مستشفى أولاً ثم ارفع شعاره.",
+                    reply_markup=ReplyKeyboardMarkup([
+                        [KeyboardButton("➕ إضافة مستشفى")],
+                        [KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")],
+                    ], resize_keyboard=True)
+                )
+                return
+            rows = [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]]
+            for h in hospitals_visible[:40]:
+                lbl = h["name"]
+                if h.get("visibility") == "private":
+                    lbl += " 🔒"
+                rows.append([KeyboardButton(lbl)])
+            await update.message.reply_text(
+                "🖼 *إضافة شعار مستشفى*\n\n"
+                "📌 سيُرسل الشعار للمراجعة:\n"
+                "  • يُستخدم في طلباتك الخاصة فوراً\n"
+                "  • عند الاعتماد يصبح شعاراً رسمياً للجميع\n\n"
+                "🔒 = مستشفى خاص بك لم يُعتمد بعد\n\n"
+                "🏥 اختر المستشفى لرفع شعاره:",
+                parse_mode="Markdown",
+                reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+            )
+            return
+        # اختيار المستشفى من القائمة
+        clean_hospital = text.replace(" 🔒", "").strip()
+        hospitals_visible = pr.get_all_hospitals_visible_to_user(uid)
+        matched = next((h for h in hospitals_visible if h["name"] == clean_hospital), None)
+        if not matched:
+            await update.message.reply_text(
+                "⚠️ لم يُعثر على المستشفى، اختر من القائمة."
+            )
+            return
+        context.user_data["user_logo_hospital"] = matched["name"]
+        context.user_data["state"] = "user_logo_upload"
+        await update.message.reply_text(
+            f"🖼 *رفع شعار:* {matched['name']}\n\n"
+            f"📤 أرسل صورة الشعار الآن:\n"
+            f"• الصيغ المقبولة: PNG أو JPG\n"
+            f"• يُفضّل خلفية شفافة أو بيضاء\n"
+            f"• سيتم تعديل الحجم تلقائياً ✅",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup(
+                [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]],
+                resize_keyboard=True
+            )
+        )
         return
 
     # ── لوحة الإدارة ──

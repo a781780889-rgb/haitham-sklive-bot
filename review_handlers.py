@@ -31,10 +31,11 @@ def _main_menu_keyboard(context, uid: int):
         [KeyboardButton("📋 طلباتي"), KeyboardButton("🧾 اشحن رصيدك")],
         [KeyboardButton("🌐 نظام المواقع"), KeyboardButton("🏥 نظام المستشفيات")],
         [KeyboardButton("➕ إضافة مستشفى"), KeyboardButton("➕ إضافة طبيب")],
+        [KeyboardButton("🖼 إضافة شعار مستشفى")],
         [KeyboardButton("🏠 القائمة الرئيسية")],
     ]
     if is_admin:
-        keyboard.insert(4, [KeyboardButton("⚙️ نظام البوت"), KeyboardButton("🎛️ لوحة التحكم")])
+        keyboard.insert(5, [KeyboardButton("⚙️ نظام البوت"), KeyboardButton("🎛️ لوحة التحكم")])
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 # ══════════════════════════════════════════════
@@ -358,9 +359,24 @@ async def handle_user_add_doctor(update, context, text: str, uid: int,
             return
         context.user_data["user_doc_name"] = text
         context.user_data["state"] = "user_add_doctor_specialty"
+        # قائمة تخصصات شائعة كاقتراحات
+        specialties = [
+            "باطنية", "جراحة عامة", "عظام", "أطفال", "نساء وولادة",
+            "عيون", "أنف وأذن وحنجرة", "أمراض جلدية", "قلب وأوعية دموية",
+            "مسالك بولية", "مخ وأعصاب", "طوارئ", "تخدير", "أشعة",
+        ]
+        rows = []
+        for i in range(0, len(specialties), 2):
+            row = [KeyboardButton(specialties[i])]
+            if i + 1 < len(specialties):
+                row.append(KeyboardButton(specialties[i + 1]))
+            rows.append(row)
+        rows.append([KeyboardButton("⬅️ رجوع")])
         await update.message.reply_text(
-            f"✅ الاسم: *{text}*\n\n🩺 أرسل التخصص:",
-            parse_mode="Markdown", reply_markup=back_kb()
+            f"✅ الاسم: *{text}*\n\n"
+            f"🩺 أرسل التخصص أو اختر من القائمة:",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
         )
         return
 
