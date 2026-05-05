@@ -2313,9 +2313,13 @@ async def handle_admin_router(update, context, text, uid, name):
                         f"🏥 {h['name']}",
                         callback_data=f"admin_doc_hosp:{h['id']}:{h['name'][:30]}"
                     )])
-                inline_rows.append([InlineKeyboardButton("🗺 تصفح بالمنطقة", callback_data="admin_doc_browse")])
+                # زر إضافة مستشفى يدوياً + زر تصفح بالمنطقة
+                inline_rows.append([
+                    InlineKeyboardButton("✏️ إضافة المستشفى يدوياً", callback_data="admin_doc_manual_hosp"),
+                    InlineKeyboardButton("🗺 تصفح بالمنطقة", callback_data="admin_doc_browse"),
+                ])
                 await update.message.reply_text(
-                    "👨‍⚕️ *إدارة الأطباء*\n\nاختر المستشفى:",
+                    "👨‍⚕️ *إدارة الأطباء*\n\nاختر المستشفى أو أضف مستشفى يدوياً:",
                     parse_mode="Markdown",
                     reply_markup=InlineKeyboardMarkup(inline_rows) if inline_rows else doctors_admin_keyboard(hospitals)
                 )
@@ -2365,7 +2369,8 @@ async def handle_admin_router(update, context, text, uid, name):
     # ── أطباء ──
     if state in ["admin_doctors", "admin_doctor_select_hospital", "admin_doctor_add_name",
                  "admin_doctor_add_specialty", "admin_doc_browse_region", "admin_doc_browse_city",
-                 "admin_doc_list_city", "admin_doc_no_doctors_select", "admin_doc_after_add"]:
+                 "admin_doc_list_city", "admin_doc_no_doctors_select", "admin_doc_after_add",
+                 "admin_doc_manual_hosp_name"]:
         await handle_admin_doctors(update, context, text, uid)
         return
 
@@ -3174,6 +3179,41 @@ async def handle_admin_doctors(update, context, text, uid):
                     parse_mode="Markdown",
                     reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
                 )
+        return
+
+    # ── إدخال اسم المستشفى يدوياً من الأدمن
+    if state == "admin_doc_manual_hosp_name":
+        if not text or len(text) < 3:
+            await update.message.reply_text("⚠️ اسم المستشفى قصير جداً، أعد الإدخال:")
+            return
+        # نبحث أولاً هل المستشفى موجود في DB
+        hospitals_db = db.get_all_hospitals()
+        matched = next((h for h in hospitals_db if h["name"].strip() == text.strip()), None)
+        if matched:
+            context.user_data["doctor_hospital_id"]   = matched["id"]
+            context.user_data["doctor_hospital_name"] = matched["name"]
+        else:
+            # إنشاء المستشفى تلقائياً في قاعدة البيانات
+            try:
+                new_id = db.add_hospital(text.strip(), "", "حكومي")
+                context.user_data["doctor_hospital_id"]   = new_id
+                context.user_data["doctor_hospital_name"] = text.strip()
+            except Exception:
+                # إذا فشل الإنشاء نحفظ الاسم بدون id
+                context.user_data["doctor_hospital_id"]   = None
+                context.user_data["doctor_hospital_name"] = text.strip()
+        context.user_data["state"] = "admin_doctor_add_name"
+        doctors = db.get_doctors_by_hospital_name(text.strip(), active_only=False)
+        doc_txt = "\n".join([
+            f"{'✅' if d.get('status')=='active' else '⏸'} د.{d['name']} — {d['specialty']}"
+            for d in doctors
+        ]) or "لا يوجد أطباء"
+        await update.message.reply_text(
+            f"🏥 *{md_escape(text.strip())}*\n\n"
+            f"📋 *الأطباء الحاليون ({len(doctors)}):*\n{doc_txt}\n\n"
+            f"✏️ أرسل اسم الطبيب الجديد:",
+            parse_mode="Markdown", reply_markup=back_keyboard()
+        )
         return
 
     # ── اختيار مستشفى من قائمة "بدون أطباء"
@@ -4298,6 +4338,16 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await query.message.reply_text(
             "🗺 *اختر المنطقة:*",
             parse_mode="Markdown", reply_markup=logo_city_regions_keyboard()
+        )
+
+    elif data == "admin_doc_manual_hosp":
+        # ── إدخال اسم المستشفى يدوياً من لوحة الإدارة ──
+        context.user_data["state"] = "admin_doc_manual_hosp_name"
+        await query.message.reply_text(
+            "✏️ *أدخل اسم المستشفى يدوياً:*\n\n"
+            "سيُستخدم هذا الاسم مباشرةً لإضافة الطبيب تحته.",
+            parse_mode="Markdown",
+            reply_markup=back_keyboard()
         )
 
     # ── بحث عن شعار المستشفى
