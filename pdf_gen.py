@@ -1123,7 +1123,8 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
                         hospital_type=None,
                         website_url="https://www.sehasaa.com",
                         custom_qr_path=None,
-                        template_path=None):
+                        template_path=None,
+                        force_license=False):
     """
     ينشئ PDF إجازة مرضية بإحداثيات مطابقة لملف صحة المرجعي.
 
@@ -1211,9 +1212,11 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
     # اسم المستشفى إنجليزي
     hosp_en   = _to_en(hospital  or "")
 
-    # رقم الترخيص (16 رقم) — للمستشفيات الخاصة فقط
-    # الأولوية: hospital_type المُمرَّر مباشرةً > فحص is_private_hospital
-    if hospital_type is not None:
+    # رقم الترخيص (16 رقم)
+    # الأولوية: force_license (من اختيار المستخدم) > hospital_type > فحص is_private_hospital
+    if force_license:
+        _is_private = True
+    elif hospital_type is not None:
         _is_private = (str(hospital_type).strip() == "خاص")
     else:
         _is_private = is_private_hospital(hospital)

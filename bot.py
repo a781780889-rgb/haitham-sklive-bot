@@ -580,13 +580,15 @@ def confirm_keyboard():
         [KeyboardButton("🔄 رجوع")],
     ], resize_keyboard=True)
 
-def confirm_inline_keyboard():
-    """Inline keyboard لتأكيد الطلب"""
+def confirm_inline_keyboard(license_enabled: bool = False):
+    """Inline keyboard لتأكيد الطلب — 5 أزرار"""
+    license_label = "🟢 رقم الترخيص: مُفعَّل" if license_enabled else "🔴 رقم الترخيص: مُعطَّل"
     return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("✅ تأكيد وإصدار PDF", callback_data="confirm_order"),
-            InlineKeyboardButton("❌ إلغاء", callback_data="cancel_order"),
-        ],
+        [InlineKeyboardButton("✅ تأكيد الإصدار", callback_data="confirm_order")],
+        [InlineKeyboardButton("✏️ تعديل البيانات", callback_data="edit_data")],
+        [InlineKeyboardButton("⬅️ رجوع للمستشفى BACK", callback_data="back_to_hospital")],
+        [InlineKeyboardButton(license_label, callback_data="toggle_license")],
+        [InlineKeyboardButton("❌ إلغاء", callback_data="cancel_order")],
     ])
 
 def packages_keyboard():
@@ -1369,6 +1371,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # ─── اكتملت البيانات ────────────────────────────────
             context.user_data["state"] = "confirm_order"
             context.user_data["prev_state"] = "collecting_data"
+            # تهيئة حالة رقم الترخيص (مُعطَّل افتراضياً)
+            context.user_data.setdefault("license_enabled", False)
 
             preview = build_smart_preview(od, context.user_data)
 
@@ -1380,7 +1384,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(
                 "👆 *راجع البيانات ثم اضغط تأكيد:*",
                 parse_mode="Markdown",
-                reply_markup=confirm_inline_keyboard()
+                reply_markup=confirm_inline_keyboard(context.user_data.get("license_enabled", False))
             )
         return
 
@@ -1975,6 +1979,9 @@ async def generate_and_send_pdf(update, context, uid):
         )
         logger.info(f"generate_pdf user={uid}: hospital={hospital} doctor={doctor} hospital_type={hospital_type_val}")
 
+        # حالة رقم الترخيص — مُفعَّل بواسطة المستخدم أم لا
+        force_license = context.user_data.get("license_enabled", False)
+
         generate_excuse_pdf(
             order_data      = od,
             hospital        = hospital,
@@ -1987,6 +1994,7 @@ async def generate_and_send_pdf(update, context, uid):
             custom_qr_path  = custom_qr_path,
             hospital_type   = hospital_type_val,
             template_path   = template_path,
+            force_license   = force_license,
         )
         # حذف الملف المؤقت للـ QR المخصص
         if custom_qr_tmp and os.path.exists(custom_qr_tmp):
@@ -4210,7 +4218,53 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     elif data == "confirm_order":
         await generate_and_send_pdf(update, context, uid)
 
-    # ── إدارة الأطباء: اختيار مستشفى بزر تفاعلي ──
+    elif data == "edit_data":
+        # ── تعديل البيانات: العودة لحالة collecting_data ──
+        context.user_data["state"] = "collecting_data"
+        await query.message.reply_text(
+            "✏️ *تعديل البيانات*\n\n"
+            "أرسل الحقل الذي تريد تعديله بالصيغة:\n"
+            "`الحقل: القيمة الجديدة`\n\n"
+            "مثال: `الجنسية: سعودي`",
+            parse_mode="Markdown",
+            reply_markup=back_keyboard()
+        )
+
+    elif data == "back_to_hospital":
+        # ── رجوع للمستشفى: إعادة اختيار المستشفى ──
+        if context.user_data.get("pdf_issued"):
+            await query.answer("✅ تم الإصدار بالفعل ولا يمكن التعديل.", show_alert=True)
+            return
+        context.user_data["state"] = "browse_hospital_type"
+        context.user_data.pop("selected_hospital", None)
+        context.user_data.pop("selected_doctor", None)
+        await query.message.reply_text(
+            "🏥 *اختر نوع المستشفى:*",
+            parse_mode="Markdown",
+            reply_markup=hospital_type_browse_keyboard(
+                context.user_data.get("order_data", {}).get("city", "")
+            )
+        )
+
+    elif data == "toggle_license":
+        # ── تبديل حالة رقم الترخيص (تفعيل/تعطيل) ──
+        if context.user_data.get("pdf_issued"):
+            await query.answer("✅ تم الإصدار بالفعل ولا يمكن التعديل.", show_alert=True)
+            return
+        current = context.user_data.get("license_enabled", False)
+        context.user_data["license_enabled"] = not current
+        new_state = context.user_data["license_enabled"]
+        status_text = "مُفعَّل 🟢" if new_state else "مُعطَّل 🔴"
+        await query.answer(f"رقم الترخيص الآن: {status_text}", show_alert=False)
+        # تحديث الكيبورد بالحالة الجديدة
+        try:
+            await query.message.edit_reply_markup(
+                reply_markup=confirm_inline_keyboard(new_state)
+            )
+        except Exception:
+            pass
+
+
     elif data.startswith("admin_doc_hosp:"):
         parts = data.split(":", 2)
         if len(parts) >= 2:
