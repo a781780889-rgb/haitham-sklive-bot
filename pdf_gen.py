@@ -1094,6 +1094,37 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
             # في كل الحالات: الشعار بنفس الحضور البصري للـ QR.
 
             orig = PILImage.open(logo_path).convert('RGBA')
+
+            # ─── خطوة 1: اقتطاع الهوامش الفارغة (transparent/white) تلقائياً ──
+            # المشكلة: كثير من شعارات المستشفيات لها هوامش بيضاء/شفافة كبيرة
+            # حول الشعار الفعلي، فعند التحجيم يبدو الشعار صغيراً.
+            # الحل: نكتشف حدود المحتوى الفعلي (bounding box) ونقتطع الهوامش.
+            try:
+                import numpy as _np
+                _arr = _np.array(orig)
+                # حساب alpha مع اعتبار الأبيض الفاتح كشفاف أيضاً
+                _r, _g, _b, _a = _arr[..., 0], _arr[..., 1], _arr[..., 2], _arr[..., 3]
+                # البكسل يُعتبر "محتوى" إذا:
+                #   - alpha > 20 (ليس شفافاً تماماً)
+                #   - وليس أبيضاً تقريباً (lightness < 245)
+                _lightness = (_r.astype(_np.int16) + _g + _b) / 3
+                _is_content = (_a > 20) & (_lightness < 245)
+
+                if _is_content.any():
+                    _rows = _np.where(_is_content.any(axis=1))[0]
+                    _cols = _np.where(_is_content.any(axis=0))[0]
+                    _top, _bottom = int(_rows[0]), int(_rows[-1]) + 1
+                    _left, _right = int(_cols[0]), int(_cols[-1]) + 1
+                    # هامش أمان صغير (3% من البُعد الأكبر)
+                    _pad = max(1, int(max(orig.size) * 0.02))
+                    _top    = max(0, _top    - _pad)
+                    _left   = max(0, _left   - _pad)
+                    _bottom = min(orig.size[1], _bottom + _pad)
+                    _right  = min(orig.size[0], _right  + _pad)
+                    orig = orig.crop((_left, _top, _right, _bottom))
+            except Exception:
+                pass   # في حال فشل، نكمل بالشعار كما هو
+
             orig_w, orig_h = orig.size
 
             # دقة عالية للحفاظ على جودة الشعار بعد التحجيم
