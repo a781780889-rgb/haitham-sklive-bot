@@ -227,12 +227,16 @@ LOGO_SLOT = {
 
 
 # ══════════════════════════════════════════════════════════════
-# تسجيل الخطوط — Times New Roman فقط
+# تسجيل الخطوط — مطابق للملف المرجعي:
+#   • عربي    → NotoSansArabic (Regular + Bold)
+#   • إنجليزي → Times-Roman / Times-Bold (المدمج في ReportLab)
 # ══════════════════════════════════════════════════════════════
 _fonts_registered = False
-_times_ok         = False   # Times New Roman TTF محمل
+_times_ok         = False   # Times New Roman TTF محمل (للأرقام/الإنجليزي إن لزم)
+_noto_ar_ok       = False   # NotoSansArabic-Regular محمل
+_noto_ar_bold_ok  = False   # NotoSansArabic-Bold محمل
 
-# مسارات بحث ملف times.ttf — كل النصوص عربي + إنجليزي + أرقام
+# مسارات بحث ملف times.ttf — للأرقام والإنجليزي fallback
 _TIMES_PATHS = [
     os.path.join(_BASE_DIR, 'fonts', 'times.ttf'),
     os.path.join(_BASE_DIR, 'times.ttf'),
@@ -241,17 +245,52 @@ _TIMES_PATHS = [
     'C:/Windows/Fonts/times.ttf',
 ]
 
+# مسارات Noto Sans Arabic Regular
+_NOTO_AR_PATHS = [
+    os.path.join(_BASE_DIR, 'fonts', 'NotoSansArabic-Regular.ttf'),
+    os.path.join(_BASE_DIR, 'NotoSansArabic-Regular.ttf'),
+    '/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf',
+]
+
+# مسارات Noto Sans Arabic Bold
+_NOTO_AR_BOLD_PATHS = [
+    os.path.join(_BASE_DIR, 'fonts', 'NotoSansArabic-Bold.ttf'),
+    os.path.join(_BASE_DIR, 'NotoSansArabic-Bold.ttf'),
+    '/usr/share/fonts/truetype/noto/NotoSansArabic-Bold.ttf',
+]
+
 
 def _register_fonts():
-    global _fonts_registered, _times_ok
+    global _fonts_registered, _times_ok, _noto_ar_ok, _noto_ar_bold_ok
     if _fonts_registered:
         return
 
+    # Times New Roman (للأرقام/الإنجليزي fallback)
     for path in _TIMES_PATHS:
         if os.path.exists(path):
             try:
                 pdfmetrics.registerFont(TTFont('TimesNewRoman', path))
                 _times_ok = True
+                break
+            except Exception:
+                pass
+
+    # Noto Sans Arabic — Regular
+    for path in _NOTO_AR_PATHS:
+        if os.path.exists(path):
+            try:
+                pdfmetrics.registerFont(TTFont('NotoSansArabic', path))
+                _noto_ar_ok = True
+                break
+            except Exception:
+                pass
+
+    # Noto Sans Arabic — Bold
+    for path in _NOTO_AR_BOLD_PATHS:
+        if os.path.exists(path):
+            try:
+                pdfmetrics.registerFont(TTFont('NotoSansArabic-Bold', path))
+                _noto_ar_bold_ok = True
                 break
             except Exception:
                 pass
@@ -833,16 +872,31 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
     """
     طبقة شفافة تُرسم فوق القالب:
     • نصوص إنجليزية → Times-Roman / Times-Bold  (مدمج في ReportLab)
-    • جميع النصوص (عربي + إنجليزي + أرقام) → Times New Roman
-    • الخط العريض   → للمستشفى + الوقت + التاريخ + رقم الترخيص
+    • نصوص إنجليزية → Times-Roman / Times-Bold
+    • نصوص عربية   → NotoSansArabic / NotoSansArabic-Bold
+    (مطابق تماماً للـ PDF المرجعي)
     """
     _register_fonts()
     c = rl_canvas.Canvas(overlay_path, pagesize=(page_w, page_h))
 
-    # ── اختيار الخطوط حسب ما هو متاح ───────────────────────────
-    # ── Times New Roman لكل النصوص (عربي + إنجليزي + أرقام) ──
-    FONT_REG  = 'TimesNewRoman' if _times_ok else 'Times-Roman'
-    FONT_BOLD = 'TimesNewRoman' if _times_ok else 'Times-Bold'
+    # ── اختيار الخطوط — مطابق للـ PDF المرجعي ────────────────
+    # English: Times-Roman/Times-Bold (Type1 المدمج في ReportLab — أو TTF إن وُجد)
+    FONT_EN_REG  = 'TimesNewRoman' if _times_ok else 'Times-Roman'
+    FONT_EN_BOLD = 'TimesNewRoman' if _times_ok else 'Times-Bold'
+
+    # Arabic: NotoSansArabic Regular/Bold
+    FONT_AR_REG  = 'NotoSansArabic'      if _noto_ar_ok      else FONT_EN_REG
+    FONT_AR_BOLD = 'NotoSansArabic-Bold' if _noto_ar_bold_ok else FONT_AR_REG
+
+    # توافق رجعي للحقول التي لا تعتمد على لغة
+    FONT_REG  = FONT_EN_REG
+    FONT_BOLD = FONT_EN_BOLD
+
+    def _pick_font(text, bold):
+        """يختار الخط الصحيح حسب لغة النص (عربي/إنجليزي)."""
+        if _has_arabic(text):
+            return FONT_AR_BOLD if bold else FONT_AR_REG
+        return FONT_EN_BOLD if bold else FONT_EN_REG
 
     # معامل تحجيم تلقائي للقوالب بأبعاد مختلفة عن 842×1190
     x_scale = page_w / 842.0
@@ -904,7 +958,7 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
         #    الترتيب المنطقي إلى الترتيب البصري RTL، فتظهر الأقواس والأرقام
         #    في أماكنها الصحيحة حول التواريخ الهجرية.
         if slot.get('reshape_only'):
-            font = FONT_BOLD if is_bold else FONT_REG
+            font = _pick_font(text_str, is_bold)
             if _BIDI_OK:
                 try:
                     reshaped = arabic_reshaper.reshape(text_str)
@@ -928,8 +982,8 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
             continue
 
         if _has_arabic(text_str):
-            # ── نص عربي ─────────────────────────────────────
-            font = FONT_BOLD if is_bold else FONT_REG
+            # ── نص عربي → NotoSansArabic ─────────────────────
+            font = FONT_AR_BOLD if is_bold else FONT_AR_REG
             shaped = shape_arabic(text_str)
             # تقليص تلقائي إن كان النص طويلاً
             max_w = MAX_WIDTHS.get(slot_id, 0) * x_scale
@@ -943,8 +997,8 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
             else:
                 c.drawCentredString(x, rl_y, shaped)
         else:
-            # ── نص إنجليزي ──────────────────────────────────
-            font = FONT_BOLD if is_bold else FONT_REG
+            # ── نص إنجليزي → Times-Roman/Bold ───────────────
+            font = FONT_EN_BOLD if is_bold else FONT_EN_REG
             # تقليص تلقائي إن كان النص طويلاً
             max_w = MAX_WIDTHS.get(slot_id, 0) * x_scale
             if max_w > 0:
@@ -1138,15 +1192,21 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
         gsl_code        — رمز الإجازة (اختياري، يُولَّد تلقائياً)
         license_number  — رقم الترخيص 16 رقماً (اختياري، يُولَّد تلقائياً للخاص)
         hospital_type   — نوع المستشفى: 'خاص' | 'حكومي' | 'مجمعات' (اختياري)
-        template_path   — مسار قالب PDF (إلزامي)
+        template_path   — مسار قالب PDF (اختياري، يستخدم default_template.pdf إذا لم يُحدَّد)
     """
 
+    # ── إذا لم يُمرَّر قالب → استخدم القالب الافتراضي ──────────────
     if not template_path or not os.path.exists(template_path):
-        raise FileNotFoundError(
-            "❌ لا يوجد قالب PDF!\n"
-            "يجب رفع قالب من لوحة التحكم:\n"
-            "⚙️ نظام البوت ← 📄 قوالب PDF ← ➕ إضافة قالب PDF جديد"
-        )
+        _default_tpl = os.path.join(_BASE_DIR, "default_template.pdf")
+        if os.path.exists(_default_tpl):
+            template_path = _default_tpl
+        else:
+            raise FileNotFoundError(
+                "❌ لا يوجد قالب PDF!\n"
+                "تأكد من وجود ملف default_template.pdf بجانب pdf_gen.py،\n"
+                "أو ارفع قالباً من لوحة التحكم:\n"
+                "⚙️ نظام البوت ← 📄 قوالب PDF ← ➕ إضافة قالب PDF جديد"
+            )
 
     if not output_path:
         output_path = os.path.join(TEMP_DIR, f"excuse_{uuid.uuid4().hex}.pdf")
