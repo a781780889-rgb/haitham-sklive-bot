@@ -1069,44 +1069,65 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
             else:
                 c.drawCentredString(x, rl_y, text_str)
 
-    # ─── شعار المستشفى — نفس حجم الباركود تماماً ──────────────
+    # ─── شعار المستشفى — حجم بصري مساوٍ للباركود تماماً ──
     if logo_path and os.path.exists(logo_path):
         try:
             from PIL import Image as PILImage
             lx = LOGO_SLOT['x']      * x_scale
             ly = LOGO_SLOT['rl_y']   * y_scale
-            lw = LOGO_SLOT['width']  * x_scale   # نفس منطق التحجيم كـ QR_SLOT
-            lh = LOGO_SLOT['height'] * y_scale   # نفس منطق التحجيم كـ QR_SLOT
+            lw = LOGO_SLOT['width']  * x_scale   # = عرض QR
+            lh = LOGO_SLOT['height'] * y_scale   # = ارتفاع QR
 
-            # تحجيم الشعار ليملأ نفس مساحة الباركود QR بالضبط مع الحفاظ على النسبة
-            # ومحاذاة في المنتصف داخل الخانة
+            # ─── منطق التحجيم: يجعل الشعار بنفس "الحضور البصري" للباركود ──
+            # المتطلب من المستخدم:
+            #   1) الشعار بنفس عرض/ارتفاع الباركود (مساحة بصرية متساوية)
+            #   2) الحفاظ على نسبة الأبعاد (لا تشويه)
+            #   3) الحفاظ على جودة الشعار
+            #   4) الشعار لا يخرج خارج المساحة المحجوزة
+            #
+            # الحل: نُكبّر الشعار حتى يلامس البُعد الأصغر من بُعدَي المربع
+            # (min(scale_w, scale_h)) — هذا يجعل الشعار بأكبر حجم
+            # ممكن داخل مربع QR مع الحفاظ على النسبة. النتيجة:
+            #   - الشعار العريض → عرضه = عرض QR بالضبط
+            #   - الشعار الطويل → ارتفاعه = ارتفاع QR بالضبط
+            #   - الشعار المربع → عرضه وارتفاعه = أبعاد QR بالضبط
+            # في كل الحالات: الشعار بنفس الحضور البصري للـ QR.
+
             orig = PILImage.open(logo_path).convert('RGBA')
             orig_w, orig_h = orig.size
-            slot_w_px = int(lw * 3)   # تحويل نقاط → بيكسل (تقريبي)
-            slot_h_px = int(lh * 3)
 
+            # دقة عالية للحفاظ على جودة الشعار بعد التحجيم
+            DPI_FACTOR = 6
+            slot_w_px = max(1, int(lw * DPI_FACTOR))
+            slot_h_px = max(1, int(lh * DPI_FACTOR))
+
+            # min: الشعار يملأ المساحة المتاحة دون أن يخرج خارجها
             scale = min(slot_w_px / orig_w, slot_h_px / orig_h)
-            new_w = int(orig_w * scale)
-            new_h = int(orig_h * scale)
+            new_w = max(1, int(round(orig_w * scale)))
+            new_h = max(1, int(round(orig_h * scale)))
             resized = orig.resize((new_w, new_h), PILImage.LANCZOS)
 
-            # وضع الشعار في منتصف خلفية بيضاء بحجم الخانة
-            canvas_img = PILImage.new('RGBA', (slot_w_px, slot_h_px), (255, 255, 255, 0))
-            offset_x = (slot_w_px - new_w) // 2
-            offset_y = (slot_h_px - new_h) // 2
-            canvas_img.paste(resized, (offset_x, offset_y), resized)
+            # تحويل من بكسل إلى نقاط للرسم
+            draw_w_pt = new_w / DPI_FACTOR
+            draw_h_pt = new_h / DPI_FACTOR
+
+            # محاذاة في منتصف مربع الـ QR (نفس مركز الباركود)
+            center_x = lx + lw / 2
+            center_y = ly + lh / 2
+            draw_x = center_x - draw_w_pt / 2
+            draw_y = center_y - draw_h_pt / 2
 
             _logo_buf = io.BytesIO()
-            canvas_img.save(_logo_buf, 'PNG')
+            resized.save(_logo_buf, 'PNG')
             _logo_buf.seek(0)
 
             from reportlab.lib.utils import ImageReader as _IR
             c.drawImage(
                 _IR(_logo_buf),
-                lx, ly,
-                width=lw,
-                height=lh,
-                preserveAspectRatio=False,
+                draw_x, draw_y,
+                width=draw_w_pt,
+                height=draw_h_pt,
+                preserveAspectRatio=True,
                 mask='auto',
             )
         except Exception:
@@ -1121,7 +1142,7 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
                     lx, ly,
                     width=lw,
                     height=lh,
-                    preserveAspectRatio=False,
+                    preserveAspectRatio=True,
                     mask='auto',
                 )
             except Exception:
