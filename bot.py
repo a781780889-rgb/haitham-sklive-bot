@@ -1986,6 +1986,9 @@ async def generate_and_send_pdf(update, context, uid):
         # حالة رقم الترخيص — مُفعَّل بواسطة المستخدم أم لا
         force_license = context.user_data.get("license_enabled", False)
 
+        # ── توليد GSL مسبقاً قبل الـ PDF حتى يُطبع فيه بدلاً من PSL ──
+        pre_gsl_code = db.generate_gsl_code()
+
         generate_excuse_pdf(
             order_data      = od,
             hospital        = hospital,
@@ -1999,6 +2002,7 @@ async def generate_and_send_pdf(update, context, uid):
             hospital_type   = hospital_type_val,
             template_path   = template_path,
             force_license   = force_license,
+            gsl_code        = pre_gsl_code,
         )
         # حذف الملف المؤقت للـ QR المخصص
         if custom_qr_tmp and os.path.exists(custom_qr_tmp):
@@ -2012,7 +2016,7 @@ async def generate_and_send_pdf(update, context, uid):
         od["days_count"] = safe_int(od.get("days_count", 1))
 
         full_data = {**od, "hospital": hospital, "doctor": doctor, "specialty": specialty}
-        order_id  = db.save_order(uid, full_data)
+        order_id  = db.save_order(uid, full_data, preset_gsl_code=pre_gsl_code)
         # ✅ قفل الطلب — منع إعادة الإصدار
         context.user_data["pdf_issued"] = True
         context.user_data["pdf_order_id"] = order_id
@@ -2021,8 +2025,8 @@ async def generate_and_send_pdf(update, context, uid):
         db.increment_doctor_orders(doctor, hospital)
         db.log_activity(uid, "order_created", f"طلب #{order_id} — {hospital}")
 
-        # ── جلب رمز GSL أولاً لاستخدامه كـ report_number في Supabase ──
-        gsl_code = db.get_order_gsl(order_id)
+        # ── استخدام GSL الذي تم توليده مسبقاً (نفس الكود المطبوع في الـ PDF) ──
+        gsl_code = pre_gsl_code
 
         # ── إرسال بيانات الإجازة إلى Supabase (في الخلفية) ───────────
         asyncio.create_task(

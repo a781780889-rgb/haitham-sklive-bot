@@ -1002,10 +1002,10 @@ def generate_gsl_code():
         conn.close()
 
 
-def save_order(user_id, data):
+def save_order(user_id, data, preset_gsl_code=None):
     conn = get_conn()
     try:
-        gsl = generate_gsl_code()
+        gsl = preset_gsl_code if preset_gsl_code else generate_gsl_code()
         # تحويل days_count لرقم صحيح دائماً (يمنع InvalidTextRepresentation في PostgreSQL)
         raw_days = data.get("days_count", 1)
         try:
