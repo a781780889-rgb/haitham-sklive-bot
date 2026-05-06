@@ -1132,8 +1132,41 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
             slot_w_px = max(1, int(lw * DPI_FACTOR))
             slot_h_px = max(1, int(lh * DPI_FACTOR))
 
-            # min: الشعار يملأ المساحة المتاحة دون أن يخرج خارجها
-            scale = min(slot_w_px / orig_w, slot_h_px / orig_h)
+            # ─── خطوة 2: تحجيم لـ "حضور بصري متساوٍ مع QR" ──
+            # المتطلب: الشعار يجب أن يبدو بنفس "حجم" QR للناظر.
+            # المعيار الأفضل لـ"الحضور البصري" هو: نفس الارتفاع كـ QR.
+            # (لأن العين تقيس الحضور بالارتفاع غالباً في التصاميم الأفقية)
+            #
+            # المنطق:
+            #   - نُكبّر الشعار ليصبح ارتفاعه = ارتفاع QR بالضبط
+            #   - إذا كان عرضه (بعد التكبير) ≤ عرض QR → ممتاز
+            #   - إذا كان عرضه (بعد التكبير) > عرض QR (شعار عريض جداً)
+            #     → نتراجع لتطابق العرض بدل الارتفاع، لتفادي الخروج عن
+            #       الحدود بشكل مفرط، مع هامش تسامح 80% (يسمح بامتداد بسيط)
+            #
+            # هذا يضمن أن الشعار يحتل دائماً مساحة بصرية مساوية للـ QR
+            # ولا يبدو صغيراً جداً.
+
+            logo_aspect = orig_w / orig_h
+            slot_aspect = slot_w_px / slot_h_px
+
+            # نسبة التسامح: نسمح للشعار بأن يكون أعرض حتى 1.3× عرض QR
+            # قبل اللجوء لتقليصه ليتناسب مع العرض
+            MAX_WIDTH_RATIO = 1.3
+
+            # سيناريو 1: الشعار يطابق ارتفاع QR
+            scale_by_height = slot_h_px / orig_h
+            width_if_height_match = orig_w * scale_by_height
+
+            if width_if_height_match <= slot_w_px * MAX_WIDTH_RATIO:
+                # العرض ضمن الحد المقبول → نطابق على الارتفاع (الشعار بحضور
+                # بصري كامل = ارتفاع QR). يحدث للشعارات المربعة والعريضة المعقولة
+                scale = scale_by_height
+            else:
+                # الشعار عريض جداً (مثل: نسبة 3:1) → نطابق على عرض موسّع
+                # حتى لا يخرج كثيراً عن المساحة، لكن يبقى أكبر من السابق
+                scale = (slot_w_px * MAX_WIDTH_RATIO) / orig_w
+
             new_w = max(1, int(round(orig_w * scale)))
             new_h = max(1, int(round(orig_h * scale)))
             resized = orig.resize((new_w, new_h), PILImage.LANCZOS)
