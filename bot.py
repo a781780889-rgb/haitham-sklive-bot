@@ -665,11 +665,11 @@ def logo_city_hospitals_keyboard(city: str, hospitals_db: list):
             combined.append(h["name"])
     rows = []
     for name in combined:
-        has_logo = name in db_names and any(
+        hospital_has_logo = name in db_names and any(
             has_logo(h)
             for h in hospitals_db if h["name"] == name
         )
-        label = f"✅ {name}" if has_logo else name
+        label = f"✅ {name}" if hospital_has_logo else name
         rows.append([KeyboardButton(label)])
     rows.append([KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")])
     return ReplyKeyboardMarkup(rows, resize_keyboard=True)
@@ -693,8 +693,8 @@ async def refresh_city_logo_keyboard(message, context):
     rows = [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]]
     for name in combined:
         db_h     = next((h for h in db_city if h["name"] == name), None)
-        has_logo = db_h and has_logo(db_h)
-        label    = f"✅ {name}" if has_logo else name
+        hospital_has_logo = db_h and has_logo(db_h)
+        label    = f"✅ {name}" if hospital_has_logo else name
         rows.append([KeyboardButton(label)])
     context.user_data["state"] = "admin_logo_select_hospital"
     await message.reply_text(
@@ -2744,8 +2744,8 @@ async def handle_logos(update, context, text, uid):
             rows = [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]]
             for name in combined_names:
                 db_h = next((h for h in db_city if h["name"] == name), None)
-                has_logo = db_h and has_logo(db_h)
-                label = f"✅ {name}" if has_logo else name
+                hospital_has_logo = db_h and has_logo(db_h)
+                label = f"✅ {name}" if hospital_has_logo else name
                 rows.append([KeyboardButton(label)])
             await update.message.reply_text(
                 f"🏥 *مستشفيات {text}* ({len(combined_names)})\n✅ = لديه شعار\n\nاختر المستشفى:",
