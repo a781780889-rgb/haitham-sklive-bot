@@ -1224,18 +1224,13 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
             slot_h_px = max(1, int(lh * DPI_FACTOR))
 
             # استراتيجية التحجيم:
-            # - نُكبّر حتى يلامس الشعار حدود مربع الباركود من الداخل
-            # - نسمح بتجاوز العرض حتى 30% لتجنب تصغير الشعارات الأفقية
-            # - الحفاظ التام على نسبة الأبعاد الأصلية (لا تمدد، لا ضغط)
-            MAX_WIDTH_RATIO = 1.3   # يمنع الخروج الكبير عن حدود المساحة
-
+            # ✅ الشعار يجب ألا يتجاوز حدود مربع الباركود (slot) في أي اتجاه
+            # ✅ الحفاظ التام على نسبة الأبعاد الأصلية (لا تمدد، لا ضغط)
+            # ✅ تكبير حتى الحد الأقصى الذي يبقي الشعار داخل المربع
             scale_by_height = slot_h_px / orig_h
-            width_if_height = orig_w * scale_by_height
-
-            if width_if_height <= slot_w_px * MAX_WIDTH_RATIO:
-                scale = scale_by_height  # الشعار المربع/الطويل → ملء الارتفاع
-            else:
-                scale = (slot_w_px * MAX_WIDTH_RATIO) / orig_w  # شعار عريض جداً → ملء العرض
+            scale_by_width  = slot_w_px / orig_w
+            # اختر أصغر مقياس لضمان بقاء الشعار داخل الحدود
+            scale = min(scale_by_height, scale_by_width)
 
             new_w = max(1, int(round(orig_w * scale)))
             new_h = max(1, int(round(orig_h * scale)))
