@@ -2387,3 +2387,41 @@ async def handle_dashboard_router(update, context, text, uid, name):
                     parse_mode="Markdown", reply_markup=dashboard_keyboard()
                 )
 
+
+# ══════════════════════════════════════════════
+# 🚀 نقطة التشغيل الرئيسية
+# ══════════════════════════════════════════════
+def main():
+    application = (
+        Application.builder()
+        .token(BOT_TOKEN)
+        .build()
+    )
+
+    # تسجيل الأوامر
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", cmd_help))
+    application.add_handler(CommandHandler("balance", cmd_balance))
+    application.add_handler(CommandHandler("myorders", cmd_myorders))
+    application.add_handler(CommandHandler("verify", cmd_verify))
+    application.add_handler(CommandHandler("pending", cmd_pending))
+
+    # معالج الأزرار الإنلاين
+    async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        query = update.callback_query
+        await query.answer()
+        uid = query.from_user.id
+        data = query.data or ""
+        await rh.handle_review_callback(query, uid, data, context.bot, ADMIN_IDS)
+
+    application.add_handler(CallbackQueryHandler(handle_callback))
+
+    # معالج الرسائل النصية
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    logger.info("✅ البوت يعمل الآن...")
+    application.run_polling(drop_pending_updates=True)
+
+
+if __name__ == "__main__":
+    main()
