@@ -2290,6 +2290,997 @@ async def generate_and_send_pdf(update, context, uid):
 # راوتر الإدارة
 # ══════════════════════════════════════════════
 
+async def show_analytics(update):
+    """عرض إحصائيات النظام"""
+    try:
+        data = db.get_analytics()
+        top_h = ""
+        for i, h in enumerate(data.get("top_hospitals", []), 1):
+            top_h += f"  {i}. {h.get('hospital','—')}: {h.get('cnt',0)} طلب\n"
+        msg = (
+            f"📈 *إحصائيات النظام*\n\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"👥 المستخدمين: *{data.get('total_users', 0)}*\n"
+            f"📋 إجمالي الطلبات: *{data.get('total_orders', 0)}*\n"
+            f"✅ طلبات مكتملة: *{data.get('done_orders', 0)}*\n"
+            f"📅 طلبات اليوم: *{data.get('today_orders', 0)}*\n"
+            f"📆 طلبات الشهر: *{data.get('month_orders', 0)}*\n"
+            f"💰 إجمالي الإيرادات: *{data.get('total_revenue', 0):.2f}* ريال\n"
+            f"🏥 المستشفيات: *{data.get('total_hospitals', 0)}*\n"
+            f"👨‍⚕️ الأطباء: *{data.get('total_doctors', 0)}*\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"🏆 *أكثر المستشفيات طلباً:*\n{top_h or '  لا توجد بيانات بعد'}"
+        )
+        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=admin_keyboard())
+    except Exception as e:
+        await update.message.reply_text(f"❌ خطأ في جلب الإحصائيات: {e}", reply_markup=admin_keyboard())
+
+
+async def handle_admin_router(update, context, text, uid, name):
+    """راوتر كامل لكل أزرار لوحة الإدارة"""
+
+    if not is_admin_user(uid):
+        context.user_data.clear()
+        await update.message.reply_text("❌ لا صلاحية.", reply_markup=main_menu_keyboard(False))
+        return
+
+    state = context.user_data.get("state", "admin")
+
+    # ── أزرار التنقل العامة ──
+    if text in ["⬅️ رجوع", "🔙 الرجوع"]:
+        await handle_back(update, context, uid, name, state)
+        return
+
+    if text == "🏠 القائمة الرئيسية":
+        context.user_data.clear()
+        await update.message.reply_text(
+            build_main_menu_text(uid, name), parse_mode="Markdown",
+            reply_markup=main_menu_keyboard(True)
+        )
+        return
+
+    # ── القائمة الرئيسية للإدارة ──
+    if text == "📄 قوالب PDF":
+        context.user_data["state"] = "admin_templates"
+        await update.message.reply_text(
+            "📄 *قوالب PDF*\n\nاختر العملية:",
+            parse_mode="Markdown", reply_markup=templates_keyboard()
+        )
+        return
+
+    if text == "🖼️ شعارات المستشفيات":
+        context.user_data["state"] = "admin_logos"
+        await update.message.reply_text(
+            "🖼️ *شعارات المستشفيات*",
+            parse_mode="Markdown", reply_markup=logos_keyboard()
+        )
+        return
+
+    if text == "🏥 إدارة المستشفيات":
+        context.user_data["state"] = "admin_hospitals"
+        await update.message.reply_text(
+            "🏥 *إدارة المستشفيات*\n\nاختر العملية:",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup([
+                [KeyboardButton("🗺 تصفح بالمنطقة والمدينة")],
+                [KeyboardButton("➕ إضافة مستشفى جديد")],
+                [KeyboardButton("📋 عرض جميع المستشفيات")],
+                [KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")],
+            ], resize_keyboard=True)
+        )
+        return
+
+    if text == "👨‍⚕️ إدارة الأطباء":
+        context.user_data["state"] = "admin_doctors"
+        await update.message.reply_text(
+            "👨‍⚕️ *إدارة الأطباء*\n\nاختر طريقة البحث:",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup([
+                [KeyboardButton("🗺 تصفح بالمنطقة والمدينة")],
+                [KeyboardButton("📋 كل المستشفيات")],
+                [KeyboardButton("⚠️ المستشفيات بدون أطباء")],
+                [KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")],
+            ], resize_keyboard=True)
+        )
+        return
+
+    if text == "👥 المستخدمين":
+        context.user_data["state"] = "admin_users"
+        await update.message.reply_text(
+            "👥 *إدارة المستخدمين*\n\nاختر العملية:",
+            parse_mode="Markdown", reply_markup=users_admin_keyboard()
+        )
+        return
+
+    if text == "📊 الطلبات":
+        context.user_data["state"] = "admin_orders"
+        await update.message.reply_text(
+            "📊 *إدارة الطلبات*\n\nاختر العملية:",
+            parse_mode="Markdown", reply_markup=orders_admin_keyboard()
+        )
+        return
+
+    if text == "💰 المعاملات المالية":
+        txs = db.get_pending_transactions()
+        all_txs = db.get_all_transactions(limit=20)
+        pending_count = len(txs)
+        lines = []
+        status_emoji = {"approved": "✅", "pending": "⏳", "waiting_approval": "🔍", "rejected": "❌"}
+        for t in all_txs[:15]:
+            se = status_emoji.get(t["status"], "•")
+            u_name = t.get("user_name", "—")
+            lines.append(f"{se} #{t['id']} | {u_name} | {t.get('package_name','—')} | {t.get('amount',0):.0f}ر")
+        msg = (
+            f"💰 *المعاملات المالية*\n\n"
+            f"🔍 في انتظار المراجعة: *{pending_count}*\n\n"
+            f"{'─' * 25}\n"
+            + ("\n".join(lines) if lines else "لا توجد معاملات بعد.")
+        )
+        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=admin_keyboard())
+        if txs:
+            for t in txs[:5]:
+                u_name = t.get("user_name", "—")
+                target_uid = t.get("user_id")
+                tx_id = t["id"]
+                screenshot = t.get("screenshot_path", "")
+                approval_kb = InlineKeyboardMarkup([[
+                    InlineKeyboardButton("✅ اعتماد", callback_data=f"charge_approve:{tx_id}:{target_uid}"),
+                    InlineKeyboardButton("❌ رفض", callback_data=f"charge_reject:{tx_id}:{target_uid}"),
+                ]])
+                tx_text = (
+                    f"🔍 *طلب شحن #{tx_id}*\n"
+                    f"👤 {u_name} | `{target_uid}`\n"
+                    f"📦 {t.get('package_name','—')} | 💰 {t.get('amount',0):.0f} ريال\n"
+                    f"💳 {t.get('payment_method','—')}"
+                )
+                if screenshot:
+                    try:
+                        await context.bot.send_photo(chat_id=uid, photo=screenshot, caption=tx_text,
+                                                     parse_mode="Markdown", reply_markup=approval_kb)
+                    except Exception:
+                        await update.message.reply_text(tx_text, parse_mode="Markdown", reply_markup=approval_kb)
+                else:
+                    await update.message.reply_text(tx_text, parse_mode="Markdown", reply_markup=approval_kb)
+        return
+
+    if text == "🎫 أكواد الشحن":
+        context.user_data["state"] = "admin_codes"
+        vouchers = db.get_all_vouchers(limit=20)
+        lines = []
+        for v in vouchers[:10]:
+            status = "✅ مستخدم" if v.get("used_by") else "🟢 متاح"
+            lines.append(f"• `{v['code']}` — {v.get('amount',0):.0f}ر — {status}")
+        msg = (
+            f"🎫 *أكواد الشحن*\n\n"
+            f"{'─' * 25}\n"
+            + ("\n".join(lines) if lines else "لا توجد أكواد بعد.")
+        )
+        await update.message.reply_text(
+            msg, parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup([
+                [KeyboardButton("➕ إنشاء كود شحن جديد")],
+                [KeyboardButton("📋 عرض كل الأكواد")],
+                [KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")],
+            ], resize_keyboard=True)
+        )
+        return
+
+    if text == "➕ إنشاء كود شحن جديد":
+        context.user_data["state"] = "admin_code_amount"
+        await update.message.reply_text(
+            "💰 أدخل قيمة الكود (بالريال):\nمثال: `50` أو `100`",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup([
+                [KeyboardButton("⬅️ رجوع")],
+            ], resize_keyboard=True)
+        )
+        return
+
+    if state == "admin_code_amount":
+        try:
+            amount = float(text.strip())
+            if amount <= 0:
+                raise ValueError
+            codes = db.create_voucher(amount, uid, count=1)
+            code_str = "\n".join([f"`{c}`" for c in codes])
+            await update.message.reply_text(
+                f"✅ *تم إنشاء الكود بنجاح!*\n\n"
+                f"🎫 الكود: {code_str}\n"
+                f"💰 القيمة: *{amount:.0f} ريال*\n\n"
+                f"شارك هذا الكود مع المستخدم.",
+                parse_mode="Markdown",
+                reply_markup=ReplyKeyboardMarkup([
+                    [KeyboardButton("➕ إنشاء كود آخر")],
+                    [KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")],
+                ], resize_keyboard=True)
+            )
+            context.user_data["state"] = "admin_codes"
+        except (ValueError, TypeError):
+            await update.message.reply_text(
+                "❌ قيمة غير صحيحة. أدخل رقماً مثل: `50`",
+                parse_mode="Markdown"
+            )
+        return
+
+    if text == "➕ إنشاء كود آخر":
+        context.user_data["state"] = "admin_code_amount"
+        await update.message.reply_text(
+            "💰 أدخل قيمة الكود الجديد:",
+            reply_markup=ReplyKeyboardMarkup([[KeyboardButton("⬅️ رجوع")]], resize_keyboard=True)
+        )
+        return
+
+    if text == "📋 عرض كل الأكواد":
+        vouchers = db.get_all_vouchers(limit=50)
+        lines = []
+        for v in vouchers:
+            status = "✅ مستخدم" if v.get("used_by") else "🟢 متاح"
+            lines.append(f"• `{v['code']}` — {v.get('amount',0):.0f}ر — {status}")
+        msg = "🎫 *كل أكواد الشحن:*\n\n" + ("\n".join(lines) if lines else "لا توجد أكواد.")
+        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=admin_keyboard())
+        return
+
+    if text == "📈 الإحصائيات":
+        await show_analytics(update)
+        return
+
+    if text == "⚙️ الإعدادات":
+        context.user_data["state"] = "admin_settings"
+        current_price = db.get_setting("order_price") or "غير محدد"
+        await update.message.reply_text(
+            f"⚙️ *إعدادات النظام*\n\n"
+            f"💲 السعر الحالي للطلب: *{current_price}* ريال\n\n"
+            f"اختر الإعداد المطلوب:",
+            parse_mode="Markdown", reply_markup=settings_keyboard()
+        )
+        return
+
+    if text == "🔔 الإشعارات":
+        await update.message.reply_text(
+            "🔔 *الإشعارات*\n\n"
+            "📢 استخدم زر *رسالة جماعية* من لوحة التحكم لإرسال إشعارات لجميع المستخدمين.\n\n"
+            "أو استخدم `/broadcast [رسالتك]` للإرسال السريع.",
+            parse_mode="Markdown", reply_markup=admin_keyboard()
+        )
+        return
+
+    # ── قوالب PDF ──
+    if state == "admin_templates":
+        if text == "➕ إضافة قالب PDF جديد":
+            context.user_data["state"] = "admin_template_upload"
+            await update.message.reply_text(
+                "📤 *رفع قالب PDF جديد*\n\nأرسل ملف PDF الآن:",
+                parse_mode="Markdown",
+                reply_markup=ReplyKeyboardMarkup([[KeyboardButton("⬅️ رجوع")]], resize_keyboard=True)
+            )
+            return
+
+        if text == "📋 عرض كل القوالب":
+            templates = db.get_all_templates()
+            if not templates:
+                await update.message.reply_text("❌ لا توجد قوالب مرفوعة بعد.", reply_markup=templates_keyboard())
+                return
+            lines = []
+            for t in templates:
+                active_mark = "⭐ " if t.get("is_active") else ""
+                lines.append(f"{active_mark}#{t['id']} — {t.get('name','قالب')} ({t.get('file_size',0)//1024} كيلو)")
+            await update.message.reply_text(
+                "📋 *القوالب المتاحة:*\n\n" + "\n".join(lines),
+                parse_mode="Markdown", reply_markup=templates_keyboard()
+            )
+            return
+
+        if text == "⭐ تعيين قالب افتراضي":
+            templates = db.get_all_templates()
+            if not templates:
+                await update.message.reply_text("❌ لا توجد قوالب.", reply_markup=templates_keyboard())
+                return
+            rows = []
+            for t in templates:
+                rows.append([KeyboardButton(f"⭐ #{t['id']} — {t.get('name','قالب')}")])
+            rows.append([KeyboardButton("⬅️ رجوع")])
+            context.user_data["state"] = "admin_template_set_default"
+            await update.message.reply_text(
+                "اختر القالب الافتراضي:",
+                reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+            )
+            return
+
+        if text == "🗑 حذف قالب":
+            templates = db.get_all_templates()
+            if not templates:
+                await update.message.reply_text("❌ لا توجد قوالب.", reply_markup=templates_keyboard())
+                return
+            rows = []
+            for t in templates:
+                rows.append([KeyboardButton(f"🗑 #{t['id']} — {t.get('name','قالب')}")])
+            rows.append([KeyboardButton("⬅️ رجوع")])
+            context.user_data["state"] = "admin_template_delete"
+            await update.message.reply_text(
+                "⚠️ اختر القالب لحذفه:",
+                reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+            )
+            return
+
+    if state == "admin_template_set_default" and text.startswith("⭐ #"):
+        try:
+            template_id = int(text.split("#")[1].split("—")[0].strip())
+            db.set_active_template(template_id)
+            await update.message.reply_text(
+                f"✅ تم تعيين القالب #{template_id} كقالب افتراضي.",
+                reply_markup=templates_keyboard()
+            )
+            context.user_data["state"] = "admin_templates"
+        except Exception as e:
+            await update.message.reply_text(f"❌ خطأ: {e}", reply_markup=templates_keyboard())
+        return
+
+    if state == "admin_template_delete" and text.startswith("🗑 #"):
+        try:
+            template_id = int(text.split("#")[1].split("—")[0].strip())
+            db.delete_template(template_id)
+            await update.message.reply_text(
+                f"✅ تم حذف القالب #{template_id}.",
+                reply_markup=templates_keyboard()
+            )
+            context.user_data["state"] = "admin_templates"
+        except Exception as e:
+            await update.message.reply_text(f"❌ خطأ: {e}", reply_markup=templates_keyboard())
+        return
+
+    # ── شعارات المستشفيات ──
+    if state == "admin_logos":
+        if text == "➕ رفع شعار مستشفى":
+            context.user_data["state"] = "admin_logo_select_hospital"
+            hospitals = db.get_hospitals_by_city(None) or []
+            all_h = db.get_all_hospitals() if hasattr(db, "get_all_hospitals") else []
+            await update.message.reply_text(
+                "🏥 أرسل اسم المستشفى لرفع شعاره:",
+                reply_markup=ReplyKeyboardMarkup(
+                    [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]],
+                    resize_keyboard=True
+                )
+            )
+            return
+
+        if text == "🏙️ رفع شعار (تصفح بالمدينة)":
+            context.user_data["state"] = "admin_logo_browse_region"
+            await update.message.reply_text(
+                "🗺 *اختر المنطقة:*",
+                parse_mode="Markdown", reply_markup=logo_city_regions_keyboard()
+            )
+            return
+
+        if text == "🔍 المستشفيات التي تحتاج شعار":
+            hospitals = db.get_all_hospitals() if hasattr(db, "get_all_hospitals") else []
+            no_logo = [h for h in hospitals if not has_logo(h)]
+            if not no_logo:
+                await update.message.reply_text("✅ جميع المستشفيات لديها شعارات!", reply_markup=logos_keyboard())
+                return
+            rows = []
+            for h in no_logo[:20]:
+                rows.append([KeyboardButton(h["name"])])
+            rows.append([KeyboardButton("⬅️ رجوع")])
+            context.user_data["state"] = "admin_logo_no_logo_select"
+            context.user_data["logo_came_from_no_logo"] = True
+            await update.message.reply_text(
+                f"🔍 *{len(no_logo)} مستشفى بدون شعار:*\n\nاختر مستشفى لرفع شعاره:",
+                parse_mode="Markdown",
+                reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+            )
+            return
+
+        if text == "🤖 تحميل الشعارات تلقائياً من الإنترنت":
+            await update.message.reply_text(
+                "🤖 *تحميل الشعارات التلقائي*\n\n"
+                "⚠️ هذه الميزة غير متاحة حالياً.\n"
+                "يرجى رفع الشعارات يدوياً.",
+                parse_mode="Markdown", reply_markup=logos_keyboard()
+            )
+            return
+
+        if text == "📋 عرض الشعارات الحالية":
+            hospitals = db.get_all_hospitals() if hasattr(db, "get_all_hospitals") else []
+            with_logo = [h for h in hospitals if has_logo(h)]
+            without_logo = [h for h in hospitals if not has_logo(h)]
+            lines = [f"✅ {h['name']}" for h in with_logo[:15]]
+            msg = (
+                f"📋 *الشعارات الحالية*\n\n"
+                f"🖼 بشعار: *{len(with_logo)}* | ❌ بدون: *{len(without_logo)}*\n\n"
+                + ("\n".join(lines) if lines else "لا توجد شعارات بعد.")
+            )
+            await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=logos_keyboard())
+            return
+
+        if text == "🗑 حذف شعار":
+            hospitals = db.get_all_hospitals() if hasattr(db, "get_all_hospitals") else []
+            with_logo = [h for h in hospitals if has_logo(h)]
+            if not with_logo:
+                await update.message.reply_text("❌ لا توجد شعارات لحذفها.", reply_markup=logos_keyboard())
+                return
+            rows = [[KeyboardButton(f"🗑 {h['name']}")] for h in with_logo[:20]]
+            rows.append([KeyboardButton("⬅️ رجوع")])
+            context.user_data["state"] = "admin_logo_delete"
+            await update.message.reply_text(
+                "🗑 اختر المستشفى لحذف شعاره:",
+                reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+            )
+            return
+
+    if state == "admin_logo_delete" and text.startswith("🗑 "):
+        hospital_name = text.replace("🗑 ", "").strip()
+        try:
+            db.set_hospital_logo(hospital_name, logo_path=None)
+            await update.message.reply_text(
+                f"✅ تم حذف شعار {hospital_name}.",
+                reply_markup=logos_keyboard()
+            )
+            context.user_data["state"] = "admin_logos"
+        except Exception as e:
+            await update.message.reply_text(f"❌ خطأ: {e}", reply_markup=logos_keyboard())
+        return
+
+    if state == "admin_logo_no_logo_select":
+        clean_hospital = text.strip()
+        if clean_hospital in ["⬅️ رجوع", "🏠 القائمة الرئيسية"]:
+            context.user_data["state"] = "admin_logos"
+            context.user_data.pop("logo_came_from_no_logo", None)
+            await update.message.reply_text("🖼️ *شعارات المستشفيات*", parse_mode="Markdown", reply_markup=logos_keyboard())
+            return
+        context.user_data["admin_logo_hospital"] = clean_hospital
+        context.user_data["state"] = "admin_logo_upload"
+        await update.message.reply_text(
+            f"🖼 *رفع شعار المستشفى*\n\n🏥 المستشفى: *{clean_hospital}*\n\n📤 أرسل صورة الشعار الآن:",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup([[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]], resize_keyboard=True)
+        )
+        return
+
+    # تصفح المناطق لرفع الشعار
+    if state == "admin_logo_browse_region":
+        region_clean = text.replace("🗺 ", "").strip()
+        if region_clean in KSA_REGIONS:
+            context.user_data["logo_browse_region"] = region_clean
+            context.user_data["state"] = "admin_logo_browse_city"
+            cities = KSA_REGIONS[region_clean]
+            rows = []
+            for i in range(0, len(cities), 2):
+                row = [KeyboardButton(cities[i])]
+                if i + 1 < len(cities):
+                    row.append(KeyboardButton(cities[i + 1]))
+                rows.append(row)
+            rows.append([KeyboardButton("⬅️ رجوع")])
+            await update.message.reply_text(
+                f"🏙️ *مدن {region_clean}:*",
+                parse_mode="Markdown",
+                reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+            )
+        return
+
+    if state == "admin_logo_browse_city":
+        city = text.strip()
+        context.user_data["logo_browse_city"] = city
+        context.user_data["state"] = "admin_logo_select_hospital"
+        hospitals_db = db.get_hospitals_by_city(city)
+        await logo_city_hospitals_keyboard(city, hospitals_db)
+        rows = []
+        if hospitals_db:
+            for h in hospitals_db[:20]:
+                label = f"✅ {h['name']}" if has_logo(h) else h["name"]
+                rows.append([KeyboardButton(label)])
+        rows.append([KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")])
+        await update.message.reply_text(
+            f"🏥 *مستشفيات {city}:*\n✅ = لديه شعار",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+        )
+        return
+
+    # حالة اختيار مستشفى لرفع الشعار
+    if state == "admin_logo_select_hospital":
+        clean_hospital = text.replace("✅ ", "").replace(" ✅", "").strip()
+        if clean_hospital in ["⬅️ رجوع", "🏠 القائمة الرئيسية"]:
+            context.user_data["state"] = "admin_logos"
+            await update.message.reply_text("🖼️ *شعارات المستشفيات*", parse_mode="Markdown", reply_markup=logos_keyboard())
+            return
+        context.user_data["admin_logo_hospital"] = clean_hospital
+        context.user_data["state"] = "admin_logo_upload"
+        existing_logo = db.get_hospital_logo(clean_hospital)
+        status_msg = "🔄 *سيتم استبدال الشعار الحالي*" if existing_logo else "➕ *سيُضاف شعار جديد*"
+        await update.message.reply_text(
+            f"🖼 *رفع شعار المستشفى*\n\n"
+            f"🏥 المستشفى: *{clean_hospital}*\n"
+            f"{status_msg}\n\n"
+            f"📤 أرسل صورة الشعار الآن:\n"
+            f"• PNG أو JPG\n"
+            f"• يُفضَّل بخلفية شفافة أو بيضاء\n"
+            f"• سيتم إزالة الخلفية تلقائياً ✅",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup([[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]], resize_keyboard=True)
+        )
+        return
+
+    # ── إدارة المستخدمين ──
+    if state == "admin_users":
+        if text == "👥 قائمة المستخدمين":
+            users = db.get_all_users()
+            lines = []
+            for u in users[:20]:
+                banned = "🚫" if u.get("is_banned") else "✅"
+                lines.append(f"{banned} {u.get('name','—')} | `{u['user_id']}` | {u.get('balance',0):.0f}ر")
+            msg = f"👥 *المستخدمين ({len(users)}):*\n\n" + ("\n".join(lines) if lines else "لا مستخدمين.")
+            await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=users_admin_keyboard())
+            return
+
+        if text == "🔍 بحث عن مستخدم":
+            context.user_data["state"] = "admin_user_search"
+            await update.message.reply_text(
+                "🔍 أرسل ID المستخدم أو اسمه:",
+                reply_markup=ReplyKeyboardMarkup([[KeyboardButton("⬅️ رجوع")]], resize_keyboard=True)
+            )
+            return
+
+        if text == "🚫 حظر مستخدم":
+            context.user_data["state"] = "admin_ban_user"
+            await update.message.reply_text(
+                "🚫 أرسل ID المستخدم لحظره:",
+                reply_markup=ReplyKeyboardMarkup([[KeyboardButton("⬅️ رجوع")]], resize_keyboard=True)
+            )
+            return
+
+        if text == "✅ رفع الحظر":
+            context.user_data["state"] = "admin_unban_user"
+            await update.message.reply_text(
+                "✅ أرسل ID المستخدم لرفع الحظر عنه:",
+                reply_markup=ReplyKeyboardMarkup([[KeyboardButton("⬅️ رجوع")]], resize_keyboard=True)
+            )
+            return
+
+        if text == "💰 إضافة رصيد":
+            context.user_data["state"] = "admin_add_balance_uid"
+            await update.message.reply_text(
+                "💰 أرسل ID المستخدم لإضافة رصيد له:",
+                reply_markup=ReplyKeyboardMarkup([[KeyboardButton("⬅️ رجوع")]], resize_keyboard=True)
+            )
+            return
+
+    if state == "admin_user_search":
+        try:
+            target_uid = int(text.strip())
+            user = db.get_user(target_uid)
+        except ValueError:
+            users = db.get_all_users()
+            user = next((u for u in users if text.lower() in (u.get("name") or "").lower()), None)
+        if user:
+            banned = "🚫 محظور" if user.get("is_banned") else "✅ نشط"
+            msg = (
+                f"👤 *معلومات المستخدم*\n\n"
+                f"🆔 ID: `{user['user_id']}`\n"
+                f"👤 الاسم: {user.get('name','—')}\n"
+                f"💰 الرصيد: {user.get('balance',0):.2f} ريال\n"
+                f"📊 الحالة: {banned}\n"
+                f"📅 التسجيل: {user.get('created_at','—')}"
+            )
+            await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=users_admin_keyboard())
+        else:
+            await update.message.reply_text("❌ لم يُعثر على مستخدم.", reply_markup=users_admin_keyboard())
+        context.user_data["state"] = "admin_users"
+        return
+
+    if state == "admin_ban_user":
+        try:
+            target_uid = int(text.strip())
+            db.ban_user(target_uid, 1)
+            await update.message.reply_text(f"✅ تم حظر المستخدم `{target_uid}`.", parse_mode="Markdown", reply_markup=users_admin_keyboard())
+        except ValueError:
+            await update.message.reply_text("❌ ID غير صحيح.", reply_markup=users_admin_keyboard())
+        context.user_data["state"] = "admin_users"
+        return
+
+    if state == "admin_unban_user":
+        try:
+            target_uid = int(text.strip())
+            db.ban_user(target_uid, 0)
+            await update.message.reply_text(f"✅ تم رفع الحظر عن `{target_uid}`.", parse_mode="Markdown", reply_markup=users_admin_keyboard())
+        except ValueError:
+            await update.message.reply_text("❌ ID غير صحيح.", reply_markup=users_admin_keyboard())
+        context.user_data["state"] = "admin_users"
+        return
+
+    if state == "admin_add_balance_uid":
+        try:
+            target_uid = int(text.strip())
+            context.user_data["admin_balance_target"] = target_uid
+            context.user_data["state"] = "admin_add_balance_amount"
+            await update.message.reply_text(
+                f"💰 أرسل المبلغ لإضافته للمستخدم `{target_uid}`:",
+                parse_mode="Markdown",
+                reply_markup=ReplyKeyboardMarkup([[KeyboardButton("⬅️ رجوع")]], resize_keyboard=True)
+            )
+        except ValueError:
+            await update.message.reply_text("❌ ID غير صحيح.", reply_markup=users_admin_keyboard())
+            context.user_data["state"] = "admin_users"
+        return
+
+    if state == "admin_add_balance_amount":
+        try:
+            amount = float(text.strip())
+            target_uid = context.user_data.get("admin_balance_target")
+            db.update_balance(target_uid, amount)
+            await update.message.reply_text(
+                f"✅ تم إضافة *{amount:.2f}* ريال للمستخدم `{target_uid}`.",
+                parse_mode="Markdown", reply_markup=users_admin_keyboard()
+            )
+        except (ValueError, TypeError):
+            await update.message.reply_text("❌ مبلغ غير صحيح.", reply_markup=users_admin_keyboard())
+        context.user_data["state"] = "admin_users"
+        return
+
+    # ── إدارة الطلبات ──
+    if state == "admin_orders":
+        if text == "📋 آخر الطلبات":
+            orders = db.get_all_orders(limit=15)
+            if not orders:
+                await update.message.reply_text("❌ لا توجد طلبات بعد.", reply_markup=orders_admin_keyboard())
+                return
+            lines = []
+            for o in orders:
+                lines.append(f"#{o['id']} | {o.get('full_name','—')} | {o.get('hospital','—')} | {o.get('created_at','')[:10]}")
+            await update.message.reply_text(
+                "📋 *آخر الطلبات:*\n\n" + "\n".join(lines),
+                parse_mode="Markdown", reply_markup=orders_admin_keyboard()
+            )
+            return
+
+        if text == "🔍 بحث بـ GSL":
+            context.user_data["state"] = "admin_search_gsl"
+            await update.message.reply_text(
+                "🔍 أرسل رمز GSL للبحث:",
+                reply_markup=ReplyKeyboardMarkup([[KeyboardButton("⬅️ رجوع")]], resize_keyboard=True)
+            )
+            return
+
+    if state == "admin_search_gsl":
+        results = db.search_orders_by_gsl(text.strip())
+        if results:
+            o = results[0]
+            msg = (
+                f"📋 *نتيجة البحث:*\n\n"
+                f"🔑 GSL: `{o.get('gsl_code','—')}`\n"
+                f"👤 {o.get('full_name','—')}\n"
+                f"🏥 {o.get('hospital','—')}\n"
+                f"📅 {o.get('created_at','')[:10]}"
+            )
+            await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=orders_admin_keyboard())
+        else:
+            await update.message.reply_text("❌ لم يُعثر على طلب بهذا الرمز.", reply_markup=orders_admin_keyboard())
+        context.user_data["state"] = "admin_orders"
+        return
+
+    # ── إعدادات النظام ──
+    if state == "admin_settings":
+        if text == "💲 تعديل سعر الطلب":
+            context.user_data["state"] = "admin_set_price"
+            current = db.get_setting("order_price") or "5"
+            await update.message.reply_text(
+                f"💲 السعر الحالي: *{current}* ريال\n\nأرسل السعر الجديد:",
+                parse_mode="Markdown",
+                reply_markup=ReplyKeyboardMarkup([[KeyboardButton("⬅️ رجوع")]], resize_keyboard=True)
+            )
+            return
+
+        if text == "🌐 تعديل رابط التحقق":
+            context.user_data["state"] = "admin_set_url"
+            current = db.get_setting("website_url") or "—"
+            await update.message.reply_text(
+                f"🌐 الرابط الحالي: `{current}`\n\nأرسل الرابط الجديد:",
+                parse_mode="Markdown",
+                reply_markup=ReplyKeyboardMarkup([[KeyboardButton("⬅️ رجوع")]], resize_keyboard=True)
+            )
+            return
+
+        if text == "📋 عرض جميع الإعدادات":
+            price = db.get_setting("order_price") or "—"
+            url = db.get_setting("website_url") or "—"
+            maintenance = db.get_setting("maintenance_mode") or "0"
+            await update.message.reply_text(
+                f"📋 *إعدادات النظام الحالية:*\n\n"
+                f"💲 سعر الطلب: *{price}* ريال\n"
+                f"🌐 رابط التحقق: `{url}`\n"
+                f"🔧 وضع الصيانة: {'مفعّل ⚠️' if maintenance == '1' else 'معطّل ✅'}",
+                parse_mode="Markdown", reply_markup=settings_keyboard()
+            )
+            return
+
+    if state == "admin_set_price":
+        try:
+            price = float(text.strip())
+            db.set_setting("order_price", str(price))
+            await update.message.reply_text(
+                f"✅ تم تحديث السعر إلى *{price:.2f}* ريال.",
+                parse_mode="Markdown", reply_markup=settings_keyboard()
+            )
+        except ValueError:
+            await update.message.reply_text("❌ سعر غير صحيح.", reply_markup=settings_keyboard())
+        context.user_data["state"] = "admin_settings"
+        return
+
+    if state == "admin_set_url":
+        db.set_setting("website_url", text.strip())
+        await update.message.reply_text(
+            f"✅ تم تحديث رابط التحقق.",
+            reply_markup=settings_keyboard()
+        )
+        context.user_data["state"] = "admin_settings"
+        return
+
+    # ── إدارة المستشفيات ──
+    if state == "admin_hospitals":
+        if text == "🗺 تصفح بالمنطقة والمدينة":
+            context.user_data["state"] = "admin_hosp_browse_region"
+            await update.message.reply_text("🗺 *اختر المنطقة:*", parse_mode="Markdown", reply_markup=logo_city_regions_keyboard())
+            return
+
+        if text == "📋 عرض جميع المستشفيات":
+            hospitals = db.get_all_hospitals() if hasattr(db, "get_all_hospitals") else []
+            if not hospitals:
+                await update.message.reply_text("❌ لا توجد مستشفيات مسجلة.", reply_markup=admin_keyboard())
+                return
+            lines = [f"🏥 {h['name']} — {h.get('city','')}" for h in hospitals[:20]]
+            await update.message.reply_text(
+                f"📋 *المستشفيات ({len(hospitals)}):*\n\n" + "\n".join(lines),
+                parse_mode="Markdown", reply_markup=admin_keyboard()
+            )
+            return
+
+        if text == "➕ إضافة مستشفى جديد":
+            context.user_data["state"] = "admin_hosp_add_name"
+            await update.message.reply_text(
+                "🏥 أرسل اسم المستشفى الجديد:",
+                reply_markup=ReplyKeyboardMarkup([[KeyboardButton("⬅️ رجوع")]], resize_keyboard=True)
+            )
+            return
+
+    if state == "admin_hosp_add_name":
+        context.user_data["new_hosp_name"] = text.strip()
+        context.user_data["state"] = "admin_hosp_add_city"
+        await update.message.reply_text(
+            f"🏙️ أرسل اسم المدينة للمستشفى: *{text.strip()}*",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup([[KeyboardButton("⬅️ رجوع")]], resize_keyboard=True)
+        )
+        return
+
+    if state == "admin_hosp_add_city":
+        hosp_name = context.user_data.get("new_hosp_name", "")
+        city = text.strip()
+        try:
+            db.add_hospital(hosp_name, city)
+            await update.message.reply_text(
+                f"✅ تمت إضافة *{hosp_name}* في {city}.",
+                parse_mode="Markdown", reply_markup=admin_keyboard()
+            )
+        except Exception as e:
+            await update.message.reply_text(f"❌ خطأ: {e}", reply_markup=admin_keyboard())
+        context.user_data["state"] = "admin"
+        return
+
+    # التصفح بالمنطقة للمستشفيات
+    if state == "admin_hosp_browse_region":
+        region_clean = text.replace("🗺 ", "").strip()
+        if region_clean in KSA_REGIONS:
+            context.user_data["hosp_browse_region"] = region_clean
+            context.user_data["state"] = "admin_hosp_browse_city"
+            cities = KSA_REGIONS[region_clean]
+            rows = []
+            for i in range(0, len(cities), 2):
+                row = [KeyboardButton(cities[i])]
+                if i + 1 < len(cities):
+                    row.append(KeyboardButton(cities[i + 1]))
+                rows.append(row)
+            rows.append([KeyboardButton("⬅️ رجوع")])
+            await update.message.reply_text(
+                f"🏙️ *مدن {region_clean}:*", parse_mode="Markdown",
+                reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+            )
+        return
+
+    if state == "admin_hosp_browse_city":
+        city = text.strip()
+        hospitals = db.get_hospitals_by_city(city)
+        if not hospitals:
+            await update.message.reply_text(f"❌ لا توجد مستشفيات مسجلة في {city}.", reply_markup=admin_keyboard())
+            context.user_data["state"] = "admin"
+            return
+        lines = [f"🏥 {h['name']}" for h in hospitals]
+        context.user_data["state"] = "admin_hosp_list_city"
+        await update.message.reply_text(
+            f"🏥 *مستشفيات {city} ({len(hospitals)}):*\n\n" + "\n".join(lines),
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup([[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]], resize_keyboard=True)
+        )
+        return
+
+    # ── إدارة الأطباء ──
+    if state == "admin_doctors":
+        if text == "🗺 تصفح بالمنطقة والمدينة":
+            context.user_data["state"] = "admin_doc_browse_region"
+            await update.message.reply_text("🗺 *اختر المنطقة:*", parse_mode="Markdown", reply_markup=logo_city_regions_keyboard())
+            return
+
+        if text == "📋 كل المستشفيات":
+            hospitals = db.get_all_hospitals() if hasattr(db, "get_all_hospitals") else []
+            rows = [[KeyboardButton(f"🏥 {h['name']}")] for h in hospitals[:20]]
+            rows.append([KeyboardButton("⬅️ رجوع")])
+            context.user_data["state"] = "admin_doc_select_hosp"
+            await update.message.reply_text(
+                "🏥 اختر المستشفى لإدارة أطبائه:",
+                reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+            )
+            return
+
+        if text == "⚠️ المستشفيات بدون أطباء":
+            hospitals = db.get_all_hospitals() if hasattr(db, "get_all_hospitals") else []
+            no_docs = []
+            for h in hospitals:
+                docs = db.get_doctors_by_hospital_name(h["name"])
+                if not docs:
+                    no_docs.append(h)
+            if not no_docs:
+                await update.message.reply_text("✅ جميع المستشفيات لديها أطباء!", reply_markup=admin_keyboard())
+                return
+            rows = [[KeyboardButton(h["name"])] for h in no_docs[:20]]
+            rows.append([KeyboardButton("⬅️ رجوع")])
+            context.user_data["state"] = "admin_doc_no_doctors_select"
+            await update.message.reply_text(
+                f"⚠️ *{len(no_docs)} مستشفى بدون أطباء:*",
+                parse_mode="Markdown",
+                reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+            )
+            return
+
+    if state in ["admin_doc_select_hosp", "admin_doc_no_doctors_select"]:
+        hosp_name = text.replace("🏥 ", "").strip()
+        if hosp_name in ["⬅️ رجوع", "🏠 القائمة الرئيسية"]:
+            context.user_data["state"] = "admin_doctors"
+            await update.message.reply_text(
+                "👨‍⚕️ *إدارة الأطباء*",
+                parse_mode="Markdown",
+                reply_markup=ReplyKeyboardMarkup([
+                    [KeyboardButton("🗺 تصفح بالمنطقة والمدينة")],
+                    [KeyboardButton("📋 كل المستشفيات")],
+                    [KeyboardButton("⚠️ المستشفيات بدون أطباء")],
+                    [KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")],
+                ], resize_keyboard=True)
+            )
+            return
+        doctors = db.get_doctors_by_hospital_name(hosp_name)
+        context.user_data["doc_manage_hospital"] = hosp_name
+        context.user_data["state"] = "admin_doc_manage"
+        lines = [f"👨‍⚕️ {d['name']} — {d.get('specialty','—')}" for d in doctors]
+        await update.message.reply_text(
+            f"👨‍⚕️ *أطباء {hosp_name} ({len(doctors)}):*\n\n" + ("\n".join(lines) if lines else "لا أطباء."),
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup([
+                [KeyboardButton("➕ إضافة طبيب")],
+                [KeyboardButton("🗑 حذف طبيب")],
+                [KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")],
+            ], resize_keyboard=True)
+        )
+        return
+
+    if state == "admin_doc_manage":
+        hosp_name = context.user_data.get("doc_manage_hospital", "")
+        if text == "➕ إضافة طبيب":
+            context.user_data["state"] = "admin_doc_add_name"
+            await update.message.reply_text(
+                f"👨‍⚕️ أرسل اسم الطبيب الجديد في *{hosp_name}*:",
+                parse_mode="Markdown",
+                reply_markup=ReplyKeyboardMarkup([[KeyboardButton("⬅️ رجوع")]], resize_keyboard=True)
+            )
+            return
+
+        if text == "🗑 حذف طبيب":
+            doctors = db.get_doctors_by_hospital_name(hosp_name)
+            if not doctors:
+                await update.message.reply_text("❌ لا أطباء لحذفهم.", reply_markup=admin_keyboard())
+                return
+            rows = [[KeyboardButton(f"🗑 {d['name']}")] for d in doctors]
+            rows.append([KeyboardButton("⬅️ رجوع")])
+            context.user_data["state"] = "admin_doc_delete"
+            await update.message.reply_text(
+                "اختر الطبيب للحذف:",
+                reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+            )
+            return
+
+    if state == "admin_doc_add_name":
+        context.user_data["new_doc_name"] = text.strip()
+        context.user_data["state"] = "admin_doc_add_specialty"
+        await update.message.reply_text(
+            f"🔬 أرسل تخصص الطبيب *{text.strip()}*:",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup([[KeyboardButton("⬅️ رجوع")]], resize_keyboard=True)
+        )
+        return
+
+    if state == "admin_doc_add_specialty":
+        doc_name = context.user_data.get("new_doc_name", "")
+        specialty = text.strip()
+        hosp_name = context.user_data.get("doc_manage_hospital", "")
+        try:
+            hosp = db.get_hospital_by_name(hosp_name)
+            if hosp:
+                db.add_doctor(hosp["id"], doc_name, specialty)
+                await update.message.reply_text(
+                    f"✅ تمت إضافة الطبيب *{doc_name}* — {specialty} في {hosp_name}.",
+                    parse_mode="Markdown", reply_markup=admin_keyboard()
+                )
+            else:
+                await update.message.reply_text("❌ المستشفى غير موجود.", reply_markup=admin_keyboard())
+        except Exception as e:
+            await update.message.reply_text(f"❌ خطأ: {e}", reply_markup=admin_keyboard())
+        context.user_data["state"] = "admin_doc_after_add"
+        return
+
+    if state == "admin_doc_delete" and text.startswith("🗑 "):
+        doc_name = text.replace("🗑 ", "").strip()
+        hosp_name = context.user_data.get("doc_manage_hospital", "")
+        doctors = db.get_doctors_by_hospital_name(hosp_name)
+        doc = next((d for d in doctors if d["name"] == doc_name), None)
+        if doc:
+            db.delete_doctor(doc["id"])
+            await update.message.reply_text(f"✅ تم حذف الطبيب {doc_name}.", reply_markup=admin_keyboard())
+        else:
+            await update.message.reply_text("❌ لم يُعثر على الطبيب.", reply_markup=admin_keyboard())
+        context.user_data["state"] = "admin"
+        return
+
+    # تصفح المناطق للأطباء
+    if state == "admin_doc_browse_region":
+        region_clean = text.replace("🗺 ", "").strip()
+        if region_clean in KSA_REGIONS:
+            context.user_data["doc_browse_region"] = region_clean
+            context.user_data["state"] = "admin_doc_browse_city"
+            cities = KSA_REGIONS[region_clean]
+            rows = []
+            for i in range(0, len(cities), 2):
+                row = [KeyboardButton(cities[i])]
+                if i + 1 < len(cities):
+                    row.append(KeyboardButton(cities[i + 1]))
+                rows.append(row)
+            rows.append([KeyboardButton("⬅️ رجوع")])
+            await update.message.reply_text(
+                f"🏙️ *مدن {region_clean}:*", parse_mode="Markdown",
+                reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+            )
+        return
+
+    if state == "admin_doc_browse_city":
+        city = text.strip()
+        hospitals = db.get_hospitals_by_city(city)
+        if not hospitals:
+            await update.message.reply_text(f"❌ لا مستشفيات في {city}.", reply_markup=admin_keyboard())
+            context.user_data["state"] = "admin"
+            return
+        rows = [[KeyboardButton(f"🏥 {h['name']}")] for h in hospitals[:20]]
+        rows.append([KeyboardButton("⬅️ رجوع")])
+        context.user_data["state"] = "admin_doc_select_hosp"
+        context.user_data["state"] = "admin_doc_list_city"
+        await update.message.reply_text(
+            f"🏥 *مستشفيات {city}:*", parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+        )
+        return
+
+    # ── فول باك للـ admin ──
+    if state == "admin" or (state and state.startswith("admin_")):
+        await update.message.reply_text(
+            "⚙️ *لوحة الإدارة*\n\nاختر القسم:",
+            parse_mode="Markdown", reply_markup=admin_keyboard()
+        )
+
+
 async def handle_dashboard_router(update, context, text, uid, name):
     """معالج لوحة التحكم الرئيسية"""
 
