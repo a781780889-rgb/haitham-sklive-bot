@@ -2385,4 +2385,5 @@ async def handle_dashboard_router(update, context, text, uid, name):
                 await update.message.reply_text(
                     f"✅ *تم الإرسال!*\n\nوصلت الرسالة لـ *{sent}* مستخدم.",
                     parse_mode="Markdown", reply_markup=dashboard_keyboard()
-          
+                )
+
