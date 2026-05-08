@@ -2359,6 +2359,54 @@ async def handle_dashboard_router(update, context, text, uid, name):
         )
         return
 
+    # ── المعاملات المالية (للأدمن) ──
+    if text == "💰 المعاملات المالية" and is_admin_user(uid):
+        txs = db.get_pending_transactions()
+        all_txs = db.get_all_transactions(limit=20)
+        pending_count = len(txs)
+        lines = []
+        status_emoji = {"approved": "✅", "pending": "⏳", "waiting_approval": "🔍", "rejected": "❌"}
+        for t in all_txs[:15]:
+            se = status_emoji.get(t["status"], "•")
+            u_name = t.get("user_name", "—")
+            lines.append(
+                f"{se} #{t['id']} | {u_name} | {t.get('package_name','—')} | {t.get('amount',0):.0f}ر"
+            )
+        msg = (
+            f"💰 *المعاملات المالية*\n\n"
+            f"🔍 في انتظار المراجعة: *{pending_count}*\n\n"
+            f"{'─' * 25}\n"
+            + ("\n".join(lines) if lines else "لا توجد معاملات بعد.")
+        )
+        await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=dashboard_keyboard())
+        if txs:
+            for t in txs[:5]:
+                u_name = t.get("user_name", "—")
+                target_uid = t.get("user_id")
+                tx_id = t["id"]
+                screenshot = t.get("screenshot_path", "")
+                approval_kb = InlineKeyboardMarkup([
+                    [
+                        InlineKeyboardButton("✅ اعتماد", callback_data=f"charge_approve:{tx_id}:{target_uid}"),
+                        InlineKeyboardButton("❌ رفض", callback_data=f"charge_reject:{tx_id}:{target_uid}"),
+                    ]
+                ])
+                tx_text = (
+                    f"🔍 *طلب شحن #{tx_id}*\n"
+                    f"👤 {u_name} | `{target_uid}`\n"
+                    f"📦 {t.get('package_name','—')} | 💰 {t.get('amount',0):.0f} ريال\n"
+                    f"💳 {t.get('payment_method','—')}"
+                )
+                if screenshot:
+                    try:
+                        await context.bot.send_photo(chat_id=uid, photo=screenshot, caption=tx_text,
+                                                     parse_mode="Markdown", reply_markup=approval_kb)
+                    except Exception:
+                        await update.message.reply_text(tx_text, parse_mode="Markdown", reply_markup=approval_kb)
+                else:
+                    await update.message.reply_text(tx_text, parse_mode="Markdown", reply_markup=approval_kb)
+        return
+
     # ── إدارة الأسعار ──
     if text == "💰 إدارة الأسعار":
         context.user_data["state"] = "admin_settings"
@@ -2563,7 +2611,95 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # ══════════════════════════════════════════════════════════════════════
-    # حالة 3: المسؤول في حالة admin_logo_select_hospital — ينتظر تحديد مستشفى أولاً
+    # حالة 3: المستخدم أرسل إيصال الدفع — charge_await_screenshot
+    # ══════════════════════════════════════════════════════════════════════
+    if state == "charge_await_screenshot":
+        tx_id = context.user_data.get("pending_tx_id")
+        if not tx_id:
+            await update.message.reply_text(
+                "⚠️ لم يتم العثور على معاملة نشطة. ابدأ عملية الشحن من جديد.",
+                reply_markup=main_menu_keyboard(is_admin_user(uid))
+            )
+            context.user_data["state"] = "main"
+            return
+
+        # حفظ file_id كـ screenshot_path في قاعدة البيانات
+        if update.message.photo:
+            file_id = update.message.photo[-1].file_id
+        else:
+            file_id = update.message.document.file_id
+
+        try:
+            db.update_transaction_screenshot(tx_id, file_id)
+        except Exception as e:
+            logger.error(f"❌ فشل حفظ الإيصال في DB: {e}")
+
+        # إشعار للمستخدم
+        await update.message.reply_text(
+            "✅ *تم استلام إيصال الدفع!*\n\n"
+            "⏳ سيتم مراجعة طلبك وتفعيل رصيدك خلال فترة قصيرة.\n"
+            "سنُعلمك فور اعتماد الطلب.",
+            parse_mode="Markdown",
+            reply_markup=main_menu_keyboard(is_admin_user(uid))
+        )
+        context.user_data["state"] = "main"
+        context.user_data.pop("pending_tx_id", None)
+        context.user_data.pop("selected_package", None)
+        context.user_data.pop("selected_method", None)
+
+        # إشعار الأدمن مع الإيصال وأزرار القبول/الرفض
+        try:
+            tx = db.get_transaction(tx_id)
+            user_obj = db.get_user(uid)
+            pkg_name = tx.get("package_name", "—") if tx else "—"
+            amount = tx.get("amount", 0) if tx else 0
+            method = tx.get("payment_method", "—") if tx else "—"
+            u_name = update.effective_user.full_name or name
+            approval_kb = InlineKeyboardMarkup([
+                [
+                    InlineKeyboardButton("✅ اعتماد وشحن الرصيد", callback_data=f"charge_approve:{tx_id}:{uid}"),
+                    InlineKeyboardButton("❌ رفض", callback_data=f"charge_reject:{tx_id}:{uid}"),
+                ]
+            ])
+            admin_text = (
+                f"🔔 *طلب شحن رصيد جديد #{tx_id}*\n\n"
+                f"👤 المستخدم: *{u_name}*\n"
+                f"🆔 ID: `{uid}`\n"
+                f"📦 الباقة: *{pkg_name}*\n"
+                f"💰 المبلغ: *{amount:.0f} ريال*\n"
+                f"💳 طريقة الدفع: *{method}*\n\n"
+                f"📎 الإيصال مرفق أدناه"
+            )
+            for admin_id in ADMIN_IDS:
+                try:
+                    await context.bot.send_message(
+                        chat_id=admin_id,
+                        text=admin_text,
+                        parse_mode="Markdown"
+                    )
+                    # إرسال صورة الإيصال مع أزرار القبول/الرفض
+                    if update.message.photo:
+                        await context.bot.send_photo(
+                            chat_id=admin_id,
+                            photo=file_id,
+                            caption=f"📷 إيصال طلب #{tx_id}",
+                            reply_markup=approval_kb
+                        )
+                    else:
+                        await context.bot.send_document(
+                            chat_id=admin_id,
+                            document=file_id,
+                            caption=f"📷 إيصال طلب #{tx_id}",
+                            reply_markup=approval_kb
+                        )
+                except Exception as e:
+                    logger.warning(f"⚠️ فشل إشعار الأدمن {admin_id}: {e}")
+        except Exception as e:
+            logger.error(f"❌ فشل إرسال إشعار الشحن للأدمن: {e}")
+        return
+
+    # ══════════════════════════════════════════════════════════════════════
+    # حالة 4: المسؤول في حالة admin_logo_select_hospital — ينتظر تحديد مستشفى أولاً
     # ══════════════════════════════════════════════════════════════════════
     if state == "admin_logo_select_hospital" and is_admin_user(uid):
         await update.message.reply_text(
@@ -2603,6 +2739,66 @@ def main():
         await query.answer()
         uid = query.from_user.id
         data = query.data or ""
+
+        # معالجة أزرار قبول/رفض طلبات الشحن
+        if data.startswith("charge_approve:") or data.startswith("charge_reject:"):
+            if not is_admin_user(uid):
+                await query.answer("غير مصرح.", show_alert=True)
+                return
+            parts = data.split(":")
+            action = parts[0]
+            tx_id = int(parts[1])
+            target_uid = int(parts[2]) if len(parts) > 2 else None
+            if action == "charge_approve":
+                tx = db.approve_transaction(tx_id, uid)
+                if not tx:
+                    try:
+                        await query.edit_message_caption(caption="تمت معالجة هذه المعاملة مسبقاً.")
+                    except Exception:
+                        pass
+                    return
+                pkg_name = tx.get("package_name", "")
+                pkg = db.PACKAGES.get(pkg_name, {})
+                credits_added = pkg.get("credits", 0)
+                try:
+                    await query.edit_message_caption(
+                        caption=f"تم اعتماد طلب الشحن #{tx_id}\nالباقة: {pkg_name} | {credits_added} طلبات",
+                        parse_mode=None
+                    )
+                except Exception:
+                    pass
+                if target_uid:
+                    try:
+                        await context.bot.send_message(
+                            chat_id=target_uid,
+                            text=f"\u2705 *تم اعتماد شحن رصيدك!*\n\n\U0001f4e6 الباقة: *{pkg_name}*\n\U0001f381 تم إضافة *{credits_added} طلبات* لحسابك.\nيمكنك إنشاء طلب جديد الآن! \U0001f389",
+                            parse_mode="Markdown"
+                        )
+                    except Exception as e:
+                        logger.warning(f"فشل إشعار المستخدم {target_uid}: {e}")
+            elif action == "charge_reject":
+                tx = db.reject_transaction(tx_id, uid)
+                if not tx:
+                    try:
+                        await query.edit_message_caption(caption="تمت معالجة هذه المعاملة مسبقاً.")
+                    except Exception:
+                        pass
+                    return
+                try:
+                    await query.edit_message_caption(caption=f"تم رفض طلب الشحن #{tx_id}")
+                except Exception:
+                    pass
+                if target_uid:
+                    try:
+                        await context.bot.send_message(
+                            chat_id=target_uid,
+                            text=f"\u274c *تم رفض طلب شحن رصيدك #{tx_id}*\n\nللاستفسار تواصل مع الدعم.",
+                            parse_mode="Markdown"
+                        )
+                    except Exception as e:
+                        logger.warning(f"فشل إشعار المستخدم {target_uid}: {e}")
+            return
+
         await rh.handle_review_callback(query, uid, data, context.bot, ADMIN_IDS)
 
     application.add_handler(CallbackQueryHandler(handle_callback))
