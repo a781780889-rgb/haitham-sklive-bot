@@ -868,6 +868,135 @@ def _get_page_size(template_path):
 # إنشاء طبقة النصوص والصور
 # ══════════════════════════════════════════════════════════════
 
+def process_logo_for_pdf(logo_path):
+    """
+    معالجة شاملة وموحّدة للشعارات قبل إدراجها في PDF:
+    ─────────────────────────────────────────────────────────
+    1. تحميل الصورة وتحويلها إلى RGBA
+    2. كشف لون الخلفية تلقائياً (أبيض / رمادي / ملون / أسود)
+    3. إزالة الخلفية بدقة مع الحفاظ على حواف الشعار (anti-aliasing)
+    4. اقتطاع الهوامش الفارغة تلقائياً (Autocrop)
+    5. تسليم صورة RGBA شفافة عالية الجودة
+    ─────────────────────────────────────────────────────────
+    يُعيد كائن PIL.Image بصيغة RGBA شفافة، أو None عند الفشل.
+    """
+    try:
+        from PIL import Image as _PIL
+        import numpy as _np
+
+        orig = _PIL.open(logo_path).convert('RGBA')
+        arr  = _np.array(orig, dtype=_np.int32)   # int32 يتجنب overflow عند الحسابات
+
+        r, g, b, a = arr[..., 0], arr[..., 1], arr[..., 2], arr[..., 3]
+        img_h, img_w = arr.shape[:2]
+
+        # ── خطوة 1: كشف لون الخلفية من حواف الصورة ───────────────────────
+        mh = max(1, img_h // 20)
+        mw = max(1, img_w // 20)
+        edges = _np.concatenate([
+            arr[:mh,  :].reshape(-1, 4),
+            arr[-mh:, :].reshape(-1, 4),
+            arr[:,  :mw].reshape(-1, 4),
+            arr[:, -mw:].reshape(-1, 4),
+        ])
+        # تجاهل البكسلات الشفافة تماماً
+        opaque_edges = edges[edges[:, 3] > 30]
+        if len(opaque_edges) >= 10:
+            bg_r = int(_np.median(opaque_edges[:, 0]))
+            bg_g = int(_np.median(opaque_edges[:, 1]))
+            bg_b = int(_np.median(opaque_edges[:, 2]))
+        else:
+            bg_r, bg_g, bg_b = 255, 255, 255
+
+        bg_lightness = (bg_r + bg_g + bg_b) / 3
+
+        # ── خطوة 2: حساب المسافة اللونية من الخلفية ──────────────────────
+        diff_r = (r - bg_r) ** 2
+        diff_g = (g - bg_g) ** 2
+        diff_b = (b - bg_b) ** 2
+        color_dist = _np.sqrt(
+            _np.clip(diff_r + diff_g + diff_b, 0, None).astype(_np.float32)
+        )
+
+        # ── خطوة 3: ضبط عتبة الحذف حسب نوع الخلفية ─────────────────────
+        # خلفية فاتحة (أبيض/رمادي فاتح) → عتبة أعلى للتسامح مع الظلال
+        # خلفية داكنة (أسود/رمادي داكن) → عتبة متوسطة
+        # خلفية ملونة → عتبة أدق لتمييز الشعار
+        if bg_lightness > 200:
+            THRESHOLD = 40   # خلفية فاتحة جداً
+        elif bg_lightness > 120:
+            THRESHOLD = 45   # خلفية رمادية
+        elif bg_lightness < 40:
+            THRESHOLD = 50   # خلفية سوداء/داكنة — عتبة أعلى لضمان إزالتها
+        else:
+            THRESHOLD = 35   # خلفية ملونة
+
+        # ── خطوة 4: بناء قناة الشفافية الجديدة ───────────────────────────
+        # البكسل يصبح شفافاً إذا كان:
+        #   أ) قريب جداً من لون الخلفية (color_dist < THRESHOLD)
+        #   ب) أبيض صريح (للخلفيات البيضاء في القوالب)
+        #   ج) مشابه لقريب من الخلفية مع alpha مرتفع (حواف الصورة الأصلية)
+        is_white_bg   = (r > 238) & (g > 238) & (b > 238)
+        is_light_gray = (r > 210) & (g > 210) & (b > 210) & \
+                        (_np.abs(r - g) < 15) & (_np.abs(g - b) < 15)
+        is_bg_color   = color_dist < THRESHOLD
+
+        if bg_lightness > 180:
+            # خلفية فاتحة: احذف الفاتح الصريح + المشابه للخلفية
+            is_bg = is_bg_color | is_white_bg
+        elif bg_lightness < 50:
+            # خلفية داكنة/سوداء: احذف الداكن المشابه للخلفية
+            is_dark = (r < 50) & (g < 50) & (b < 50)
+            is_bg = is_bg_color | is_dark
+        else:
+            # خلفية رمادية أو ملونة: احذف المشابه + الرمادي الفاتح
+            is_bg = is_bg_color | (is_light_gray & (bg_lightness > 100))
+
+        # قيم alpha الجديدة
+        new_alpha = _np.where(is_bg, _np.int32(0), a.copy())
+
+        # ── خطوة 5: تدرّج ناعم على الحواف (anti-aliasing) ───────────────
+        # منطقة الحافة: بين 60%-100% من عتبة الحذف
+        near = (color_dist >= THRESHOLD * 0.60) & (color_dist < THRESHOLD)
+        if near.any():
+            ratio = ((color_dist[near] - THRESHOLD * 0.60) / (THRESHOLD * 0.40))
+            new_alpha[near] = (new_alpha[near] * ratio).astype(_np.int32)
+
+        # تطبيق القناة النهائية
+        out_arr = arr.copy().astype(_np.uint8)
+        out_arr[..., 3] = _np.clip(new_alpha, 0, 255).astype(_np.uint8)
+        result = _PIL.fromarray(out_arr, 'RGBA')
+
+        # ── خطوة 6: Autocrop — اقتطاع الهوامش الشفافة ────────────────────
+        out_a  = out_arr[..., 3]
+        out_r  = out_arr[..., 0]
+        out_g  = out_arr[..., 1]
+        out_b  = out_arr[..., 2]
+        lum    = (out_r.astype(_np.int32) + out_g + out_b) / 3
+        is_content = (out_a > 20) & (lum < 245)
+
+        if is_content.any():
+            row_idx = _np.where(is_content.any(axis=1))[0]
+            col_idx = _np.where(is_content.any(axis=0))[0]
+            t = int(row_idx[0]);   b_idx = int(row_idx[-1]) + 1
+            l = int(col_idx[0]);   r_idx = int(col_idx[-1]) + 1
+            pad = max(3, int(max(result.size) * 0.025))
+            t = max(0, t - pad);  l = max(0, l - pad)
+            b_idx = min(result.size[1], b_idx + pad)
+            r_idx = min(result.size[0], r_idx + pad)
+            result = result.crop((l, t, r_idx, b_idx))
+
+        return result
+
+    except Exception:
+        # Fallback: أعد الصورة الأصلية كـ RGBA بدون معالجة
+        try:
+            from PIL import Image as _PIL
+            return _PIL.open(logo_path).convert('RGBA')
+        except Exception:
+            return None
+
+
 def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_path, website_url="https://www.sehasaa.com", custom_qr_path=None):
     """
     طبقة شفافة تُرسم فوق القالب:
@@ -1069,123 +1198,64 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
             else:
                 c.drawCentredString(x, rl_y, text_str)
 
-    # ─── شعار المستشفى — حجم بصري مساوٍ للباركود تماماً ──
+    # ─── شعار المستشفى — معالجة موحّدة مع إزالة الخلفية ──────────────────
     if logo_path and os.path.exists(logo_path):
         try:
             from PIL import Image as PILImage
+            from reportlab.lib.utils import ImageReader as _IR
+
+            # حدود مربع الشعار (نفس أبعاد الباركود تماماً)
             lx = LOGO_SLOT['x']      * x_scale
             ly = LOGO_SLOT['rl_y']   * y_scale
             lw = LOGO_SLOT['width']  * x_scale   # = عرض QR
             lh = LOGO_SLOT['height'] * y_scale   # = ارتفاع QR
 
-            # ─── منطق التحجيم: يجعل الشعار بنفس "الحضور البصري" للباركود ──
-            # المتطلب من المستخدم:
-            #   1) الشعار بنفس عرض/ارتفاع الباركود (مساحة بصرية متساوية)
-            #   2) الحفاظ على نسبة الأبعاد (لا تشويه)
-            #   3) الحفاظ على جودة الشعار
-            #   4) الشعار لا يخرج خارج المساحة المحجوزة
-            #
-            # الحل: نُكبّر الشعار حتى يلامس البُعد الأصغر من بُعدَي المربع
-            # (min(scale_w, scale_h)) — هذا يجعل الشعار بأكبر حجم
-            # ممكن داخل مربع QR مع الحفاظ على النسبة. النتيجة:
-            #   - الشعار العريض → عرضه = عرض QR بالضبط
-            #   - الشعار الطويل → ارتفاعه = ارتفاع QR بالضبط
-            #   - الشعار المربع → عرضه وارتفاعه = أبعاد QR بالضبط
-            # في كل الحالات: الشعار بنفس الحضور البصري للـ QR.
+            # ── المعالجة الشاملة للشعار (إزالة خلفية + اقتطاع + شفافية) ──
+            processed = process_logo_for_pdf(logo_path)
+            if processed is None:
+                raise ValueError("فشل تحميل الشعار")
 
-            orig = PILImage.open(logo_path).convert('RGBA')
+            orig_w, orig_h = processed.size
 
-            # ─── خطوة 1: اقتطاع الهوامش الفارغة (transparent/white) تلقائياً ──
-            # المشكلة: كثير من شعارات المستشفيات لها هوامش بيضاء/شفافة كبيرة
-            # حول الشعار الفعلي، فعند التحجيم يبدو الشعار صغيراً.
-            # الحل: نكتشف حدود المحتوى الفعلي (bounding box) ونقتطع الهوامش.
-            try:
-                import numpy as _np
-                _arr = _np.array(orig)
-                # حساب alpha مع اعتبار الأبيض الفاتح كشفاف أيضاً
-                _r, _g, _b, _a = _arr[..., 0], _arr[..., 1], _arr[..., 2], _arr[..., 3]
-                # البكسل يُعتبر "محتوى" إذا:
-                #   - alpha > 20 (ليس شفافاً تماماً)
-                #   - وليس أبيضاً تقريباً (lightness < 245)
-                _lightness = (_r.astype(_np.int16) + _g + _b) / 3
-                _is_content = (_a > 20) & (_lightness < 245)
-
-                if _is_content.any():
-                    _rows = _np.where(_is_content.any(axis=1))[0]
-                    _cols = _np.where(_is_content.any(axis=0))[0]
-                    _top, _bottom = int(_rows[0]), int(_rows[-1]) + 1
-                    _left, _right = int(_cols[0]), int(_cols[-1]) + 1
-                    # هامش أمان صغير (3% من البُعد الأكبر)
-                    _pad = max(1, int(max(orig.size) * 0.02))
-                    _top    = max(0, _top    - _pad)
-                    _left   = max(0, _left   - _pad)
-                    _bottom = min(orig.size[1], _bottom + _pad)
-                    _right  = min(orig.size[0], _right  + _pad)
-                    orig = orig.crop((_left, _top, _right, _bottom))
-            except Exception:
-                pass   # في حال فشل، نكمل بالشعار كما هو
-
-            orig_w, orig_h = orig.size
-
-            # دقة عالية للحفاظ على جودة الشعار بعد التحجيم
+            # ── تحجيم الشعار بحيث يساوي حجم الباركود بصرياً ──────────────
+            # DPI عالي للحفاظ على الجودة
             DPI_FACTOR = 6
             slot_w_px = max(1, int(lw * DPI_FACTOR))
             slot_h_px = max(1, int(lh * DPI_FACTOR))
 
-            # ─── خطوة 2: تحجيم لـ "حضور بصري متساوٍ مع QR" ──
-            # المتطلب: الشعار يجب أن يبدو بنفس "حجم" QR للناظر.
-            # المعيار الأفضل لـ"الحضور البصري" هو: نفس الارتفاع كـ QR.
-            # (لأن العين تقيس الحضور بالارتفاع غالباً في التصاميم الأفقية)
-            #
-            # المنطق:
-            #   - نُكبّر الشعار ليصبح ارتفاعه = ارتفاع QR بالضبط
-            #   - إذا كان عرضه (بعد التكبير) ≤ عرض QR → ممتاز
-            #   - إذا كان عرضه (بعد التكبير) > عرض QR (شعار عريض جداً)
-            #     → نتراجع لتطابق العرض بدل الارتفاع، لتفادي الخروج عن
-            #       الحدود بشكل مفرط، مع هامش تسامح 80% (يسمح بامتداد بسيط)
-            #
-            # هذا يضمن أن الشعار يحتل دائماً مساحة بصرية مساوية للـ QR
-            # ولا يبدو صغيراً جداً.
+            # استراتيجية التحجيم:
+            # - نُكبّر حتى يلامس الشعار حدود مربع الباركود من الداخل
+            # - نسمح بتجاوز العرض حتى 30% لتجنب تصغير الشعارات الأفقية
+            # - الحفاظ التام على نسبة الأبعاد الأصلية (لا تمدد، لا ضغط)
+            MAX_WIDTH_RATIO = 1.3   # يمنع الخروج الكبير عن حدود المساحة
 
-            logo_aspect = orig_w / orig_h
-            slot_aspect = slot_w_px / slot_h_px
-
-            # نسبة التسامح: نسمح للشعار بأن يكون أعرض حتى 1.3× عرض QR
-            # قبل اللجوء لتقليصه ليتناسب مع العرض
-            MAX_WIDTH_RATIO = 1.3
-
-            # سيناريو 1: الشعار يطابق ارتفاع QR
             scale_by_height = slot_h_px / orig_h
-            width_if_height_match = orig_w * scale_by_height
+            width_if_height = orig_w * scale_by_height
 
-            if width_if_height_match <= slot_w_px * MAX_WIDTH_RATIO:
-                # العرض ضمن الحد المقبول → نطابق على الارتفاع (الشعار بحضور
-                # بصري كامل = ارتفاع QR). يحدث للشعارات المربعة والعريضة المعقولة
-                scale = scale_by_height
+            if width_if_height <= slot_w_px * MAX_WIDTH_RATIO:
+                scale = scale_by_height  # الشعار المربع/الطويل → ملء الارتفاع
             else:
-                # الشعار عريض جداً (مثل: نسبة 3:1) → نطابق على عرض موسّع
-                # حتى لا يخرج كثيراً عن المساحة، لكن يبقى أكبر من السابق
-                scale = (slot_w_px * MAX_WIDTH_RATIO) / orig_w
+                scale = (slot_w_px * MAX_WIDTH_RATIO) / orig_w  # شعار عريض جداً → ملء العرض
 
             new_w = max(1, int(round(orig_w * scale)))
             new_h = max(1, int(round(orig_h * scale)))
-            resized = orig.resize((new_w, new_h), PILImage.LANCZOS)
+            resized = processed.resize((new_w, new_h), PILImage.LANCZOS)
 
-            # تحويل من بكسل إلى نقاط للرسم
+            # تحويل بكسل → نقاط PDF
             draw_w_pt = new_w / DPI_FACTOR
             draw_h_pt = new_h / DPI_FACTOR
 
-            # محاذاة في منتصف مربع الـ QR (نفس مركز الباركود)
+            # توسيط الشعار في منتصف مربع LOGO_SLOT (= مركز الباركود أفقياً)
             center_x = lx + lw / 2
             center_y = ly + lh / 2
-            draw_x = center_x - draw_w_pt / 2
-            draw_y = center_y - draw_h_pt / 2
+            draw_x   = center_x - draw_w_pt / 2
+            draw_y   = center_y - draw_h_pt / 2
 
+            # حفظ في buffer وإدراج في PDF مع شفافية كاملة
             _logo_buf = io.BytesIO()
             resized.save(_logo_buf, 'PNG')
             _logo_buf.seek(0)
 
-            from reportlab.lib.utils import ImageReader as _IR
             c.drawImage(
                 _IR(_logo_buf),
                 draw_x, draw_y,
@@ -1194,8 +1264,9 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
                 preserveAspectRatio=True,
                 mask='auto',
             )
+
         except Exception:
-            # fallback بسيط إن فشل PIL
+            # Fallback بسيط بدون معالجة
             try:
                 lx = LOGO_SLOT['x']      * x_scale
                 ly = LOGO_SLOT['rl_y']   * y_scale
