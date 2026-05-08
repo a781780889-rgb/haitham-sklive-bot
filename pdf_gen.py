@@ -873,34 +873,37 @@ def process_logo_for_pdf(logo_path):
     معالجة شاملة وموحّدة للشعارات قبل إدراجها في PDF:
     ─────────────────────────────────────────────────────────
     1. تحميل الصورة وتحويلها إلى RGBA
-    2. كشف لون الخلفية تلقائياً (أبيض / رمادي / ملون / أسود)
-    3. إزالة الخلفية بدقة مع الحفاظ على حواف الشعار (anti-aliasing)
-    4. اقتطاع الهوامش الفارغة تلقائياً (Autocrop)
-    5. تسليم صورة RGBA شفافة عالية الجودة
+    2. كشف لون الخلفية تلقائياً من حواف الصورة
+    3. Flood Fill من الحواف لكشف الخلفية المتصلة فقط
+       (يحمي ألوان الشعار حتى لو كانت داكنة كـ navy blue)
+    4. إزالة الخلفية مع تدرج ناعم على الحواف (anti-aliasing)
+    5. اقتطاع الهوامش الفارغة تلقائياً (Autocrop)
+    6. تسليم صورة RGBA شفافة عالية الجودة
     ─────────────────────────────────────────────────────────
     يُعيد كائن PIL.Image بصيغة RGBA شفافة، أو None عند الفشل.
+    يعمل مع جميع أنواع الخلفيات: بيضاء، رمادية، سوداء، ملونة.
     """
     try:
         from PIL import Image as _PIL
         import numpy as _np
+        from collections import deque as _deque
 
         orig = _PIL.open(logo_path).convert('RGBA')
-        arr  = _np.array(orig, dtype=_np.int32)   # int32 يتجنب overflow عند الحسابات
+        arr  = _np.array(orig, dtype=_np.int32)
 
         r, g, b, a = arr[..., 0], arr[..., 1], arr[..., 2], arr[..., 3]
         img_h, img_w = arr.shape[:2]
 
         # ── خطوة 1: كشف لون الخلفية من حواف الصورة ───────────────────────
-        mh = max(1, img_h // 20)
-        mw = max(1, img_w // 20)
-        edges = _np.concatenate([
-            arr[:mh,  :].reshape(-1, 4),
-            arr[-mh:, :].reshape(-1, 4),
-            arr[:,  :mw].reshape(-1, 4),
-            arr[:, -mw:].reshape(-1, 4),
-        ])
-        # تجاهل البكسلات الشفافة تماماً
+        mh = max(1, img_h // 15)
+        mw = max(1, img_w // 15)
+        e1 = arr[:mh, :].reshape(-1, 4)
+        e2 = arr[-mh:, :].reshape(-1, 4)
+        e3 = arr[:, :mw].reshape(-1, 4)
+        e4 = arr[:, -mw:].reshape(-1, 4)
+        edges = _np.concatenate([e1, e2, e3, e4])
         opaque_edges = edges[edges[:, 3] > 30]
+
         if len(opaque_edges) >= 10:
             bg_r = int(_np.median(opaque_edges[:, 0]))
             bg_g = int(_np.median(opaque_edges[:, 1]))
@@ -911,76 +914,73 @@ def process_logo_for_pdf(logo_path):
         bg_lightness = (bg_r + bg_g + bg_b) / 3
 
         # ── خطوة 2: حساب المسافة اللونية من الخلفية ──────────────────────
-        diff_r = (r - bg_r) ** 2
-        diff_g = (g - bg_g) ** 2
-        diff_b = (b - bg_b) ** 2
-        color_dist = _np.sqrt(
-            _np.clip(diff_r + diff_g + diff_b, 0, None).astype(_np.float32)
+        dist = _np.sqrt(
+            _np.clip((r - bg_r)**2 + (g - bg_g)**2 + (b - bg_b)**2, 0, None).astype(_np.float32)
         )
 
-        # ── خطوة 3: ضبط عتبة الحذف حسب نوع الخلفية ─────────────────────
-        # خلفية فاتحة (أبيض/رمادي فاتح) → عتبة أعلى للتسامح مع الظلال
-        # خلفية داكنة (أسود/رمادي داكن) → عتبة متوسطة
-        # خلفية ملونة → عتبة أدق لتمييز الشعار
+        # عتبة التطابق مع الخلفية
         if bg_lightness > 200:
-            THRESHOLD = 40   # خلفية فاتحة جداً
-        elif bg_lightness > 120:
-            THRESHOLD = 45   # خلفية رمادية
-        elif bg_lightness < 40:
-            THRESHOLD = 50   # خلفية سوداء/داكنة — عتبة أعلى لضمان إزالتها
-        else:
-            THRESHOLD = 35   # خلفية ملونة
-
-        # ── خطوة 4: بناء قناة الشفافية الجديدة ───────────────────────────
-        # البكسل يصبح شفافاً إذا كان:
-        #   أ) قريب جداً من لون الخلفية (color_dist < THRESHOLD)
-        #   ب) أبيض صريح (للخلفيات البيضاء في القوالب)
-        #   ج) مشابه لقريب من الخلفية مع alpha مرتفع (حواف الصورة الأصلية)
-        is_white_bg   = (r > 238) & (g > 238) & (b > 238)
-        is_light_gray = (r > 210) & (g > 210) & (b > 210) & \
-                        (_np.abs(r - g) < 15) & (_np.abs(g - b) < 15)
-        is_bg_color   = color_dist < THRESHOLD
-
-        if bg_lightness > 180:
-            # خلفية فاتحة: احذف الفاتح الصريح + المشابه للخلفية
-            is_bg = is_bg_color | is_white_bg
+            THRESHOLD = 38
         elif bg_lightness < 50:
-            # خلفية داكنة/سوداء: احذف الداكن المشابه للخلفية
-            is_dark = (r < 50) & (g < 50) & (b < 50)
-            is_bg = is_bg_color | is_dark
+            THRESHOLD = 32
         else:
-            # خلفية رمادية أو ملونة: احذف المشابه + الرمادي الفاتح
-            is_bg = is_bg_color | (is_light_gray & (bg_lightness > 100))
+            THRESHOLD = 34
 
-        # قيم alpha الجديدة
-        new_alpha = _np.where(is_bg, _np.int32(0), a.copy())
+        # ── خطوة 3: Flood Fill من الحواف ─────────────────────────────────
+        # يكشف الخلفية المتصلة فقط — يحمي الألوان الداكنة داخل الشعار
+        is_bg_candidate = dist < THRESHOLD
 
-        # ── خطوة 5: تدرّج ناعم على الحواف (anti-aliasing) ───────────────
-        # منطقة الحافة: بين 60%-100% من عتبة الحذف
-        near = (color_dist >= THRESHOLD * 0.60) & (color_dist < THRESHOLD)
-        if near.any():
-            ratio = ((color_dist[near] - THRESHOLD * 0.60) / (THRESHOLD * 0.40))
-            new_alpha[near] = (new_alpha[near] * ratio).astype(_np.int32)
+        visited = _np.zeros((img_h, img_w), dtype=bool)
+        queue = _deque()
 
-        # تطبيق القناة النهائية
+        for y in range(img_h):
+            for x in [0, img_w - 1]:
+                if is_bg_candidate[y, x] and not visited[y, x]:
+                    queue.append((y, x))
+                    visited[y, x] = True
+        for x in range(img_w):
+            for y in [0, img_h - 1]:
+                if is_bg_candidate[y, x] and not visited[y, x]:
+                    queue.append((y, x))
+                    visited[y, x] = True
+
+        dirs = [(0,1),(0,-1),(1,0),(-1,0),(1,1),(1,-1),(-1,1),(-1,-1)]
+        while queue:
+            cy, cx = queue.popleft()
+            for dy, dx in dirs:
+                ny, nx = cy + dy, cx + dx
+                if 0 <= ny < img_h and 0 <= nx < img_w:
+                    if not visited[ny, nx] and is_bg_candidate[ny, nx]:
+                        visited[ny, nx] = True
+                        queue.append((ny, nx))
+
+        # ── خطوة 4: بناء قناة الشفافية مع تدرج ناعم ─────────────────────
         out_arr = arr.copy().astype(_np.uint8)
+        new_alpha = out_arr[..., 3].astype(_np.float32)
+        # الخلفية المكتشفة → شفافة تماماً
+        new_alpha[visited] = 0
+        # تدرج ناعم على الحواف (anti-aliasing)
+        near = (dist >= THRESHOLD) & (dist < THRESHOLD * 2.0)
+        if near.any():
+            ratio = _np.clip((dist[near] - THRESHOLD) / THRESHOLD, 0, 1)
+            new_alpha[near] = new_alpha[near] * ratio
         out_arr[..., 3] = _np.clip(new_alpha, 0, 255).astype(_np.uint8)
         result = _PIL.fromarray(out_arr, 'RGBA')
 
-        # ── خطوة 6: Autocrop — اقتطاع الهوامش الشفافة ────────────────────
+        # ── خطوة 5: Autocrop — اقتطاع الهوامش الشفافة ────────────────────
         out_a  = out_arr[..., 3]
         out_r  = out_arr[..., 0]
         out_g  = out_arr[..., 1]
         out_b  = out_arr[..., 2]
         lum    = (out_r.astype(_np.int32) + out_g + out_b) / 3
-        is_content = (out_a > 20) & (lum < 245)
+        is_content = (out_a > 20) & (lum < 248)
 
         if is_content.any():
             row_idx = _np.where(is_content.any(axis=1))[0]
             col_idx = _np.where(is_content.any(axis=0))[0]
             t = int(row_idx[0]);   b_idx = int(row_idx[-1]) + 1
             l = int(col_idx[0]);   r_idx = int(col_idx[-1]) + 1
-            pad = max(3, int(max(result.size) * 0.025))
+            pad = max(3, int(max(result.size) * 0.02))
             t = max(0, t - pad);  l = max(0, l - pad)
             b_idx = min(result.size[1], b_idx + pad)
             r_idx = min(result.size[0], r_idx + pad)
