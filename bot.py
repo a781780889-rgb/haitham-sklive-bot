@@ -198,10 +198,10 @@ def _remove_logo_background(img):
     out_arr[..., 3] = _np.clip(new_alpha, 0, 255).astype(_np.uint8)
     result = _PIL.fromarray(out_arr, "RGBA")
 
-    # ── خطوة 5: Autocrop — حذف الهوامش الشفافة ──────────────────
+    # ── خطوة 5: Autocrop — Alpha فقط (لا يقطع الأجزاء الفاتحة) ──────
+    # ✅ إصلاح: نعتمد على Alpha فقط — لا على lum < 250
     out_a   = out_arr[..., 3]
-    lum     = (out_arr[...,0].astype(_np.int32) + out_arr[...,1] + out_arr[...,2]) / 3
-    is_content = (out_a > 20) & (lum < 250)
+    is_content = (out_a > 15)
 
     if is_content.any():
         rows = _np.where(is_content.any(axis=1))[0]
@@ -1860,8 +1860,35 @@ async def handle_back(update, context, uid, name, state):
         context.user_data["state"] = "admin_logos"
         await update.message.reply_text("🖼️ *شعارات المستشفيات*", parse_mode="Markdown", reply_markup=logos_keyboard())
     elif state == "admin_logo_select_hospital":
-        context.user_data["state"] = "admin_logos"
-        await update.message.reply_text("🖼️ *شعارات المستشفيات*", parse_mode="Markdown", reply_markup=logos_keyboard())
+        # ── المسؤول اختار مستشفى — انتقل لوضع رفع الشعار ────────────────
+        # تنظيف اسم المستشفى (إزالة علامة ✅ إن وُجدت)
+        clean_hospital = text.replace("✅ ", "").replace(" ✅", "").strip()
+        # تجاهل الضغط على أزرار التنقل
+        if clean_hospital in ["⬅️ رجوع", "🏠 القائمة الرئيسية"]:
+            context.user_data["state"] = "admin_logos"
+            await update.message.reply_text("🖼️ *شعارات المستشفيات*", parse_mode="Markdown", reply_markup=logos_keyboard())
+            return
+        # حفظ المستشفى المختار وانتظار الصورة
+        context.user_data["admin_logo_hospital"] = clean_hospital
+        context.user_data["state"] = "admin_logo_upload"
+        # تحقق هل لديه شعار مسبقاً
+        existing_logo = db.get_hospital_logo(clean_hospital)
+        status_msg = "🔄 *سيتم استبدال الشعار الحالي*" if existing_logo else "➕ *سيُضاف شعار جديد*"
+        await update.message.reply_text(
+            f"🖼 *رفع شعار المستشفى*\n\n"
+            f"🏥 المستشفى: *{clean_hospital}*\n"
+            f"{status_msg}\n\n"
+            f"📤 أرسل صورة الشعار الآن:\n"
+            f"• PNG أو JPG\n"
+            f"• يُفضَّل بخلفية شفافة أو بيضاء\n"
+            f"• سيتم إزالة الخلفية تلقائياً ✅\n"
+            f"• الحجم سيُضبط مساوياً للباركود ✅",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup(
+                [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]],
+                resize_keyboard=True
+            )
+        )
     elif state == "admin_hosp_browse_city":
         context.user_data["state"] = "admin_hosp_browse_region"
         await update.message.reply_text("🗺 *اختر المنطقة:*", parse_mode="Markdown", reply_markup=logo_city_regions_keyboard())
@@ -2389,6 +2416,170 @@ async def handle_dashboard_router(update, context, text, uid, name):
 
 
 # ══════════════════════════════════════════════
+# 📷 معالج الصور — استقبال شعارات المستشفيات
+# ══════════════════════════════════════════════
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    يستقبل الصور (PHOTO أو Document صورة) من المستخدم/المسؤول،
+    ويعالجها كشعار للمستشفى المحدد في الجلسة الحالية.
+    الحالات المدعومة:
+      • user_logo_upload  — رفع شعار مستشفى من قِبل المستخدم (للمراجعة)
+      • admin_logo_upload — رفع شعار مستشفى مباشرة من المسؤول
+    """
+    uid   = update.effective_user.id
+    name  = update.effective_user.full_name or "مستخدم"
+    state = context.user_data.get("state", "main")
+
+    # ── التحقق من الحظر والصيانة ─────────────────────────────────────────
+    if db.is_banned(uid) and uid not in ADMIN_IDS:
+        await update.message.reply_text("⛔ تم حظر حسابك.")
+        return
+    if db.get_setting("maintenance_mode") == "1" and not is_admin_user(uid):
+        await update.message.reply_text("🔧 البوت في وضع الصيانة. يرجى المحاولة لاحقاً.")
+        return
+
+    # ── استخراج بيانات الصورة ────────────────────────────────────────────
+    try:
+        if update.message.photo:
+            # Telegram compresses photos — خذ أعلى جودة (آخر عنصر)
+            photo = update.message.photo[-1]
+            file_obj = await context.bot.get_file(photo.file_id)
+            mime_type = "image/jpeg"
+        elif update.message.document:
+            doc = update.message.document
+            if not (doc.mime_type or "").startswith("image/"):
+                await update.message.reply_text("⚠️ أرسل صورة بصيغة PNG أو JPG فقط.")
+                return
+            file_obj = await context.bot.get_file(doc.file_id)
+            mime_type = doc.mime_type or "image/jpeg"
+        else:
+            return
+
+        import io as _io
+        buf = _io.BytesIO()
+        await file_obj.download_to_memory(buf)
+        image_bytes = buf.getvalue()
+
+    except Exception as e:
+        logger.warning(f"⚠️ فشل تحميل الصورة: {e}")
+        await update.message.reply_text("⚠️ فشل تحميل الصورة. حاول مرة أخرى.")
+        return
+
+    # ══════════════════════════════════════════════════════════════════════
+    # حالة 1: رفع شعار من قِبل المستخدم العادي (للمراجعة)
+    # ══════════════════════════════════════════════════════════════════════
+    if state == "user_logo_upload":
+        hospital = context.user_data.get("user_logo_hospital", "")
+        if not hospital:
+            await update.message.reply_text(
+                "⚠️ لم يتم تحديد المستشفى. اختر المستشفى أولاً.",
+                reply_markup=main_menu_keyboard(is_admin_user(uid))
+            )
+            return
+
+        await update.message.reply_text("⏳ جاري معالجة الشعار...")
+        try:
+            # معالجة الشعار وإزالة الخلفية قبل الحفظ
+            processed_bytes = resize_logo_to_qr_size(image_bytes)
+
+            result = pr.add_private_logo(
+                hospital_name=hospital,
+                logo_data=processed_bytes,
+                mime_type="image/png",
+                added_by_id=uid,
+                added_by_name=name
+            )
+
+            if result.get("already_exists"):
+                await update.message.reply_text(
+                    f"⚠️ *يوجد شعار معلّق بالفعل لـ {hospital}*\n\n"
+                    f"سيتم استخدامه في طلباتك حتى الاعتماد.",
+                    parse_mode="Markdown",
+                    reply_markup=main_menu_keyboard(is_admin_user(uid))
+                )
+            else:
+                await update.message.reply_text(
+                    f"✅ *تم رفع الشعار بنجاح!*\n\n"
+                    f"🏥 المستشفى: *{hospital}*\n"
+                    f"🔄 الشعار سيُستخدم في طلباتك فوراً\n"
+                    f"⏳ يخضع للمراجعة للاعتماد العام",
+                    parse_mode="Markdown",
+                    reply_markup=main_menu_keyboard(is_admin_user(uid))
+                )
+            context.user_data.pop("user_logo_hospital", None)
+            context.user_data["state"] = "main"
+
+        except Exception as e:
+            logger.error(f"❌ فشل رفع شعار المستخدم: {e}")
+            await update.message.reply_text(
+                "❌ فشل رفع الشعار. حاول مرة أخرى.",
+                reply_markup=main_menu_keyboard(is_admin_user(uid))
+            )
+        return
+
+    # ══════════════════════════════════════════════════════════════════════
+    # حالة 2: رفع شعار من المسؤول (مباشر بدون مراجعة)
+    # ══════════════════════════════════════════════════════════════════════
+    if state == "admin_logo_upload" and is_admin_user(uid):
+        hospital = context.user_data.get("admin_logo_hospital", "")
+        if not hospital:
+            await update.message.reply_text(
+                "⚠️ لم يتم تحديد المستشفى. اختر المستشفى أولاً.",
+                reply_markup=logos_keyboard()
+            )
+            return
+
+        await update.message.reply_text("⏳ جاري معالجة الشعار وإزالة الخلفية...")
+        try:
+            # معالجة الشعار بجودة عالية
+            processed_bytes = resize_logo_to_qr_size(image_bytes)
+
+            # حفظ مباشر في قاعدة البيانات
+            db.set_hospital_logo(
+                hospital_name=hospital,
+                logo_data=processed_bytes,
+                mime_type="image/png"
+            )
+
+            await update.message.reply_text(
+                f"✅ *تم رفع الشعار بنجاح!*\n\n"
+                f"🏥 المستشفى: *{hospital}*\n"
+                f"🖼 الشعار محفوظ وجاهز للاستخدام فوراً",
+                parse_mode="Markdown",
+                reply_markup=logos_keyboard()
+            )
+            context.user_data.pop("admin_logo_hospital", None)
+            context.user_data["state"] = "admin_logos"
+
+            # تحديث قائمة المستشفيات
+            await refresh_city_logo_keyboard(update.message, context)
+
+        except Exception as e:
+            logger.error(f"❌ فشل رفع شعار المسؤول: {e}")
+            await update.message.reply_text(
+                "❌ فشل رفع الشعار. حاول مرة أخرى.",
+                reply_markup=logos_keyboard()
+            )
+        return
+
+    # ══════════════════════════════════════════════════════════════════════
+    # حالة 3: المسؤول في حالة admin_logo_select_hospital — ينتظر تحديد مستشفى أولاً
+    # ══════════════════════════════════════════════════════════════════════
+    if state == "admin_logo_select_hospital" and is_admin_user(uid):
+        await update.message.reply_text(
+            "⚠️ اختر المستشفى أولاً من القائمة ثم أرسل الشعار."
+        )
+        return
+
+    # ── حالة غير معروفة: تجاهل الصورة برسالة توجيهية ────────────────────
+    if state not in ["main", "choose_city", "collecting_data"]:
+        await update.message.reply_text(
+            "📷 لرفع شعار مستشفى، اضغط على '🖼 إضافة شعار مستشفى' أولاً.",
+            reply_markup=main_menu_keyboard(is_admin_user(uid))
+        )
+
+
+# ══════════════════════════════════════════════
 # 🚀 نقطة التشغيل الرئيسية
 # ══════════════════════════════════════════════
 def main():
@@ -2418,6 +2609,9 @@ def main():
 
     # معالج الرسائل النصية
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
+
+    # ✅ معالج الصور — لاستقبال شعارات المستشفيات عبر البوت
+    application.add_handler(MessageHandler(filters.PHOTO | filters.Document.IMAGE, handle_photo))
 
     logger.info("✅ البوت يعمل الآن...")
     application.run_polling(drop_pending_updates=True)
