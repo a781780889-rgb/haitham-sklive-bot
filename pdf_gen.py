@@ -872,21 +872,21 @@ def process_logo_for_pdf(logo_path):
     """
     معالجة شاملة وموحّدة للشعارات قبل إدراجها في PDF:
     ─────────────────────────────────────────────────────────
-    1. تحميل الصورة وتحويلها إلى RGBA
-    2. رفع دقة الصورة (super-sampling) للحفاظ على الجودة
-    3. كشف لون الخلفية تلقائياً من حواف الصورة (Median)
-    4. Fast Flood Fill (scipy) — يكشف الخلفية المتصلة بالحواف فقط
-    5. إزالة الخلفية مع حماية كاملة لمحتوى الشعار
-    6. Autocrop بالاستناد إلى قناة الشفافية فقط (لا يحذف الأجزاء الفاتحة)
-    7. تسليم صورة RGBA شفافة عالية الجودة
-    ─────────────────────────────────────────────────────────
-    إصلاحات v2:
-    • Autocrop يعتمد على Alpha فقط (لا lum < 250) ← لا يقطع أجزاء الشعار الفاتحة
-    • Anti-aliasing أكثر حفاظاً على حواف الشعار الداخلية
-    • Upscale للصور الصغيرة قبل المعالجة لتحسين الجودة
+    v3 — خوارزمية ذكية متعددة المراحل:
+    1. Upscale للصور الصغيرة
+    2. كشف لون الخلفية من الحواف (Median)
+    3. حساب Saturation + Lightness + Distance لتحديد الخلفية
+    4. Flood Fill من الحواف فقط (يحمي محتوى الشعار الداخلي)
+    5. إزالة الخلفية وبناء قناة Alpha شفافة
+    6. Autocrop دقيق بدون قطع الشعار
+
+    يعمل مع:
+    - خلفية بيضاء/رمادية بسيطة
+    - خلفية رمادية مزخرفة (مثل PSMMC)
+    - خلفية ملونة
+    - خلفية سوداء
     ─────────────────────────────────────────────────────────
     يُعيد كائن PIL.Image بصيغة RGBA شفافة، أو None عند الفشل.
-    يعمل مع جميع أنواع الخلفيات: بيضاء، رمادية، سوداء، ملونة.
     """
     try:
         from PIL import Image as _PIL
@@ -894,8 +894,8 @@ def process_logo_for_pdf(logo_path):
 
         orig = _PIL.open(logo_path).convert('RGBA')
 
-        # ── Upscale الصور الصغيرة لتحسين جودة إزالة الخلفية ─────────────
-        MIN_PROCESS_SIZE = 400
+        # ── Upscale الصور الصغيرة لتحسين جودة الكشف ──────────────────────
+        MIN_PROCESS_SIZE = 500
         orig_w, orig_h = orig.size
         if max(orig_w, orig_h) < MIN_PROCESS_SIZE:
             scale_up = MIN_PROCESS_SIZE / max(orig_w, orig_h)
@@ -903,45 +903,54 @@ def process_logo_for_pdf(logo_path):
             new_uh = max(1, int(orig_h * scale_up))
             orig = orig.resize((new_uw, new_uh), _PIL.LANCZOS)
 
-        arr  = _np.array(orig, dtype=_np.int32)
-        r, g, b, a = arr[..., 0], arr[..., 1], arr[..., 2], arr[..., 3]
+        arr  = _np.array(orig, dtype=_np.float32)
         img_h, img_w = arr.shape[:2]
+        r, g, b = arr[..., 0], arr[..., 1], arr[..., 2]
 
         # ── خطوة 1: كشف لون الخلفية من حواف الصورة ───────────────────────
-        mh = max(1, img_h // 10)
-        mw = max(1, img_w // 10)
-        e1 = arr[:mh, :].reshape(-1, 4)
-        e2 = arr[-mh:, :].reshape(-1, 4)
-        e3 = arr[:, :mw].reshape(-1, 4)
-        e4 = arr[:, -mw:].reshape(-1, 4)
-        edges = _np.concatenate([e1, e2, e3, e4])
-        opaque_edges = edges[edges[:, 3] > 30]
+        mh = max(1, img_h // 8)
+        mw = max(1, img_w // 8)
+        edges = _np.concatenate([
+            arr[:mh, :, :3].reshape(-1, 3),
+            arr[-mh:, :, :3].reshape(-1, 3),
+            arr[:, :mw, :3].reshape(-1, 3),
+            arr[:, -mw:, :3].reshape(-1, 3)
+        ])
+        bg_r = float(_np.median(edges[:, 0]))
+        bg_g = float(_np.median(edges[:, 1]))
+        bg_b = float(_np.median(edges[:, 2]))
+        bg_lightness = (bg_r + bg_g + bg_b) / 3.0
 
-        if len(opaque_edges) >= 10:
-            bg_r = int(_np.median(opaque_edges[:, 0]))
-            bg_g = int(_np.median(opaque_edges[:, 1]))
-            bg_b = int(_np.median(opaque_edges[:, 2]))
+        # ── خطوة 2: حساب مقاييس اللون ────────────────────────────────────
+        # Saturation: مقياس إشباع اللون (0=رمادي/بدون لون، 255=ألوان مشبعة)
+        ch_max = _np.maximum(_np.maximum(r, g), b)
+        ch_min = _np.minimum(_np.minimum(r, g), b)
+        saturation = ch_max - ch_min
+
+        # Lightness: متوسط السطوع
+        lightness = (r + g + b) / 3.0
+
+        # Distance: المسافة اللونية من لون الخلفية
+        dist_from_bg = _np.sqrt(
+            (r - bg_r)**2 + (g - bg_g)**2 + (b - bg_b)**2
+        ).astype(_np.float32)
+
+        # ── خطوة 3: تحديد الخلفية حسب نوعها ─────────────────────────────
+        if bg_lightness > 150:
+            # خلفية فاتحة (بيضاء/رمادية/مزخرفة فاتحة مثل PSMMC)
+            # الخلفية = فاتحة + غير مشبعة + قريبة من لون الحافة
+            is_bg_candidate = (
+                ((lightness > 150) & (saturation < 50)) |
+                (dist_from_bg < 30)
+            )
+        elif bg_lightness < 50:
+            # خلفية داكنة (سوداء)
+            is_bg_candidate = (dist_from_bg < 25) & (lightness < 60)
         else:
-            bg_r, bg_g, bg_b = 255, 255, 255
+            # خلفية رمادية متوسطة / ملونة
+            is_bg_candidate = (dist_from_bg < 38)
 
-        bg_lightness = (bg_r + bg_g + bg_b) / 3
-
-        # ── خطوة 2: حساب المسافة اللونية من الخلفية ──────────────────────
-        dist = _np.sqrt(
-            ((r - bg_r)**2 + (g - bg_g)**2 + (b - bg_b)**2).astype(_np.float32)
-        )
-
-        # عتبة التطابق مع الخلفية — محافظة أكثر لحماية محتوى الشعار
-        if bg_lightness > 200:      # خلفية بيضاء / فاتحة
-            THRESHOLD = 35
-        elif bg_lightness < 50:     # خلفية سوداء / داكنة
-            THRESHOLD = 30
-        else:                       # خلفية رمادية / ملونة
-            THRESHOLD = 33
-
-        is_bg_candidate = (dist < THRESHOLD) & (a > 0)
-
-        # ── خطوة 3: Fast Flood Fill (scipy) — الخلفية المتصلة بالحواف فقط ─
+        # ── خطوة 4: Flood Fill من الحواف فقط (يحمي الداخل) ──────────────
         try:
             from scipy import ndimage as _ndi
             labeled, _ = _ndi.label(is_bg_candidate)
@@ -977,26 +986,14 @@ def process_logo_for_pdf(logo_path):
                             background_mask[ny,nx] = True
                             queue.append((ny,nx))
 
-        # ── خطوة 4: بناء قناة الشفافية — حافظة على محتوى الشعار ────────
-        out_arr = arr.copy().astype(_np.uint8)
-        new_alpha = out_arr[..., 3].astype(_np.float32)
-
-        # الخلفية المتصلة بالحواف → شفافة تماماً
-        new_alpha[background_mask] = 0
-
-        # ✅ إصلاح: تدرج ناعم فقط على الحافة الخارجية (ليس الداخلية)
-        # نحصر الـ anti-aliasing في نطاق ضيق جداً لحماية محتوى الشعار
-        near = background_mask & (dist < THRESHOLD * 0.3)  # فقط قرب الحافة
-        # لا نطبق تدرج على البكسلات الداخلية للشعار
-
-        out_arr[..., 3] = _np.clip(new_alpha, 0, 255).astype(_np.uint8)
+        # ── خطوة 5: بناء الصورة الناتجة مع Alpha شفاف للخلفية ───────────
+        out_arr = _np.array(orig).astype(_np.uint8)
+        out_arr[background_mask, 3] = 0   # الخلفية شفافة تماماً
         result = _PIL.fromarray(out_arr, 'RGBA')
 
-        # ── خطوة 5: Autocrop — Alpha فقط (لا يحذف الأجزاء الفاتحة) ──────
-        # ✅ إصلاح: نعتمد على Alpha فقط، لا على اللمعان (lum)
-        # هذا يضمن عدم قطع الأجزاء البيضاء / الفاتحة من الشعار
-        out_a = out_arr[..., 3]
-        is_content = (out_a > 15)  # أي بكسل غير شفاف هو محتوى
+        # ── خطوة 6: Autocrop — يعتمد على Alpha فقط ──────────────────────
+        alpha = out_arr[:, :, 3]
+        is_content = (alpha > 15)
 
         if is_content.any():
             row_idx = _np.where(is_content.any(axis=1))[0]
@@ -1005,7 +1002,7 @@ def process_logo_for_pdf(logo_path):
             b_idx = int(row_idx[-1]) + 1
             l     = int(col_idx[0])
             r_idx = int(col_idx[-1]) + 1
-            pad = max(6, int(max(result.size) * 0.02))
+            pad = max(5, int(max(result.size) * 0.01))
             t     = max(0, t - pad)
             l     = max(0, l - pad)
             b_idx = min(result.size[1], b_idx + pad)
