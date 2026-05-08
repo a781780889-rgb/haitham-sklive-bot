@@ -620,7 +620,14 @@ def set_hospital_logo(hospital_name, logo_path=None, logo_data: bytes = None, mi
     # احفظ في file_storage إذا كانت البيانات متوفرة
     if _FILE_STORAGE_AVAILABLE and logo_data:
         fkey = logo_key(hospital_name)
-        save_file(fkey, logo_data, f"{hospital_name}.jpg", mime_type, "logo")
+        # اختر الامتداد الصحيح حسب نوع الصورة الفعلي (PNG يدعم الشفافية)
+        if mime_type == "image/png" or (len(logo_data) >= 8 and logo_data[:8] == b'\x89PNG\r\n\x1a\n'):
+            file_ext = ".png"
+            actual_mime = "image/png"
+        else:
+            file_ext = ".jpg"
+            actual_mime = "image/jpeg"
+        save_file(fkey, logo_data, f"{hospital_name}{file_ext}", actual_mime, "logo")
         # احفظ المفتاح في العمود logo_path للتوافق
         logo_path = f"db:{fkey}"
 
@@ -633,10 +640,44 @@ def set_hospital_logo(hospital_name, logo_path=None, logo_data: bytes = None, mi
             conn.close()
 
 
+def _detect_logo_extension(data: bytes) -> str:
+    """
+    يكتشف امتداد الصورة الصحيح من magic bytes.
+    يُعيد '.png' للـ PNG و'.jpg' لكل شيء آخر (JPEG افتراضي).
+    PNG magic: 89 50 4E 47 0D 0A 1A 0A
+    """
+    if data and len(data) >= 8 and data[:8] == b'\x89PNG\r\n\x1a\n':
+        return ".png"
+    return ".jpg"
+
+
+def _get_logo_as_temp(fkey: str) -> str | None:
+    """
+    يُنزّل شعاراً من file_storage مع اكتشاف الامتداد الصحيح تلقائياً.
+    يضمن أن الملف المؤقت يحمل الامتداد الصحيح (PNG/JPG) حتى تعمل Pillow بشكل صحيح.
+    """
+    if not _FILE_STORAGE_AVAILABLE:
+        return None
+    try:
+        from file_storage import get_file, get_file_as_temp as _get_as_temp
+        data = get_file(fkey)
+        if not data:
+            return None
+        ext = _detect_logo_extension(data)
+        return _get_as_temp(fkey, ext)
+    except Exception:
+        # Fallback إلى PNG (الأكثر شيوعاً للشعارات)
+        try:
+            return get_file_as_temp(fkey, ".png")
+        except Exception:
+            return None
+
+
 def get_hospital_logo(hospital_name):
     """
     يُعيد مسار الشعار أو None.
     إذا كان مخزوناً في DB يُنزّله إلى ملف مؤقت ويُعيد مساره.
+    يكتشف تلقائياً نوع الصورة (PNG/JPG) من magic bytes لضمان معالجة الشفافية بشكل صحيح.
     """
     conn = get_conn()
     try:
@@ -648,7 +689,7 @@ def get_hospital_logo(hospital_name):
             if _FILE_STORAGE_AVAILABLE:
                 fkey = logo_key(hospital_name)
                 if file_exists(fkey):
-                    return get_file_as_temp(fkey, ".jpg")
+                    return _get_logo_as_temp(fkey)
             return None
 
         lp = row["logo_path"]
@@ -656,7 +697,7 @@ def get_hospital_logo(hospital_name):
         # مخزون في DB
         if lp.startswith("db:") and _FILE_STORAGE_AVAILABLE:
             fkey = lp[3:]
-            return get_file_as_temp(fkey, ".jpg")
+            return _get_logo_as_temp(fkey)
 
         # مسار على القرص (قديم)
         if os.path.exists(lp):
@@ -666,7 +707,7 @@ def get_hospital_logo(hospital_name):
         if _FILE_STORAGE_AVAILABLE:
             fkey = logo_key(hospital_name)
             if file_exists(fkey):
-                return get_file_as_temp(fkey, ".jpg")
+                return _get_logo_as_temp(fkey)
 
         return None
     finally:
