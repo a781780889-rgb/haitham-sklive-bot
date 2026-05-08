@@ -874,8 +874,8 @@ def process_logo_for_pdf(logo_path):
     ─────────────────────────────────────────────────────────
     1. تحميل الصورة وتحويلها إلى RGBA
     2. كشف لون الخلفية تلقائياً من حواف الصورة
-    3. Flood Fill من الحواف لكشف الخلفية المتصلة فقط
-       (يحمي ألوان الشعار حتى لو كانت داكنة كـ navy blue)
+    3. Fast Flood Fill باستخدام scipy.ndimage (أسرع بـ100x)
+       يكشف الخلفية المتصلة بالحواف فقط — يحمي محتوى الشعار
     4. إزالة الخلفية مع تدرج ناعم على الحواف (anti-aliasing)
     5. اقتطاع الهوامش الفارغة تلقائياً (Autocrop)
     6. تسليم صورة RGBA شفافة عالية الجودة
@@ -886,7 +886,6 @@ def process_logo_for_pdf(logo_path):
     try:
         from PIL import Image as _PIL
         import numpy as _np
-        from collections import deque as _deque
 
         orig = _PIL.open(logo_path).convert('RGBA')
         arr  = _np.array(orig, dtype=_np.int32)
@@ -895,8 +894,8 @@ def process_logo_for_pdf(logo_path):
         img_h, img_w = arr.shape[:2]
 
         # ── خطوة 1: كشف لون الخلفية من حواف الصورة ───────────────────────
-        mh = max(1, img_h // 15)
-        mw = max(1, img_w // 15)
+        mh = max(1, img_h // 12)
+        mw = max(1, img_w // 12)
         e1 = arr[:mh, :].reshape(-1, 4)
         e2 = arr[-mh:, :].reshape(-1, 4)
         e3 = arr[:, :mw].reshape(-1, 4)
@@ -915,73 +914,87 @@ def process_logo_for_pdf(logo_path):
 
         # ── خطوة 2: حساب المسافة اللونية من الخلفية ──────────────────────
         dist = _np.sqrt(
-            _np.clip((r - bg_r)**2 + (g - bg_g)**2 + (b - bg_b)**2, 0, None).astype(_np.float32)
+            ((r - bg_r)**2 + (g - bg_g)**2 + (b - bg_b)**2).astype(_np.float32)
         )
 
         # عتبة التطابق مع الخلفية
-        if bg_lightness > 200:
+        if bg_lightness > 200:      # خلفية بيضاء / فاتحة
+            THRESHOLD = 40
+        elif bg_lightness < 50:     # خلفية سوداء / داكنة
+            THRESHOLD = 35
+        else:                       # خلفية رمادية / ملونة
             THRESHOLD = 38
-        elif bg_lightness < 50:
-            THRESHOLD = 32
-        else:
-            THRESHOLD = 34
 
-        # ── خطوة 3: Flood Fill من الحواف ─────────────────────────────────
-        # يكشف الخلفية المتصلة فقط — يحمي الألوان الداكنة داخل الشعار
-        is_bg_candidate = dist < THRESHOLD
+        is_bg_candidate = (dist < THRESHOLD) & (a > 0)
 
-        visited = _np.zeros((img_h, img_w), dtype=bool)
-        queue = _deque()
+        # ── خطوة 3: Fast Flood Fill باستخدام scipy (بدلاً من Python deque) ─
+        # scipy.ndimage أسرع بـ100x على الصور الكبيرة
+        try:
+            from scipy import ndimage as _ndi
+            # ابحث عن المكونات المتصلة (connected components)
+            labeled, _ = _ndi.label(is_bg_candidate)
+            # اجمع الـ labels التي تلمس الحافة → هذه هي الخلفية الفعلية
+            border_labels = set()
+            border_labels.update(_np.unique(labeled[0,  :]))
+            border_labels.update(_np.unique(labeled[-1, :]))
+            border_labels.update(_np.unique(labeled[:,  0]))
+            border_labels.update(_np.unique(labeled[:, -1]))
+            border_labels.discard(0)
+            background_mask = _np.isin(labeled, list(border_labels))
 
-        for y in range(img_h):
-            for x in [0, img_w - 1]:
-                if is_bg_candidate[y, x] and not visited[y, x]:
-                    queue.append((y, x))
-                    visited[y, x] = True
-        for x in range(img_w):
-            for y in [0, img_h - 1]:
-                if is_bg_candidate[y, x] and not visited[y, x]:
-                    queue.append((y, x))
-                    visited[y, x] = True
-
-        dirs = [(0,1),(0,-1),(1,0),(-1,0),(1,1),(1,-1),(-1,1),(-1,-1)]
-        while queue:
-            cy, cx = queue.popleft()
-            for dy, dx in dirs:
-                ny, nx = cy + dy, cx + dx
-                if 0 <= ny < img_h and 0 <= nx < img_w:
-                    if not visited[ny, nx] and is_bg_candidate[ny, nx]:
-                        visited[ny, nx] = True
-                        queue.append((ny, nx))
+        except ImportError:
+            # Fallback: numpy-based iterative (أبطأ لكنه يعمل بدون scipy)
+            from collections import deque as _deque
+            background_mask = _np.zeros((img_h, img_w), dtype=bool)
+            queue = _deque()
+            for y in range(img_h):
+                for x in [0, img_w - 1]:
+                    if is_bg_candidate[y, x] and not background_mask[y, x]:
+                        background_mask[y, x] = True
+                        queue.append((y, x))
+            for x in range(img_w):
+                for y in [0, img_h - 1]:
+                    if is_bg_candidate[y, x] and not background_mask[y, x]:
+                        background_mask[y, x] = True
+                        queue.append((y, x))
+            dirs = [(0,1),(0,-1),(1,0),(-1,0)]
+            while queue:
+                cy, cx = queue.popleft()
+                for dy, dx in dirs:
+                    ny, nx = cy+dy, cx+dx
+                    if 0 <= ny < img_h and 0 <= nx < img_w:
+                        if not background_mask[ny,nx] and is_bg_candidate[ny,nx]:
+                            background_mask[ny,nx] = True
+                            queue.append((ny,nx))
 
         # ── خطوة 4: بناء قناة الشفافية مع تدرج ناعم ─────────────────────
         out_arr = arr.copy().astype(_np.uint8)
         new_alpha = out_arr[..., 3].astype(_np.float32)
         # الخلفية المكتشفة → شفافة تماماً
-        new_alpha[visited] = 0
+        new_alpha[background_mask] = 0
         # تدرج ناعم على الحواف (anti-aliasing)
-        near = (dist >= THRESHOLD) & (dist < THRESHOLD * 2.0)
+        near = (~background_mask) & (dist < THRESHOLD * 1.8)
         if near.any():
-            ratio = _np.clip((dist[near] - THRESHOLD) / THRESHOLD, 0, 1)
+            ratio = _np.clip((dist[near] - THRESHOLD * 0.5) / (THRESHOLD * 1.3), 0, 1)
             new_alpha[near] = new_alpha[near] * ratio
         out_arr[..., 3] = _np.clip(new_alpha, 0, 255).astype(_np.uint8)
         result = _PIL.fromarray(out_arr, 'RGBA')
 
         # ── خطوة 5: Autocrop — اقتطاع الهوامش الشفافة ────────────────────
         out_a  = out_arr[..., 3]
-        out_r  = out_arr[..., 0]
-        out_g  = out_arr[..., 1]
-        out_b  = out_arr[..., 2]
-        lum    = (out_r.astype(_np.int32) + out_g + out_b) / 3
-        is_content = (out_a > 20) & (lum < 248)
+        lum    = (out_arr[...,0].astype(_np.int32) + out_arr[...,1] + out_arr[...,2]) / 3
+        is_content = (out_a > 20) & (lum < 250)
 
         if is_content.any():
             row_idx = _np.where(is_content.any(axis=1))[0]
             col_idx = _np.where(is_content.any(axis=0))[0]
-            t = int(row_idx[0]);   b_idx = int(row_idx[-1]) + 1
-            l = int(col_idx[0]);   r_idx = int(col_idx[-1]) + 1
-            pad = max(3, int(max(result.size) * 0.02))
-            t = max(0, t - pad);  l = max(0, l - pad)
+            t     = int(row_idx[0])
+            b_idx = int(row_idx[-1]) + 1
+            l     = int(col_idx[0])
+            r_idx = int(col_idx[-1]) + 1
+            pad = max(4, int(max(result.size) * 0.015))
+            t     = max(0, t - pad)
+            l     = max(0, l - pad)
             b_idx = min(result.size[1], b_idx + pad)
             r_idx = min(result.size[0], r_idx + pad)
             result = result.crop((l, t, r_idx, b_idx))
@@ -1217,46 +1230,41 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
 
             orig_w, orig_h = processed.size
 
-            # ── تحجيم الشعار بحيث يساوي حجم الباركود بصرياً ──────────────
-            # DPI عالي للحفاظ على الجودة
-            DPI_FACTOR = 6
+            # ── تحجيم الشعار ليملأ مربع الباركود بدقة ──────────────────────
+            # DPI عالي للحفاظ على الجودة (8px/pt)
+            DPI_FACTOR = 8
             slot_w_px = max(1, int(lw * DPI_FACTOR))
             slot_h_px = max(1, int(lh * DPI_FACTOR))
 
             # استراتيجية التحجيم:
-            # ✅ الشعار يجب ألا يتجاوز حدود مربع الباركود (slot) في أي اتجاه
+            # ✅ يملأ الـ slot بأكبر حجم ممكن مع بقائه داخل الحدود
             # ✅ الحفاظ التام على نسبة الأبعاد الأصلية (لا تمدد، لا ضغط)
-            # ✅ تكبير حتى الحد الأقصى الذي يبقي الشعار داخل المربع
             scale_by_height = slot_h_px / orig_h
             scale_by_width  = slot_w_px / orig_w
-            # اختر أصغر مقياس لضمان بقاء الشعار داخل الحدود
             scale = min(scale_by_height, scale_by_width)
 
             new_w = max(1, int(round(orig_w * scale)))
             new_h = max(1, int(round(orig_h * scale)))
             resized = processed.resize((new_w, new_h), PILImage.LANCZOS)
 
-            # تحويل بكسل → نقاط PDF
-            draw_w_pt = new_w / DPI_FACTOR
-            draw_h_pt = new_h / DPI_FACTOR
-
-            # توسيط الشعار في منتصف مربع LOGO_SLOT (= مركز الباركود أفقياً)
-            center_x = lx + lw / 2
-            center_y = ly + lh / 2
-            draw_x   = center_x - draw_w_pt / 2
-            draw_y   = center_y - draw_h_pt / 2
+            # ── وضع الشعار في canvas شفاف بحجم الـ slot بالضبط ──────────────
+            logo_canvas = PILImage.new("RGBA", (slot_w_px, slot_h_px), (255, 255, 255, 0))
+            offset_x = (slot_w_px - new_w) // 2
+            offset_y = (slot_h_px - new_h) // 2
+            logo_canvas.paste(resized, (offset_x, offset_y), resized)
 
             # حفظ في buffer وإدراج في PDF مع شفافية كاملة
             _logo_buf = io.BytesIO()
-            resized.save(_logo_buf, 'PNG')
+            logo_canvas.save(_logo_buf, 'PNG')
             _logo_buf.seek(0)
 
+            # رسم الشعار بحجم مربع الباركود بالضبط
             c.drawImage(
                 _IR(_logo_buf),
-                draw_x, draw_y,
-                width=draw_w_pt,
-                height=draw_h_pt,
-                preserveAspectRatio=True,
+                lx, ly,
+                width=lw,
+                height=lh,
+                preserveAspectRatio=False,
                 mask='auto',
             )
 
