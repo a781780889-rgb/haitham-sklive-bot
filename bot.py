@@ -328,14 +328,14 @@ def get_scaffold_price():
     return float(db.get_setting("scaffold_price", "5.0"))
 
 def get_website_url():
-    url = db.get_setting("website_url", "https://www.sehasaa.com/")
+    url = db.get_setting("website_url", "https://www.sehasaa.com/#/inquiries/slenquiry")
     # استبدال أي رابط قديم خاطئ تلقائياً
     if (not url
         or "sehaseinquiresslendquiry.com" in url
         or "seah.s.com" in url
         or "seha-s.com" in url
         or "seha.sa" in url):
-        url = "https://www.sehasaa.com/"
+        url = "https://www.sehasaa.com/#/inquiries/slenquiry"
     return url
 
 def is_admin_user(user_id: int) -> bool:
@@ -3805,23 +3805,14 @@ def main():
 
 
 import threading
-from flask import Flask as _Flask
+import web as _web_module
 
-_flask_app = _Flask(__name__)
-
-@_flask_app.route("/")
-def _home():
-    return "✅ البوت يعمل", 200
-
-@_flask_app.route("/health")
-def _health():
-    return "OK", 200
-
-def _run_flask():
+def _run_web():
     port = int(os.environ.get("PORT", 8080))
-    _flask_app.run(host="0.0.0.0", port=port)
+    _web_module.app.run(host="0.0.0.0", port=port, debug=False)
 
 if __name__ == "__main__":
-    _t = threading.Thread(target=_run_flask, daemon=True)
-    _t.start()
+    t = threading.Thread(target=_run_web, daemon=True)
+    t.start()
+    logger.info(f"🌐 Web server يعمل على بورت {os.environ.get('PORT', 8080)}")
     main()
