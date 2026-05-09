@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-web_seha_s.py — موقع www.sehasaa.com
-التصميم مطابق 100% لصور seha-s.com الرسمية
+web_seha_s.py — موقع صحة
+التصميم الجديد: صفحة النتيجة مُدمجة مع تصميم AI Studio
 """
 
 import os, sys, base64
@@ -17,9 +17,6 @@ import shared_db
 
 app = Flask(__name__)
 
-# ══════════════════════════════════════════════════════════════
-# تحميل صور التصميم (مرة واحدة عند البدء)
-# ══════════════════════════════════════════════════════════════
 def _load_img(filename, mime="image/jpeg"):
     p = os.path.join(_THIS_DIR, filename)
     if os.path.exists(p):
@@ -27,344 +24,226 @@ def _load_img(filename, mime="image/jpeg"):
             return f"data:{mime};base64," + base64.b64encode(f.read()).decode()
     return ""
 
-_IMG_FORM        = _load_img("design_form.jpg")
-_IMG_RESULT_NEW  = _load_img("result_bg.jpg")      # خلفية صفحة النتيجة
+_IMG_FORM       = _load_img("design_form.jpg")
+_IMG_RESULT_NEW = _load_img("result_bg.jpg")
 
-# ══════════════════════════════════════════════════════════════
-# SVG شعار صحة (checkmark مخطط)
-# ══════════════════════════════════════════════════════════════
-def seha_check_svg(color="#2d5fa6", size=44):
-    uid = f"{color}{size}".replace("#","")
-    return f"""<svg width="{size}" height="{size}" viewBox="0 0 60 55" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs><clipPath id="ck{uid}">
-    <polyline points="4,30 22,48 56,8" stroke="black" stroke-width="13"
-      stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-  </clipPath></defs>
-  <g clip-path="url(#ck{uid})">
-    <line x1="-10" y1="56" x2="40"  y2="-4" stroke="{color}" stroke-width="4.2" opacity="0.22"/>
-    <line x1="-3"  y1="56" x2="47"  y2="-4" stroke="{color}" stroke-width="4.2" opacity="0.30"/>
-    <line x1="4"   y1="56" x2="54"  y2="-4" stroke="{color}" stroke-width="4.2" opacity="0.42"/>
-    <line x1="11"  y1="56" x2="61"  y2="-4" stroke="{color}" stroke-width="4.2" opacity="0.60"/>
-    <line x1="18"  y1="56" x2="68"  y2="-4" stroke="{color}" stroke-width="4.2" opacity="0.80"/>
-    <line x1="25"  y1="56" x2="75"  y2="-4" stroke="{color}" stroke-width="4.2"/>
-    <line x1="32"  y1="56" x2="82"  y2="-4" stroke="{color}" stroke-width="4.2"/>
-    <line x1="39"  y1="56" x2="89"  y2="-4" stroke="{color}" stroke-width="4.2" opacity="0.85"/>
-    <line x1="46"  y1="56" x2="96"  y2="-4" stroke="{color}" stroke-width="4.2" opacity="0.60"/>
-  </g>
-  <polyline points="4,30 22,48 56,8" stroke="{color}" stroke-width="5"
-    stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-</svg>"""
+def seha_ribbed_svg(color="#8DB5CB", size=60):
+    return f'''<svg width="{size}" height="{round(size*105/100)}" viewBox="0 0 100 105" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect x="76" y="2"    width="18" height="3.8" rx="1.9" fill="{color}"/>
+  <rect x="71" y="8.3"  width="20" height="3.8" rx="1.9" fill="{color}"/>
+  <rect x="66" y="14.6" width="22" height="3.8" rx="1.9" fill="{color}"/>
+  <rect x="61" y="20.9" width="24" height="3.8" rx="1.9" fill="{color}"/>
+  <rect x="56" y="27.2" width="26" height="3.8" rx="1.9" fill="{color}"/>
+  <rect x="51" y="33.5" width="28" height="3.8" rx="1.9" fill="{color}"/>
+  <rect x="46" y="39.8" width="30" height="3.8" rx="1.9" fill="{color}"/>
+  <rect x="41" y="46.1" width="32" height="3.8" rx="1.9" fill="{color}"/>
+  <rect x="14" y="52.4" width="10" height="3.8" rx="1.9" fill="{color}"/>
+  <rect x="37" y="52.4" width="34" height="3.8" rx="1.9" fill="{color}"/>
+  <rect x="9"  y="58.7" width="14" height="3.8" rx="1.9" fill="{color}"/>
+  <rect x="33" y="58.7" width="36" height="3.8" rx="1.9" fill="{color}"/>
+  <rect x="5"  y="65"   width="18" height="3.8" rx="1.9" fill="{color}"/>
+  <rect x="29" y="65"   width="38" height="3.8" rx="1.9" fill="{color}"/>
+  <rect x="6"  y="71.3" width="58" height="3.8" rx="1.9" fill="{color}"/>
+  <rect x="11" y="77.6" width="50" height="3.8" rx="1.9" fill="{color}"/>
+  <rect x="18" y="83.9" width="40" height="3.8" rx="1.9" fill="{color}"/>
+  <rect x="26" y="90.2" width="28" height="3.8" rx="1.9" fill="{color}"/>
+  <rect x="34" y="96.5" width="14" height="3.8" rx="1.9" fill="{color}"/>
+</svg>'''
 
-# ══════════════════════════════════════════════════════════════
-# CSS المشترك
-# ══════════════════════════════════════════════════════════════
+def seha_logo_block(text_color="#3D3D3D", check_color="#8DB5CB"):
+    svg = seha_ribbed_svg(check_color, 60)
+    return f'''<div class="seha-logo-block">
+  {svg}
+  <div class="logo-divider"></div>
+  <div class="logo-text-block">
+    <span class="logo-ar" style="color:{text_color}">صحة</span>
+    <span class="logo-en" style="color:{text_color}">Seha</span>
+  </div>
+</div>'''
+
 _CSS = """
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
-body{font-family:'Tajawal',Arial,sans-serif;background:#fff;
+body{font-family:'Cairo',Arial,sans-serif;background:#F8F9FA;
      direction:rtl;color:#222;min-height:100vh;overflow-x:hidden}
-
-/* ── HEADER ── */
-.hdr{background:#fff;padding:12px 20px;display:flex;
-  justify-content:space-between;align-items:center;
-  border-bottom:1px solid #e4e9f0;
-  position:sticky;top:0;z-index:100;
-  box-shadow:0 2px 6px rgba(0,0,0,.05)}
-.hdr-ham{display:flex;flex-direction:column;gap:5px;
-  cursor:pointer;background:none;border:none;padding:4px}
-.hdr-ham span{display:block;width:22px;height:2.5px;
-  background:#3463a8;border-radius:2px}
-.hdr-logo{display:flex;align-items:center;gap:0;direction:ltr}
-.hdr-logo-txt{display:flex;flex-direction:column;
-  align-items:flex-end;line-height:1.1;margin-left:8px}
-.logo-ar{font-size:19px;font-weight:900;color:#1a4f8a;letter-spacing:-.3px}
-.logo-en{font-size:11px;font-weight:600;color:#2d76c9;letter-spacing:.5px;
-  text-align:right}
-.hdr-sep{width:1.5px;height:36px;background:#d0daea;margin:0 8px}
-
-/* ── DESIGN IMAGE SECTION ── */
-.design-img-wrap{
-  position:relative;width:100%;
-  display:flex;justify-content:center;
-  background:#fff;overflow:hidden
-}
-.design-img-wrap img{
-  width:100%;max-width:480px;
-  display:block;object-fit:cover
-}
-/* Overlay شفاف فوق الصورة للـ interactions */
-.design-overlay{
-  position:absolute;inset:0;
-  display:flex;flex-direction:column;
-  align-items:center;
-  pointer-events:none
-}
-
-/* ── CONTAINER للمحتوى الحقيقي ── */
+.seha-logo-block{display:flex;align-items:center;gap:0}
+.logo-divider{width:1.2px;height:48px;background:#E1E1E1;margin:0 12px}
+.logo-text-block{display:flex;flex-direction:column;align-items:center;justify-content:center}
+.logo-ar{font-size:26px;font-weight:900;line-height:1;margin-bottom:3px;letter-spacing:-.3px}
+.logo-en{font-size:19px;font-weight:900;line-height:1;letter-spacing:-.2px}
+.hdr{background:#F8F9FA;padding:16px 24px;display:flex;justify-content:space-between;
+  align-items:center;border-bottom:1px solid rgba(0,0,0,.06);
+  position:sticky;top:0;z-index:100;box-shadow:0 1px 4px rgba(0,0,0,.04)}
+.hdr-ham{display:flex;flex-direction:column;gap:7.5px;
+  cursor:pointer;background:none;border:none;padding:6px}
+.hdr-ham span{display:block;width:38px;height:4px;background:#8DB5D8;border-radius:999px}
+.hdr-right{width:38px}
+.sb-overlay{display:none;position:fixed;inset:0;background:rgba(48,106,179,.18);
+  backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);z-index:200}
+.sb-overlay.on{display:block}
+.sb{position:fixed;top:0;right:-320px;width:310px;max-width:90vw;height:100%;
+  background:#fff;z-index:201;transition:right .3s cubic-bezier(.25,.8,.25,1);
+  box-shadow:-6px 0 30px rgba(0,0,0,.12);display:flex;flex-direction:column;overflow-y:auto}
+.sb.on{right:0}
+.sb-hdr{display:flex;justify-content:space-between;align-items:center;
+  padding:18px 22px;border-bottom:1px solid #f0f0f0}
+.sb-close{background:none;border:none;font-size:26px;color:#aaa;cursor:pointer;
+  line-height:1;padding:2px 6px}
+.sb-close:hover{color:#306AB3}
+.sb-body{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  padding:32px 24px;gap:28px}
+.sb-item{font-size:22px;font-weight:700;color:#306AB3;cursor:pointer;
+  opacity:.9;transition:opacity .15s}
+.sb-item:hover{opacity:1}
+.sb-item.active{display:flex;flex-direction:column;align-items:center;gap:4px}
+.sb-item.active::after{content:'';display:block;width:44px;height:4px;
+  background:#306AB3;border-radius:999px}
+.sb-divider{width:160px;height:1px;background:#F0F0F0}
+.sb-footer{padding:24px;border-top:1px solid #F0F0F0;text-align:center}
+.sb-social{display:flex;justify-content:center;gap:20px;margin-bottom:18px}
+.sb-contact{display:flex;align-items:center;justify-content:center;
+  gap:8px;color:#306AB3;font-size:15px;font-weight:700;margin-bottom:10px}
+.sb-hours{color:#aaa;font-size:13px}
+.loader{display:none;position:fixed;inset:0;background:rgba(255,255,255,.92);z-index:999;
+  justify-content:center;align-items:center;flex-direction:column;gap:16px}
+.loader.on{display:flex}
+.spin{width:48px;height:48px;border:4px solid #d8e8f8;border-top-color:#306AB3;
+  border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.load-txt{font-size:15px;color:#306AB3;font-weight:700;font-family:'Cairo',sans-serif}
 .page-wrap{max-width:540px;margin:0 auto}
-
-/* ── TITLE SECTION ── */
+.design-img-wrap{position:relative;width:100%;display:flex;justify-content:center;
+  background:#fff;overflow:hidden}
+.design-img-wrap img{width:100%;max-width:480px;display:block;object-fit:cover}
 .title-sec{padding:22px 20px 16px;background:#fff}
 .page-title{font-size:30px;font-weight:900;color:#1a3b6e;
   font-style:italic;margin-bottom:10px;line-height:1.3}
 .page-desc{font-size:13.5px;color:#5f6878;line-height:1.85}
-
-/* ── FORM ── */
 .form-sec{padding:4px 20px 10px;background:#fff}
-.f-inp{width:100%;padding:14px 16px;
-  border:1.5px solid #d0d8e8;border-radius:8px;
-  font-size:14.5px;font-family:'Tajawal',sans-serif;
-  color:#222;background:#fff;
+.f-inp{width:100%;padding:14px 16px;border:1.5px solid #d0d8e8;border-radius:8px;
+  font-size:14.5px;font-family:'Cairo',sans-serif;color:#222;background:#fff;
   direction:rtl;text-align:right;outline:none;
-  transition:border-color .2s,box-shadow .2s;
-  -webkit-appearance:none;margin-bottom:12px}
+  transition:border-color .2s,box-shadow .2s;-webkit-appearance:none;margin-bottom:12px}
 .f-inp::placeholder{color:#a8b2c4;font-size:14px}
-.f-inp:focus{border-color:#2d5fa6;
-  box-shadow:0 0 0 3px rgba(45,95,166,.1)}
+.f-inp:focus{border-color:#306AB3;box-shadow:0 0 0 3px rgba(48,106,179,.1)}
 .f-inp.err{border-color:#d63030}
-
-/* ── BUTTONS ── */
-.btn-area{display:flex;flex-direction:column;
-  align-items:center;gap:10px;padding:10px 0 24px}
-.btn-prim{width:175px;padding:13px 0;
-  background:#2d5fa6;color:#fff;border:none;
-  border-radius:8px;font-size:15px;font-weight:700;
-  font-family:'Tajawal',sans-serif;cursor:pointer;
-  transition:background .18s,transform .12s}
-.btn-prim:hover{background:#1c4a8a}
-.btn-prim:active{transform:scale(.97)}
-.btn-prim:disabled{background:#93b4d8;cursor:not-allowed}
-.btn-dark{width:175px;padding:12px 0;
-  background:#1e3c7b;color:#fff;border:none;
-  border-radius:8px;font-size:14px;font-weight:700;
-  font-family:'Tajawal',sans-serif;cursor:pointer;
-  transition:background .18s}
-.btn-dark:hover{background:#152e60}
-
-/* ── PAGES TOGGLE ── */
-.pg{display:none}.pg.on{display:block}
-
-/* ── RESULT CARD ── */
-.res-card{border:1px solid #d8e2ef;border-radius:10px;
-  overflow:hidden;margin:0 20px 20px;background:#fff}
-.res-row{padding:14px 20px;border-bottom:1px solid #edf0f6;text-align:center}
-.res-row:last-child{border-bottom:none}
-.res-lbl{font-size:15px;font-weight:700;color:#1a3b6e;margin-bottom:5px}
-.res-val{font-size:14px;color:#3a3a50;font-weight:400}
-
-/* ── ERROR ── */
-.err-box{margin:0 20px 16px;padding:16px 18px;
-  background:#fff5f5;border:1.5px solid #f5c0c0;
-  border-radius:8px;text-align:center;display:none}
+.err-box{margin:0 0 16px;padding:16px 18px;background:#fff5f5;
+  border:1.5px solid #f5c0c0;border-radius:8px;text-align:center;display:none}
 .err-ttl{font-size:14px;font-weight:700;color:#c62828;margin-bottom:4px}
 .err-sub{font-size:13px;color:#888}
-
-/* ── LOADING ── */
-.loader{display:none;position:fixed;inset:0;
-  background:rgba(255,255,255,.92);z-index:999;
-  justify-content:center;align-items:center;
-  flex-direction:column;gap:14px}
-.loader.on{display:flex}
-.spin{width:46px;height:46px;border:4px solid #d8e8f8;
-  border-top-color:#2d5fa6;border-radius:50%;
-  animation:sp .8s linear infinite}
-@keyframes sp{to{transform:rotate(360deg)}}
-.load-txt{font-size:15px;color:#2d5fa6;font-weight:700;
-  font-family:'Tajawal',sans-serif}
-
-/* ── SIDEBAR ── */
-.sb-ov{display:none;position:fixed;inset:0;
-  background:rgba(0,0,0,.42);z-index:200}
-.sb-ov.on{display:block}
-.sb{position:fixed;top:0;right:-270px;width:260px;height:100%;
-  background:#fff;z-index:201;transition:right .28s;
-  box-shadow:-4px 0 18px rgba(0,0,0,.12);overflow-y:auto}
-.sb.on{right:0}
-.sb-hdr{background:linear-gradient(135deg,#1a3472,#2d5fa6);
-  padding:22px 18px;text-align:center;position:relative}
-.sb-close{position:absolute;top:14px;left:14px;width:28px;height:28px;
-  background:rgba(255,255,255,.2);border:none;border-radius:50%;
-  color:#fff;font-size:16px;cursor:pointer;
-  display:flex;align-items:center;justify-content:center}
-.sb-menu{list-style:none;padding:10px 0}
-.sb-menu li{border-bottom:1px solid #eef2f6}
-.sb-menu li a{display:flex;align-items:center;gap:10px;
-  padding:13px 18px;color:#333;text-decoration:none;
-  font-size:14px;font-weight:500;transition:background .2s}
-.sb-menu li a:hover{background:#eef5fb;color:#2d5fa6}
-
-/* ── FOOTER ── */
-.ftr{background:#2563a8;color:#fff;padding:30px 20px 20px}
-.ftr-logo{display:flex;align-items:center;justify-content:center;
-  gap:0;margin-bottom:18px;padding-bottom:18px;
-  border-bottom:1px solid rgba(255,255,255,.18);direction:ltr}
-.ftr-logo-txt{display:flex;flex-direction:column;
-  align-items:flex-end;line-height:1.1;margin-left:8px}
-.ftr-logo-ar{font-size:20px;font-weight:900;color:#fff}
-.ftr-logo-en{font-size:11px;color:rgba(255,255,255,.75);letter-spacing:.5px}
-.ftr-sep{width:1.5px;height:34px;background:rgba(255,255,255,.25);margin:0 8px}
-.ftr-desc{font-size:13px;color:rgba(255,255,255,.9);
-  line-height:1.9;text-align:center;margin-bottom:24px}
-.ftr-sec-ttl{font-size:16px;font-weight:700;text-align:center;
-  margin-bottom:12px;border-bottom:1px solid rgba(255,255,255,.2);
-  padding-bottom:8px}
-.ftr-links{list-style:none;text-align:center;margin-bottom:22px}
-.ftr-links li{padding:10px 0;font-size:14px;
-  color:rgba(255,255,255,.8);
-  border-bottom:1px solid rgba(255,255,255,.1)}
-.ftr-links li:last-child{border-bottom:none}
-.ftr-ministry{display:flex;justify-content:center;
-  gap:14px;align-items:center;margin:10px 0 14px}
-.ftr-badge{background:rgba(255,255,255,.12);border-radius:8px;
-  padding:6px 10px;font-size:10px;text-align:center;min-width:68px}
-.ftr-badge-ico{font-size:18px;margin-bottom:2px}
-.ftr-contact{display:flex;justify-content:space-between;
-  align-items:center;margin-bottom:6px;direction:ltr}
-.ftr-nums p{font-size:13px;color:rgba(255,255,255,.85);margin-bottom:3px}
-.ftr-nums .em{color:rgba(255,255,255,.65);font-size:11.5px}
-.ftr-icos{display:flex;flex-direction:column;gap:6px;align-items:center}
-.ftr-ico{width:28px;height:28px;border:1px solid rgba(255,255,255,.4);
-  border-radius:50%;display:flex;align-items:center;
-  justify-content:center;font-size:12px}
-.ftr-hours{font-size:12px;opacity:.65;text-align:right;margin-bottom:14px}
-.ftr-social{display:flex;justify-content:center;gap:10px;margin-bottom:16px}
-.soc-ico{width:32px;height:32px;border:1px solid rgba(255,255,255,.4);
-  border-radius:50%;display:flex;align-items:center;
-  justify-content:center;font-size:13px;font-weight:700;cursor:pointer}
-.ftr-copy{font-size:11.5px;opacity:.6;text-align:center;margin-bottom:8px}
-.ftr-btm{display:flex;justify-content:center;gap:14px;
-  font-size:11.5px;opacity:.75}
-.ftr-btm a{color:#fff;text-decoration:none}
-.ftr-btm a:hover{text-decoration:underline}
-
-@media(max-width:420px){.page-title{font-size:26px}}
-@media print{.hdr,.ftr,.loader,.btn-area,.sb,.sb-ov{display:none!important}
-  .res-card{border:1px solid #ccc;box-shadow:none}}
+.btn-area{display:flex;flex-direction:column;align-items:center;gap:12px;padding:12px 0 28px}
+.btn-prim{width:180px;padding:14px 0;background:#306AB3;color:#fff;border:none;
+  border-radius:8px;font-size:15px;font-weight:700;font-family:'Cairo',sans-serif;
+  cursor:pointer;transition:background .18s,transform .12s;
+  box-shadow:0 4px 16px rgba(48,106,179,.2)}
+.btn-prim:hover{background:#285a9a}
+.btn-prim:active{transform:scale(.97)}
+.btn-prim:disabled{background:#93b4d8;cursor:not-allowed}
+.btn-dark{width:180px;padding:13px 0;background:#1e3c7b;color:#fff;border:none;
+  border-radius:8px;font-size:14px;font-weight:700;font-family:'Cairo',sans-serif;
+  cursor:pointer;transition:background .18s}
+.btn-dark:hover{background:#152e60}
+#secRes{display:none}
+.res-title-area{text-align:center;padding:32px 20px 24px;animation:fadeUp .5s ease both}
+.res-main-title{font-size:30px;font-weight:900;color:#306AB3;
+  letter-spacing:-.5px;margin-bottom:8px;line-height:1.2}
+.res-sub-title{font-size:15px;font-weight:600;color:#888}
+.res-new-card{background:#F7F7F7;border:1px solid #D1D1D1;border-radius:4px;
+  margin:0 20px 24px;padding:32px 28px;text-align:center;
+  box-shadow:0 1px 6px rgba(0,0,0,.06);animation:fadeUp .55s ease .05s both}
+.res-field{margin-bottom:24px;opacity:0;transform:translateY(10px);
+  animation:fieldIn .4s ease forwards}
+.res-field:last-child{margin-bottom:0}
+.res-field-lbl{font-size:19px;font-weight:900;color:#454545;
+  margin-bottom:6px;line-height:1.2}
+.res-field-val{font-size:20px;font-weight:500;color:#454545;line-height:1.3}
+.res-field:nth-child(1){animation-delay:.10s}
+.res-field:nth-child(2){animation-delay:.18s}
+.res-field:nth-child(3){animation-delay:.26s}
+.res-field:nth-child(4){animation-delay:.34s}
+.res-field:nth-child(5){animation-delay:.42s}
+.res-field:nth-child(6){animation-delay:.50s}
+.res-field:nth-child(7){animation-delay:.58s}
+.res-btn-area{display:flex;gap:14px;padding:0 20px 32px;
+  animation:fadeUp .6s ease .15s both}
+.res-btn-primary{flex:1;padding:16px 0;background:#306AB3;color:#fff;
+  border:none;border-radius:10px;font-size:17px;font-weight:700;
+  font-family:'Cairo',sans-serif;cursor:pointer;
+  box-shadow:0 6px 20px rgba(48,106,179,.25);
+  transition:background .18s,transform .12s}
+.res-btn-primary:hover{background:#285a9a}
+.res-btn-primary:active{transform:scale(.97)}
+.res-btn-outline{flex:1;padding:16px 0;background:#fff;color:#306AB3;
+  border:2px solid #306AB3;border-radius:10px;font-size:17px;font-weight:700;
+  font-family:'Cairo',sans-serif;cursor:pointer;
+  transition:background .18s,transform .12s}
+.res-btn-outline:hover{background:#EEF4FC}
+.res-btn-outline:active{transform:scale(.97)}
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fieldIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+.ftr{background:#306AB3;color:#fff;padding:48px 20px 32px;overflow:hidden}
+.ftr-inner{max-width:480px;margin:0 auto;display:flex;flex-direction:column;
+  align-items:center;text-align:center}
+.ftr-logo-wrap{margin-bottom:28px}
+.ftr-desc{font-size:13.5px;color:rgba(255,255,255,.88);line-height:1.9;
+  max-width:360px;margin-bottom:28px}
+.ftr-divider{width:100%;height:1px;background:rgba(255,255,255,.15);margin-bottom:28px}
+.ftr-sec-title{font-size:18px;font-weight:700;margin-bottom:16px}
+.ftr-links{list-style:none;margin-bottom:28px;display:flex;flex-direction:column;gap:14px}
+.ftr-links li{font-size:15px;color:rgba(255,255,255,.82);cursor:pointer}
+.ftr-links li:hover{color:#fff}
+.ftr-contact-row{display:flex;align-items:center;gap:10px;margin-bottom:10px;
+  font-size:16px;justify-content:center}
+.ftr-hours{font-size:13px;opacity:.65;margin-bottom:28px}
+.ftr-social{display:flex;justify-content:center;gap:24px;margin-bottom:28px}
+.ftr-social-ico{font-size:18px;opacity:.85;cursor:pointer}
+.ftr-logos-row{display:flex;justify-content:center;padding-top:20px;
+  border-top:1px solid rgba(255,255,255,.12);width:100%;
+  opacity:.5;filter:grayscale(1) brightness(10);margin-bottom:16px}
+.ftr-copy{font-size:13px;opacity:.4}
+@media(max-width:420px){
+  .page-title{font-size:26px}.res-main-title{font-size:26px}
+  .res-field-lbl{font-size:17px}.res-field-val{font-size:18px}
+  .res-btn-primary,.res-btn-outline{font-size:15px;padding:14px 0}
+}
+@media(max-width:360px){
+  .res-new-card{margin:0 12px 20px;padding:24px 18px}
+  .res-btn-area{padding:0 12px 28px}
+}
+@media print{
+  .hdr,.ftr,.loader,.btn-area,.res-btn-area,.sb,.sb-overlay{display:none!important}
+  .res-new-card{border:1px solid #ccc;box-shadow:none}
+}
 """
 
-# ══════════════════════════════════════════════════════════════
-# مكوّنات HTML مشتركة
-# ══════════════════════════════════════════════════════════════
-def _sidebar(check_sb):
-    return f"""
-<div class="sb-ov" id="sbOv" onclick="sbClose()"></div>
-<div class="sb" id="sb">
-  <button class="sb-close" onclick="sbClose()">✕</button>
-  <div class="sb-hdr">
-    <div style="display:flex;align-items:center;justify-content:center;gap:0;direction:ltr">
-      <div class="ftr-logo-txt" style="margin-left:8px">
-        <span style="font-size:19px;font-weight:900;color:#fff">sehasaa</span>
-        <span style="font-size:11px;color:rgba(255,255,255,.75)">sehasaa</span>
-      </div>
-      <div style="width:1.5px;height:32px;background:rgba(255,255,255,.3);margin:0 8px"></div>
-      {check_sb}
-    </div>
-  </div>
-  <ul class="sb-menu">
-    <li><a href="#">🏠 الرئيسية</a></li>
-    <li><a href="#">📋 الإجازات المرضية</a></li>
-    <li><a href="#">🔍 الاستعلام عن التقارير</a></li>
-    <li><a href="#">📄 طلب إجازة</a></li>
-    <li><a href="#">📊 التقارير</a></li>
-    <li><a href="#">⚙️ الإعدادات</a></li>
-    <li><a href="#">❓ المساعدة</a></li>
-  </ul>
-</div>"""
-
-def _header(check_hdr):
-    return f"""
-<header class="hdr">
-  <button class="hdr-ham" onclick="sbOpen()">
-    <span></span><span></span><span></span>
-  </button>
-  <div class="hdr-logo">
-    <div class="hdr-logo-txt">
-      <span class="logo-ar">sehasaa</span>
-      <span class="logo-en">sehasaa</span>
-    </div>
-    <div class="hdr-sep"></div>
-    {check_hdr}
-  </div>
-  <div style="width:30px"></div>
-</header>"""
-
-def _footer(check_ftr):
-    return f"""
-<footer class="ftr">
-  <div class="ftr-logo">
-    <div class="ftr-logo-txt">
-      <span class="ftr-logo-ar">sehasaa</span>
-      <span class="ftr-logo-en">sehasaa</span>
-    </div>
-    <div class="ftr-sep"></div>
-    {check_ftr}
-  </div>
-  <p class="ftr-desc">
-    sehasaa تخدم جميع المنشآت الطبية من خلال تقديم الخدمات الصحية إلكترونياً
-    لجميع المنشآت الطبية وتسعى إلى توحيد وأتمتة الاجراءات والخدمات بما في دوره
-    رفع جودة الاداء وخفض التكاليف.
-  </p>
-  <div class="ftr-sec-ttl">القائمة الرئيسية</div>
-  <ul class="ftr-links">
-    <li>الخدمات</li><li>الاستعلامات</li>
-    <li>الأسئلة الشائعة</li><li>تواصل معنا</li>
-  </ul>
-  <div class="ftr-sec-ttl">تواصل معنا</div>
-  <div class="ftr-ministry">
-    <div class="ftr-badge">
-      <div class="ftr-badge-ico">🏥</div>
-      <div>sehasaa.com</div>
-      <div style="font-size:9px;opacity:.7">sehasaa.com</div>
-    </div>
-    <div class="ftr-badge">
-      <div class="ftr-badge-ico">📊</div>
-      <div style="font-weight:700">Lean</div>
-    </div>
-  </div>
-  <div class="ftr-contact">
-    <div class="ftr-icos">
-      <div class="ftr-ico">📞</div>
-      <div class="ftr-ico">✉</div>
-      <div class="ftr-ico">💬</div>
-    </div>
-    <div class="ftr-nums">
-      <p>920002005</p>
-      <p class="em">support@sehasaa.com</p>
-      <p>920002005</p>
-    </div>
-  </div>
-  <p class="ftr-hours">أوقات العمل: الأحد حتى الخميس 8 ص - 11 م</p>
-  <div class="ftr-social">
-    <div class="soc-ico">𝕏</div>
-    <div class="soc-ico">
-      <svg width="14" height="11" viewBox="0 0 16 12" fill="white">
-        <path d="M15.6 1.9C15.4 1.1 14.8.5 14 .3 12.8 0 8 0 8 0S3.2 0 2 .3C1.2.5.6 1.1.4 1.9 0 3.2 0 6 0 6S0 8.8.4 10.1C.6 10.9 1.2 11.5 2 11.7 3.2 12 8 12 8 12S12.8 12 14 11.7C14.8 11.5 15.4 10.9 15.6 10.1 16 8.8 16 6 16 6S16 3.2 15.6 1.9ZM6.4 8.5V3.5L10.6 6 6.4 8.5Z"/>
-      </svg>
-    </div>
-  </div>
-  <p class="ftr-copy">sehasaa.com © 2026</p>
-  <div class="ftr-btm">
-    <a href="#">سياسة الخصوصية وشروط الاستخدام</a>
-    <span style="opacity:.4">|</span>
-    <a href="#">دليل الاستخدام</a>
-  </div>
-</footer>"""
-
 _JS = """
-function sbOpen(){document.getElementById('sb').classList.add('on');document.getElementById('sbOv').classList.add('on');document.body.style.overflow='hidden'}
-function sbClose(){document.getElementById('sb').classList.remove('on');document.getElementById('sbOv').classList.remove('on');document.body.style.overflow=''}
-function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
-document.addEventListener('keydown',e=>{if(e.key==='Enter')doQuery()});
-
+function sbOpen(){
+  document.getElementById('sb').classList.add('on');
+  document.getElementById('sbOv').classList.add('on');
+  document.body.style.overflow='hidden';
+}
+function sbClose(){
+  document.getElementById('sb').classList.remove('on');
+  document.getElementById('sbOv').classList.remove('on');
+  document.body.style.overflow='';
+}
+document.addEventListener('keydown',function(e){
+  if(e.key==='Escape')sbClose();
+  if(e.key==='Enter'&&document.getElementById('secForm').style.display!=='none')doQuery();
+});
+function esc(s){
+  return String(s??'')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 async function doQuery(){
-  const gsl=(document.getElementById('gI').value||'').trim().toUpperCase();
-  const id=(document.getElementById('iI').value||'').trim();
-  const btn=document.getElementById('qB');
-  const errBox=document.getElementById('errBox');
+  var gsl=(document.getElementById('gI').value||'').trim().toUpperCase();
+  var id=(document.getElementById('iI').value||'').trim();
+  var btn=document.getElementById('qB');
+  var errBox=document.getElementById('errBox');
   errBox.style.display='none';
   document.getElementById('gI').classList.remove('err');
   document.getElementById('iI').classList.remove('err');
-
   if(!gsl){document.getElementById('gI').classList.add('err')}
   if(!id){document.getElementById('iI').classList.add('err')}
   if(!gsl||!id){
@@ -375,47 +254,50 @@ async function doQuery(){
   document.getElementById('loader').classList.add('on');
   btn.textContent='جاري الاستعلام...';btn.disabled=true;
   try{
-    const r=await fetch('/api/verify?gsl='+encodeURIComponent(gsl)+'&id='+encodeURIComponent(id));
-    const d=await r.json();
+    var r=await fetch('/api/verify?gsl='+encodeURIComponent(gsl)+'&id='+encodeURIComponent(id));
+    var d=await r.json();
     document.getElementById('loader').classList.remove('on');
     if(d.success){
-      const v=d.data;
-      const issued=(v.issued_at||'').slice(0,10)||'—';
-      const days=v.days_count?v.days_count+' يوم':'—';
-      const rows=[
-        ['الاسم:',v.full_name||'—'],
-        ['تاريخ إصدار تقرير الإجازة:',issued],
-        ['تبدأ من:',v.leave_date||'—'],
-        ['وحتى:',v.end_date||'—'],
-        ['المدة بالأيام:',days],
-        ['اسم الطبيب:',v.doctor||'—'],
-        ['المسمى الوظيفي:',v.specialty||'—'],
+      var v=d.data;
+      var issued=(v.issued_at||'').slice(0,10)||'—';
+      var days=v.days_count?v.days_count+' يوم':'—';
+      var fields=[
+        ['الاسم:',               v.full_name  ||'—'],
+        ['تاريخ إصدار تقرير الإجازة:', issued           ],
+        ['تبدأ من:',             v.leave_date ||'—'],
+        ['وحتى:',               v.end_date   ||'—'],
+        ['المدة بالأيام:',       days                ],
+        ['إسم الطبيب:',          v.doctor     ||'—'],
+        ['المسمى الوظيفي:',      v.specialty  ||'—'],
       ];
-      const rowsHtml=rows.map(([l,v])=>
-        `<div class="res-row"><div class="res-lbl">${esc(l)}</div><div class="res-val">${esc(v)}</div></div>`
-      ).join('');
-      document.getElementById('resCard').innerHTML=rowsHtml;
+      var html=fields.map(function(f){
+        return '<div class="res-field"><div class="res-field-lbl">'+esc(f[0])
+          +'</div><div class="res-field-val">'+esc(f[1])+'</div></div>';
+      }).join('');
+      document.getElementById('resCardNew').innerHTML=html;
       document.getElementById('secForm').style.display='none';
       document.getElementById('secRes').style.display='block';
+      window.scrollTo({top:0,behavior:'smooth'});
     }else{
       errBox.style.display='block';
-      document.getElementById('eMsg').textContent=d.message||'لم يُعثر على نتيجة. تأكد من رمز الخدمة ورقم الهوية.';
+      document.getElementById('eMsg').textContent=
+        d.message||'لم يُعثر على نتيجة. تأكد من رمز الخدمة ورقم الهوية.';
     }
   }catch(e){
     document.getElementById('loader').classList.remove('on');
     errBox.style.display='block';
     document.getElementById('eMsg').textContent='خطأ في الاتصال بالخادم، حاول مجدداً.';
   }
-  window.scrollTo({top:0,behavior:'smooth'});
   btn.textContent='استعلام';btn.disabled=false;
 }
-
 function doReset(){
-  ['gI','iI'].forEach(i=>{document.getElementById(i).value='';document.getElementById(i).classList.remove('err')});
+  ['gI','iI'].forEach(function(id){
+    var el=document.getElementById(id);el.value='';el.classList.remove('err');
+  });
   document.getElementById('errBox').style.display='none';
   document.getElementById('secRes').style.display='none';
   document.getElementById('secForm').style.display='block';
-  document.getElementById('resCard').innerHTML='';
+  document.getElementById('resCardNew').innerHTML='';
   document.getElementById('qB').textContent='استعلام';
   document.getElementById('qB').disabled=false;
   document.getElementById('gI').focus();
@@ -423,56 +305,111 @@ function doReset(){
 }
 """
 
-# ══════════════════════════════════════════════════════════════
-# بناء HTML الكامل
-# ══════════════════════════════════════════════════════════════
+def _header():
+    return f"""
+<header class="hdr">
+  <button class="hdr-ham" onclick="sbOpen()" aria-label="القائمة">
+    <span></span><span></span><span></span>
+  </button>
+  {seha_logo_block()}
+  <div class="hdr-right"></div>
+</header>"""
+
+def _sidebar():
+    return f"""
+<div class="sb-overlay" id="sbOv" onclick="sbClose()"></div>
+<div class="sb" id="sb">
+  <div class="sb-hdr">
+    {seha_logo_block()}
+    <button class="sb-close" onclick="sbClose()">✕</button>
+  </div>
+  <div class="sb-body">
+    <div class="sb-item active" onclick="sbClose()">القائمة الرئيسية</div>
+    <div class="sb-divider"></div>
+    <div class="sb-item" onclick="sbClose()">الخدمات</div>
+    <div class="sb-divider"></div>
+    <div class="sb-item" onclick="sbClose()">الاستعلامات</div>
+    <div class="sb-divider"></div>
+    <div class="sb-item" onclick="sbClose()">الأسئلة الشائعة</div>
+    <div class="sb-divider"></div>
+    <div class="sb-item" onclick="sbClose()">الأثر البيئي</div>
+    <div class="sb-divider"></div>
+    <div class="sb-item" onclick="sbClose()">تواصل معنا</div>
+  </div>
+  <div class="sb-footer">
+    <div class="sb-social">
+      <span style="font-size:20px;font-weight:700;color:#306AB3;opacity:.8">𝕏</span>
+      <span style="font-size:20px;color:#306AB3;opacity:.8">📷</span>
+      <span style="font-size:20px;color:#306AB3;opacity:.8">▶</span>
+    </div>
+    <div class="sb-contact"><span>📞</span><span>920002005</span></div>
+    <p class="sb-hours">أوقات العمل: الأحد-الخميس 8ص - 11م</p>
+  </div>
+</div>"""
+
+def _footer():
+    logo_ftr = seha_logo_block("#fff", "rgba(255,255,255,0.85)")
+    svg_ftr  = seha_ribbed_svg("rgba(255,255,255,0.7)", 52)
+    return f"""
+<footer class="ftr">
+  <div class="ftr-inner">
+    <div class="ftr-logo-wrap">{logo_ftr}</div>
+    <p class="ftr-desc">
+      منصة صحة تخدم جميع المنشآت الطبية من خلال تقديم الخدمات الصحية
+      إلكترونياً وتسعى إلى توحيد وأتمتة الإجراءات والخدمات بما في دورة
+      رفع جودة الأداء وخفض التكاليف.
+    </p>
+    <div class="ftr-divider"></div>
+    <div class="ftr-sec-title">القائمة الرئيسية</div>
+    <ul class="ftr-links">
+      <li>الخدمات</li><li>الاستعلامات</li>
+      <li>الأسئلة الشائعة</li><li>الأثر البيئي</li>
+      <li>تواصل معنا</li>
+    </ul>
+    <div class="ftr-divider"></div>
+    <div class="ftr-sec-title">تواصل معنا</div>
+    <div class="ftr-contact-row"><span>📞</span><span>920002005</span></div>
+    <div class="ftr-contact-row"><span>✉</span><span>support@seha.sa</span></div>
+    <div class="ftr-contact-row"><span>💬</span><span>920002005</span></div>
+    <p class="ftr-hours">أوقات العمل: الأحد-الخميس 8ص - 11م</p>
+    <div class="ftr-social">
+      <span class="ftr-social-ico" style="font-size:22px;font-weight:700">𝕏</span>
+      <span class="ftr-social-ico">📷</span>
+      <span class="ftr-social-ico">▶</span>
+    </div>
+    <div class="ftr-logos-row">{svg_ftr}</div>
+    <p class="ftr-copy">معتمد من قبل وزارة الصحة 2026</p>
+  </div>
+</footer>"""
+
 def build_html():
-    chk_hdr = seha_check_svg("#2d5fa6", 44)
-    chk_ftr = seha_check_svg("white",   46)
-    chk_sb  = seha_check_svg("white",   36)
-
-    # ── صورة صفحة النموذج ──
-    form_img_tag = (
-        f'<div class="design-img-wrap" style="margin-bottom:0">'
-        f'<img src="{_IMG_FORM}" alt="نموذج-الاستعلام" '
-        f'style="width:100%;max-width:480px;display:block;border-bottom:1px solid #e4e9f0">'
-        f'</div>'
+    form_img = (
+        f'<div class="design-img-wrap"><img src="{_IMG_FORM}" alt="نموذج الاستعلام" loading="eager"></div>'
     ) if _IMG_FORM else ""
-
-    # ── صورة خلفية صفحة النتيجة ──
-    result_bg_tag = (
-        f'<div class="design-img-wrap" style="margin-bottom:0">'
-        f'<img src="{_IMG_RESULT_NEW}" alt="نتيجة-الإجازة" '
-        f'style="width:100%;max-width:480px;display:block;border-bottom:1px solid #e4e9f0">'
-        f'</div>'
-    ) if _IMG_RESULT_NEW else ""
 
     return f"""<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>الإجازات المرضية - sehasaa</title>
-<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=5.0">
+<meta name="theme-color" content="#306AB3">
+<title>الإجازات المرضية - منصة صحة</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>{_CSS}</style>
 </head>
 <body>
-
-{_sidebar(chk_sb)}
-{_header(chk_hdr)}
-
-<div class="loader" id="loader">
+{_sidebar()}
+{_header()}
+<div class="loader" id="loader" role="status" aria-live="polite">
   <div class="spin"></div>
   <div class="load-txt">جاري الاستعلام...</div>
 </div>
-
 <div class="page-wrap">
-
-  <!-- ══ قسم النموذج (صورة + عنوان + حقول) ══ -->
+  <!-- قسم النموذج -->
   <div id="secForm">
-
-    {form_img_tag}
-
+    {form_img}
     <div class="title-sec">
       <h1 class="page-title">الإجازات المرضية</h1>
       <p class="page-desc">
@@ -480,55 +417,53 @@ def build_html():
         طلبك للإجازة ويمكنك طباعتها عن طريق تطبيق صحتي
       </p>
     </div>
-
     <div class="form-sec">
-      <div class="err-box" id="errBox">
+      <div class="err-box" id="errBox" role="alert">
         <div class="err-ttl">⚠️ تعذّر الاستعلام</div>
         <div class="err-sub" id="eMsg"></div>
       </div>
       <input type="text" class="f-inp" id="gI"
         placeholder="رمز الخدمة"
         autocomplete="off" autocorrect="off"
-        autocapitalize="characters" spellcheck="false">
+        autocapitalize="characters" spellcheck="false"
+        aria-label="رمز الخدمة">
       <input type="text" class="f-inp" id="iI"
         placeholder="رقم الهوية / الإقامة"
-        autocomplete="off" inputmode="numeric" maxlength="10">
+        autocomplete="off" inputmode="numeric" maxlength="10"
+        aria-label="رقم الهوية أو الإقامة">
     </div>
-
     <div class="btn-area">
       <button class="btn-prim" id="qB" onclick="doQuery()">استعلام</button>
       <button class="btn-dark" onclick="doReset()">رجوع للاستعلامات</button>
     </div>
   </div>
-
-  <!-- ══ قسم النتيجة — خلفية result_bg.jpg فقط ══ -->
-  <div id="secRes" style="display:none">
-    {result_bg_tag}
-    <div class="res-card" id="resCard"></div>
-    <div class="btn-area">
-      <button class="btn-prim" onclick="doReset()">استعلام جديد</button>
-      <button class="btn-dark" onclick="doReset()">رجوع للاستعلامات</button>
+  <!-- قسم النتيجة — التصميم الجديد -->
+  <div id="secRes">
+    <div class="res-title-area">
+      <h2 class="res-main-title">تقرير إجازة مرضية</h2>
+      <p class="res-sub-title">وزارة الصحة - الخدمات الإلكترونية</p>
+    </div>
+    <div class="res-new-card" id="resCardNew" role="region" aria-label="نتيجة الاستعلام"></div>
+    <div class="res-btn-area">
+      <button class="res-btn-primary" onclick="doReset()">استعلام جديد</button>
+      <button class="res-btn-outline"  onclick="doReset()">رجوع للاستعلامات</button>
     </div>
   </div>
-
 </div>
-
-{_footer(chk_ftr)}
-
+{_footer()}
 <script>{_JS}</script>
 </body>
 </html>"""
 
-
-# ══════════════════════════════════════════════════════════════
-# Cache HTML
-# ══════════════════════════════════════════════════════════════
 _HTML_CACHE = None
 def get_html():
     global _HTML_CACHE
     if _HTML_CACHE is None:
         _HTML_CACHE = build_html()
     return _HTML_CACHE
+
+
+
 
 
 # ══════════════════════════════════════════════════════════════
