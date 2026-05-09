@@ -531,8 +531,15 @@ def get_html():
 @app.route("/")
 @app.route("/verify")
 @app.route("/verify/<path:gsl_code>")
-def index(gsl_code=None):
+@app.route("/inquiries")
+@app.route("/inquiries/<path:anything>")
+def index(gsl_code=None, anything=None):
     return get_html()
+
+# استقبال أي مسار غير معروف وإرجاع الصفحة الرئيسية (لدعم hash routing)
+@app.errorhandler(404)
+def not_found(e):
+    return get_html(), 200
 
 
 @app.route("/api/verify")

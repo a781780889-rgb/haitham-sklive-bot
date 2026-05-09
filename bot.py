@@ -328,14 +328,14 @@ def get_scaffold_price():
     return float(db.get_setting("scaffold_price", "5.0"))
 
 def get_website_url():
-    url = db.get_setting("website_url", "https://www.sehasaa.com/#/inquiries/slenquiry")
+    url = db.get_setting("website_url", "https://www.sehasaa.com/")
     # استبدال أي رابط قديم خاطئ تلقائياً
     if (not url
         or "sehaseinquiresslendquiry.com" in url
         or "seah.s.com" in url
         or "seha-s.com" in url
         or "seha.sa" in url):
-        url = "https://www.sehasaa.com/#/inquiries/slenquiry"
+        url = "https://www.sehasaa.com/"
     return url
 
 def is_admin_user(user_id: int) -> bool:
@@ -3822,9 +3822,6 @@ def _run_flask():
     _flask_app.run(host="0.0.0.0", port=port)
 
 if __name__ == "__main__":
-    # شغّل Flask في thread منفصل حتى يتعرف عليه Railway
     _t = threading.Thread(target=_run_flask, daemon=True)
     _t.start()
-    logger.info(f"🌐 Web server يعمل على بورت {os.environ.get('PORT', 8080)}")
-    # شغّل البوت
     main()
