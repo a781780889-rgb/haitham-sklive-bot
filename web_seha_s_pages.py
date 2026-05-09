@@ -102,8 +102,9 @@ body{font-family:'Cairo',Arial,sans-serif;background:#fff;direction:rtl;
 /* LOADING */
 .loading-overlay{display:none;position:fixed;inset:0;
   background:rgba(255,255,255,.92);z-index:999;
-  justify-content:center;align-items:center;flex-direction:column;gap:14px}
-.loading-overlay.active{display:flex}
+  justify-content:center;align-items:center;flex-direction:column;gap:14px;
+  pointer-events:none}
+.loading-overlay.active{display:flex;pointer-events:all}
 .spinner{width:46px;height:46px;border:4px solid #dbe8f5;
   border-top:4px solid #1a6db5;border-radius:50%;
   animation:spin .8s linear infinite}
@@ -293,13 +294,11 @@ def build_form_html():
   <input type="text" class="form-input" id="gslInp"
     placeholder="رمز الخدمة"
     autocomplete="off" autocorrect="off"
-    autocapitalize="characters" spellcheck="false"
-    onfocus="scrollToInput(this)">
+    autocapitalize="characters" spellcheck="false">
 
   <input type="text" class="form-input" id="idInp"
     placeholder="رقم الهوية / الإقامة"
-    autocomplete="off" inputmode="numeric" maxlength="10"
-    onfocus="scrollToInput(this)">
+    autocomplete="off" inputmode="numeric" maxlength="10">
 
   <div class="btn-wrap">
     <button class="btn btn-primary" id="qBtn" onclick="doQuery()">استعلام</button>
@@ -310,28 +309,13 @@ def build_form_html():
 {_footer_html()}
 
 <script>
-document.addEventListener('keydown', e => {{
-  if (e.key === 'Enter') doQuery();
+/* Enter فقط من داخل حقول الإدخال وليس من كل الصفحة */
+document.getElementById('gslInp').addEventListener('keydown', function(e) {{
+  if (e.key === 'Enter') {{ e.preventDefault(); document.getElementById('idInp').focus(); }}
 }});
-
-/* إصلاح مشكلة اختفاء حقل رمز الخدمة عند فتح لوحة المفاتيح في الجوال */
-function scrollToInput(el) {{
-  setTimeout(function() {{
-    el.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
-  }}, 300);
-}}
-
-/* منع تقليص الصفحة عند ظهور لوحة المفاتيح في بعض المتصفحات */
-if (window.visualViewport) {{
-  window.visualViewport.addEventListener('resize', function() {{
-    var activeEl = document.activeElement;
-    if (activeEl && (activeEl.id === 'gslInp' || activeEl.id === 'idInp')) {{
-      setTimeout(function() {{
-        activeEl.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
-      }}, 100);
-    }}
-  }});
-}}
+document.getElementById('idInp').addEventListener('keydown', function(e) {{
+  if (e.key === 'Enter') {{ e.preventDefault(); doQuery(); }}
+}});
 
 function esc(s) {{
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -394,7 +378,6 @@ function doReset() {{
   document.getElementById('gslInp').value = '';
   document.getElementById('idInp').value  = '';
   document.getElementById('errBox').style.display = 'none';
-  document.getElementById('gslInp').focus();
 }}
 </script>
 </body>
