@@ -73,12 +73,6 @@ body{font-family:'Cairo',Arial,sans-serif;background:#fff;direction:rtl;
   margin-bottom:10px;font-style:italic}
 .page-desc{font-size:13px;color:#666;line-height:1.85;margin-bottom:24px}
 
-/* إصلاح: تثبيت حقول الإدخال وإبقائها مرئية عند فتح الكيبورد */
-#gslInp, #idInp {
-  position:relative;
-  z-index:1;
-}
-
 /* FORM */
 .form-input{width:100%;padding:13px 16px;border:1.5px solid #cdd4de;
   border-radius:8px;font-family:'Cairo',sans-serif;font-size:14px;
@@ -293,13 +287,11 @@ def build_form_html():
   <input type="text" class="form-input" id="gslInp"
     placeholder="رمز الخدمة"
     autocomplete="off" autocorrect="off"
-    autocapitalize="characters" spellcheck="false"
-    onfocus="scrollToInput(this)">
+    autocapitalize="characters" spellcheck="false">
 
   <input type="text" class="form-input" id="idInp"
     placeholder="رقم الهوية / الإقامة"
-    autocomplete="off" inputmode="numeric" maxlength="10"
-    onfocus="scrollToInput(this)">
+    autocomplete="off" inputmode="numeric" maxlength="10">
 
   <div class="btn-wrap">
     <button class="btn btn-primary" id="qBtn" onclick="doQuery()">استعلام</button>
@@ -313,25 +305,6 @@ def build_form_html():
 document.addEventListener('keydown', e => {{
   if (e.key === 'Enter') doQuery();
 }});
-
-/* إصلاح مشكلة اختفاء حقل رمز الخدمة عند فتح لوحة المفاتيح في الجوال */
-function scrollToInput(el) {{
-  setTimeout(function() {{
-    el.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
-  }}, 300);
-}}
-
-/* منع تقليص الصفحة عند ظهور لوحة المفاتيح في بعض المتصفحات */
-if (window.visualViewport) {{
-  window.visualViewport.addEventListener('resize', function() {{
-    var activeEl = document.activeElement;
-    if (activeEl && (activeEl.id === 'gslInp' || activeEl.id === 'idInp')) {{
-      setTimeout(function() {{
-        activeEl.scrollIntoView({{ behavior: 'smooth', block: 'center' }});
-      }}, 100);
-    }}
-  }});
-}}
 
 function esc(s) {{
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
