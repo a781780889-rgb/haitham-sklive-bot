@@ -395,13 +395,15 @@ def build_result_html(data: dict):
 
     return render_template(
         "result_page.html",
-        name   = v("name"),
-        issued = v("issued"),
-        start  = v("start"),
-        end    = v("end"),
-        days   = v("days") + (" يوم" if v("days") != "—" else ""),
-        doctor = v("doctor"),
-        spec   = v("spec"),
+        gsl_code  = v("gsl"),
+        id_number = v("id"),
+        name      = v("name"),
+        issued    = v("issued"),
+        start     = v("start"),
+        end       = v("end"),
+        days      = v("days") + (" يوم" if v("days") != "—" else ""),
+        doctor    = v("doctor"),
+        spec      = v("spec"),
     )
 
 # Flask Routes
