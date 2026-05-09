@@ -3805,14 +3805,13 @@ def main():
 
 
 import threading
-import web as _web_module
 
 def _run_web():
+    import web as _web_module
     port = int(os.environ.get("PORT", 8080))
     _web_module.app.run(host="0.0.0.0", port=port, debug=False)
 
 if __name__ == "__main__":
     t = threading.Thread(target=_run_web, daemon=True)
     t.start()
-    logger.info(f"🌐 Web server يعمل على بورت {os.environ.get('PORT', 8080)}")
     main()
