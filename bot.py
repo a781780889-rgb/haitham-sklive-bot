@@ -3804,5 +3804,27 @@ def main():
     application.run_polling(drop_pending_updates=True)
 
 
+import threading
+from flask import Flask as _Flask
+
+_flask_app = _Flask(__name__)
+
+@_flask_app.route("/")
+def _home():
+    return "✅ البوت يعمل", 200
+
+@_flask_app.route("/health")
+def _health():
+    return "OK", 200
+
+def _run_flask():
+    port = int(os.environ.get("PORT", 8080))
+    _flask_app.run(host="0.0.0.0", port=port)
+
 if __name__ == "__main__":
+    # شغّل Flask في thread منفصل حتى يتعرف عليه Railway
+    _t = threading.Thread(target=_run_flask, daemon=True)
+    _t.start()
+    logger.info(f"🌐 Web server يعمل على بورت {os.environ.get('PORT', 8080)}")
+    # شغّل البوت
     main()
