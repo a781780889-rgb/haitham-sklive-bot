@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<meta name="theme-color" content="#0066FF" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#070B14" media="(prefers-color-scheme: dark)">
+<title>نتيجة التحقّق · صَحَّة</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=IBM+Plex+Sans:wght@500;600;700&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --brand-50:  #EFF6FF; --brand-100: #DBEAFE; --brand-200: #BFDBFE;
+  --brand-400: #60A5FA; --brand-500: #3B82F6; --brand-600: #2563EB;
+  --brand-700: #1D4ED8; --brand-900: #1E3A8A;
+  --cyan-400: #22D3EE; --cyan-500: #06B6D4;
+  --success: #10B981; --warning: #F59E0B; --danger: #EF4444;
+  
+  --grad-primary: linear-gradient(135deg, #0066FF 0%, #0EA5E9 100%);
+  --grad-success: linear-gradient(135deg, #059669 0%, #10B981 100%);
+  --grad-aurora: radial-gradient(at 20% 0%, rgba(59,130,246,0.18) 0%, transparent 50%),
+                 radial-gradient(at 80% 30%, rgba(14,165,233,0.16) 0%, transparent 50%),
+                 radial-gradient(at 60% 100%, rgba(6,182,212,0.14) 0%, transparent 60%);
+  
+  --shadow-sm: 0 2px 4px rgba(15,23,42,0.04), 0 1px 2px rgba(15,23,42,0.06);
+  --shadow-md: 0 4px 6px -1px rgba(15,23,42,0.06), 0 2px 4px -2px rgba(15,23,42,0.04);
+  --shadow-lg: 0 10px 25px -5px rgba(15,23,42,0.10), 0 8px 10px -6px rgba(15,23,42,0.04);
+  --shadow-xl: 0 20px 35px -8px rgba(15,23,42,0.14), 0 12px 18px -8px rgba(15,23,42,0.06);
+  
+  --r-sm: 10px; --r-md: 14px; --r-lg: 20px; --r-xl: 28px; --r-full: 999px;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  
+  --bg: #F4F7FB;
+  --bg-elev: #FFFFFF;
+  --bg-mesh: linear-gradient(180deg, #F4F7FB 0%, #EDF2F9 100%);
+  --surface: rgba(255,255,255,0.72);
+  --surface-2: rgba(255,255,255,0.55);
+  --border: rgba(15,23,42,0.07);
+  --border-2: rgba(15,23,42,0.04);
+  --text: #0F1729;
+  --text-2: #334155;
+  --muted: #5B6C84;
+  --muted-2: #8696B0;
+  --hairline: rgba(15,23,42,0.06);
+  --ring: 0 0 0 4px rgba(59,130,246,0.15);
+}
+
+[data-theme="dark"] {
+  --bg: #070B14;
+  --bg-elev: #0E1525;
+  --bg-mesh: radial-gradient(at 25% 10%, rgba(29,78,216,0.18) 0%, transparent 50%),
+            radial-gradient(at 80% 0%, rgba(14,165,233,0.14) 0%, transparent 50%),
+            radial-gradient(at 60% 100%, rgba(6,182,212,0.10) 0%, transparent 60%),
+            linear-gradient(180deg, #070B14 0%, #0A1020 100%);
+  --surface: rgba(255,255,255,0.04);
+  --surface-2: rgba(255,255,255,0.025);
+  --border: rgba(255,255,255,0.08);
+  --border-2: rgba(255,255,255,0.04);
+  --text: #EAEEF7;
+  --text-2: #C8D2E2;
+  --muted: #8696B0;
+  --muted-2: #5B6C84;
+  --hairline: rgba(255,255,255,0.06);
+  
+  --shadow-md: 0 4px 8px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.3);
+  --shadow-lg: 0 12px 30px rgba(0,0,0,0.55), 0 6px 12px rgba(0,0,0,0.4);
+  --shadow-xl: 0 24px 50px rgba(0,0,0,0.65), 0 12px 24px rgba(0,0,0,0.4);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
+
+body {
+  font-family: 'IBM Plex Sans Arabic', system-ui, -apple-system, sans-serif;
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--text);
+  background: var(--bg);
+  background-image: var(--bg-mesh);
+  background-attachment: fixed;
+  min-height: 100vh;
+  direction: rtl;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.4s var(--ease-out), color 0.4s var(--ease-out);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: -10%;
+  background: var(--grad-aurora);
+  pointer-events: none;
+  z-index: 0;
+  animation: aurora 22s ease-in-out infinite alternate;
+}
+
+@keyframes aurora {
+  0%   { transform: translate(0%, 0%) rotate(0deg) scale(1); }
+  100% { transform: translate(-2%, 2%) rotate(-5deg) scale(0.98); }
+}
+
+::selection { background: var(--brand-500); color: white; }
+
+button { font: inherit; color: inherit; border: none; outline: none; background: none; cursor: pointer; }
+a { color: inherit; text-decoration: none; }
+
+.wrap {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 24px 16px 60px;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Top bar ── */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 32px;
+  padding: 12px 16px;
+  background: var(--surface);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
+  box-shadow: var(--shadow-sm);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 16px;
+}
+
+.brand-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--grad-primary);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 4px 12px -3px rgba(59,130,246,0.45);
+}
+
+.brand-mark svg { width: 18px; height: 18px; color: white; }
+
+.theme-toggle {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  transition: all 0.2s var(--ease-out);
+}
+
+.theme-toggle:hover {
+  color: var(--brand-600);
+  transform: rotate(15deg);
+}
+
+[data-theme="dark"] .theme-toggle:hover { color: var(--brand-400); }
+
+.theme-toggle svg { width: 18px; height: 18px; }
+.theme-toggle .icon-sun { display: block; }
+.theme-toggle .icon-moon { display: none; }
+[data-theme="dark"] .theme-toggle .icon-sun { display: none; }
+[data-theme="dark"] .theme-toggle .icon-moon { display: block; }
+
+/* ═══════════════ STATUS HERO (success state) ═══════════════ */
+.status-hero {
+  text-align: center;
+  margin-bottom: 24px;
+  animation: fadeUp 0.7s var(--ease-out) both;
+}
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.status-icon {
+  width: 88px;
+  height: 88px;
+  margin: 0 auto 20px;
+  border-radius: 50%;
+  background: var(--grad-success);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 12px 32px -8px rgba(16,185,129,0.5),
+              inset 0 1px 0 rgba(255,255,255,0.3);
+  position: relative;
+  animation: pop 0.7s 0.2s var(--ease-spring) both;
+}
+
+@keyframes pop {
+  0%   { transform: scale(0); }
+  70%  { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+.status-icon::before {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  background: var(--grad-success);
+  opacity: 0.2;
+  filter: blur(12px);
+  z-index: -1;
+}
+
+.status-icon::after {
+  /* ripple ring */
+  content: '';
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 2px solid rgba(16,185,129,0.4);
+  animation: ripple 2s ease-out infinite;
+}
+
+@keyframes ripple {
+  0%   { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+
+.status-icon svg {
+  width: 44px;
+  height: 44px;
+  color: white;
+  stroke-dasharray: 30;
+  stroke-dashoffset: 30;
+  animation: draw 0.6s 0.4s var(--ease-out) forwards;
+}
+
+@keyframes draw {
+  to { stroke-dashoffset: 0; }
+}
+
+.status-hero h1 {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 6px;
+}
+
+.status-hero p {
+  font-size: 14.5px;
+  color: var(--muted);
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 5px 12px;
+  border-radius: var(--r-full);
+  background: rgba(16,185,129,0.1);
+  color: var(--success);
+  font-size: 12.5px;
+  font-weight: 600;
+  border: 1px solid rgba(16,185,129,0.2);
+}
+
+.status-pill::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 0 4px rgba(16,185,129,0.2);
+}
+
+/* ═══════════════ DETAILS CARD ═══════════════ */
+.details-card {
+  background: var(--surface);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  padding: 28px;
+  box-shadow: var(--shadow-xl);
+  position: relative;
+  overflow: hidden;
+  animation: fadeUp 0.7s 0.15s var(--ease-out) both;
+}
+
+.details-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(59,130,246,0.3), rgba(6,182,212,0.15), transparent 60%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.6;
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.section-title::before {
+  content: '';
+  width: 14px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--grad-primary);
+}
+
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.row:last-child { border-bottom: none; }
+
+.row-icon {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border-2);
+  display: grid;
+  place-items: center;
+  color: var(--brand-600);
+}
+
+[data-theme="dark"] .row-icon {
+  background: rgba(255,255,255,0.03);
+  color: var(--brand-400);
+}
+
+.row-icon svg { width: 18px; height: 18px; }
+
+.row-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.row-label {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+.row-value {
+  font-size: 15.5px;
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.row-value.code {
+  font-family: 'IBM Plex Sans', monospace;
+  direction: ltr;
+  font-size: 14px;
+  letter-spacing: 0.03em;
+}
+
+.divider {
+  height: 1px;
+  background: var(--hairline);
+  margin: 18px -28px 18px;
+}
+
+/* Date range styling — special highlighted */
+.date-range {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 12px;
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(59,130,246,0.06), rgba(6,182,212,0.04));
+  border: 1px solid rgba(59,130,246,0.15);
+  border-radius: var(--r-md);
+  margin: 12px 0;
+  align-items: center;
+}
+
+[data-theme="dark"] .date-range {
+  background: linear-gradient(135deg, rgba(59,130,246,0.08), rgba(6,182,212,0.05));
+  border-color: rgba(59,130,246,0.2);
+}
+
+.date-block .lbl {
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+.date-block .val {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.date-arrow {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--grad-primary);
+  display: grid;
+  place-items: center;
+  color: white;
+}
+
+.date-arrow svg { width: 14px; height: 14px; }
+
+.duration-badge {
+  text-align: center;
+  margin-top: 10px;
+  padding: 10px;
+  background: var(--bg-elev);
+  border: 1px dashed var(--border);
+  border-radius: var(--r-md);
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+[data-theme="dark"] .duration-badge { background: rgba(255,255,255,0.025); }
+
+.duration-badge b {
+  color: var(--brand-600);
+  font-size: 18px;
+  margin: 0 4px;
+}
+
+[data-theme="dark"] .duration-badge b { color: var(--brand-400); }
+
+/* ═══════════════ ACTION BUTTONS ═══════════════ */
+.actions {
+  display: grid;
+  gap: 10px;
+  margin-top: 24px;
+  animation: fadeUp 0.7s 0.3s var(--ease-out) both;
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 14px 20px;
+  font-size: 15px;
+  font-weight: 600;
+  border-radius: var(--r-md);
+  transition: all 0.2s var(--ease-out);
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-primary {
+  background: var(--grad-primary);
+  color: white;
+  box-shadow: 0 6px 20px -6px rgba(59,130,246,0.5),
+              inset 0 1px 0 rgba(255,255,255,0.25);
+}
+
+.btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px -8px rgba(59,130,246,0.65),
+              inset 0 1px 0 rgba(255,255,255,0.3);
+}
+
+.btn-primary:active { transform: translateY(0); }
+
+.btn-secondary {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(8px);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-elev);
+  border-color: var(--brand-200);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+[data-theme="dark"] .btn-secondary:hover {
+  border-color: var(--brand-700);
+}
+
+.btn svg { width: 18px; height: 18px; }
+
+.btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 60%);
+  opacity: 0;
+  transform: scale(0);
+  transition: transform 0.6s, opacity 0.6s;
+  pointer-events: none;
+}
+
+.btn:active::after { transform: scale(2); opacity: 0; transition: 0s; }
+
+/* ═══════════════ FOOTER NOTE ═══════════════ */
+.foot-note {
+  margin-top: 32px;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--muted);
+  animation: fadeUp 0.7s 0.4s var(--ease-out) both;
+}
+
+.foot-note p { margin: 4px 0; }
+
+.foot-note .seal {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 4px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-2);
+  border-radius: var(--r-full);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.foot-note .seal svg {
+  width: 12px;
+  height: 12px;
+  color: var(--success);
+}
+
+@media (max-width: 380px) {
+  .wrap { padding: 16px 12px 50px; }
+  .details-card { padding: 22px; }
+  .divider { margin-left: -22px; margin-right: -22px; }
+  .status-hero h1 { font-size: 22px; }
+  .status-icon { width: 72px; height: 72px; }
+  .status-icon svg { width: 36px; height: 36px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+  body::before { animation: none; }
+}
+
+:focus-visible {
+  outline: 3px solid var(--brand-500);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  
+  <!-- Top bar -->
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+        </svg>
+      </div>
+      <span>صَحَّة</span>
+    </div>
+    <button class="theme-toggle" id="themeToggle" aria-label="تبديل الوضع المظلم">
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="4"/>
+        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+      </svg>
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- Status hero -->
+  <div class="status-hero">
+    <div class="status-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="20 6 9 17 4 12"/>
+      </svg>
+    </div>
+    <h1>إجازة طبيّة موثّقة</h1>
+    <p>تم التحقّق من صحّة الإجازة من سجلّ المنشأة الصحيّة</p>
+    <span class="status-pill">سارية وصحيحة</span>
+  </div>
+
+  <!-- Details card -->
+  <div class="details-card">
+    
+    <div class="section-title">بيانات المريض</div>
+    
+    <div class="row">
+      <div class="row-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/>
+          <circle cx="12" cy="7" r="4"/>
+        </svg>
+      </div>
+      <div class="row-body">
+        <div class="row-label">الاسم الكامل</div>
+        <div class="row-value">{{ name }}</div>
+      </div>
+    </div>
+    
+    <div class="row">
+      <div class="row-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="16" rx="2"/>
+          <circle cx="9" cy="10" r="2"/>
+          <path d="M15 8h2M15 12h2M7 16h10"/>
+        </svg>
+      </div>
+      <div class="row-body">
+        <div class="row-label">رقم الهوية</div>
+        <div class="row-value code">{{ id_number }}</div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="section-title">تفاصيل الإجازة</div>
+    
+    <!-- Date range hero -->
+    <div class="date-range">
+      <div class="date-block">
+        <div class="lbl">تبدأ من</div>
+        <div class="val">{{ start }}</div>
+      </div>
+      <div class="date-arrow">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="19" y1="12" x2="5" y2="12"/>
+          <polyline points="12 5 5 12 12 19"/>
+        </svg>
+      </div>
+      <div class="date-block">
+        <div class="lbl">حتى</div>
+        <div class="val">{{ end }}</div>
+      </div>
+    </div>
+    
+    <div class="duration-badge">
+      المدّة الإجماليّة: <b>{{ days }}</b> أيّام
+    </div>
+
+    <div class="row">
+      <div class="row-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2"/>
+          <line x1="16" y1="2" x2="16" y2="6"/>
+          <line x1="8" y1="2" x2="8" y2="6"/>
+          <line x1="3" y1="10" x2="21" y2="10"/>
+        </svg>
+      </div>
+      <div class="row-body">
+        <div class="row-label">تاريخ الإصدار</div>
+        <div class="row-value">{{ issued }}</div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <div class="section-title">المنشأة الصحيّة</div>
+    
+    <div class="row">
+      <div class="row-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <path d="M12 6v6l4 2"/>
+        </svg>
+      </div>
+      <div class="row-body">
+        <div class="row-label">الطبيب المعالج</div>
+        <div class="row-value">{{ doctor }}</div>
+      </div>
+    </div>
+    
+    <div class="row">
+      <div class="row-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 11l3 3L22 4"/>
+          <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+        </svg>
+      </div>
+      <div class="row-body">
+        <div class="row-label">التخصّص</div>
+        <div class="row-value">{{ spec }}</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Action buttons -->
+  <div class="actions">
+    <a href="/slenqu" class="btn btn-primary">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"/>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+      </svg>
+      استعلام جديد
+    </a>
+    <a href="/slenqu" class="btn btn-secondary">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="19" y1="12" x2="5" y2="12"/>
+        <polyline points="12 19 5 12 12 5"/>
+      </svg>
+      رجوع للاستعلامات
+    </a>
+  </div>
+
+  <!-- Footer note -->
+  <div class="foot-note">
+    <p>تم التحقّق عبر منصّة صَحَّة الرسميّة</p>
+    <span class="seal">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 12l2 2 4-4"/>
+        <path d="M21 12c0 4.97-4.03 9-9 9s-9-4.03-9-9 4.03-9 9-9 9 4.03 9 9z"/>
+      </svg>
+      موثّق رقميّاً
+    </span>
+  </div>
+
+</div>
+
+<script>
+// Theme toggle with localStorage persistence
+(function() {
+  const KEY = 'seha-theme';
+  const root = document.documentElement;
+  const stored = localStorage.getItem(KEY);
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  root.setAttribute('data-theme', stored || (prefersDark ? 'dark' : 'light'));
+  
+  document.getElementById('themeToggle').addEventListener('click', () => {
+    const current = root.getAttribute('data-theme');
+    const next = current === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    localStorage.setItem(KEY, next);
+  });
+})();
+</script>
+</body>
+</html>
