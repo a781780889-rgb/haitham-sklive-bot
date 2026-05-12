@@ -30,6 +30,7 @@ from external_api import send_leave_to_external_api
 # ══════════════════════════════════════════════
 import pending_review as pr
 import review_handlers as rh
+import delete_system
 from pdf_gen import (
     generate_excuse_pdf,
     parse_hijri_date_input,
@@ -967,6 +968,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # فحص وضع الصيانة
     if db.get_setting("maintenance_mode") == "1" and not is_admin_user(uid):
         await update.message.reply_text("🔧 البوت في وضع الصيانة. يرجى المحاولة لاحقاً.")
+        return
+
+    # ── نظام الحذف ─ معالجة نص البحث ────────────────────────────────────
+    if is_admin_user(uid) and isinstance(state, str) and state.startswith("del_search_"):
+        await delete_system.handle_search_input(update, context, uid, text)
         return
 
     # ── أزرار ثابتة ──
@@ -2707,17 +2713,10 @@ async def handle_admin_router(update, context, text, uid, name):
             return
 
         if text == "🗑 حذف شعار":
-            hospitals = db.get_all_hospitals() if hasattr(db, "get_all_hospitals") else []
-            with_logo = [h for h in hospitals if has_logo(h)]
-            if not with_logo:
-                await update.message.reply_text("❌ لا توجد شعارات لحذفها.", reply_markup=logos_keyboard())
+            if not is_admin_user(uid):
                 return
-            context.user_data["state"] = "admin_logo_delete_type"
-            await update.message.reply_text(
-                "🗑 *حذف الشعارات*\n\nاختر نوع المستشفيات التي تريد حذف شعاراتها:",
-                parse_mode="Markdown",
-                reply_markup=logo_delete_type_keyboard()
-            )
+            await delete_system.start_delete_logos(update, context)
+            return
             return
 
     # ── اختيار نوع المستشفيات للحذف ──
@@ -3170,6 +3169,10 @@ async def handle_admin_router(update, context, text, uid, name):
             )
             return
 
+        if text == "🗑️ حذف مستشفى":
+            await delete_system.start_delete_hospitals(update, context)
+            return
+
         if text == "➕ إضافة مستشفى جديد":
             context.user_data["state"] = "admin_hosp_add_name"
             await update.message.reply_text(
@@ -3318,17 +3321,9 @@ async def handle_admin_router(update, context, text, uid, name):
             return
 
         if text == "🗑 حذف طبيب":
-            doctors = db.get_doctors_by_hospital_name(hosp_name)
-            if not doctors:
-                await update.message.reply_text("❌ لا أطباء لحذفهم.", reply_markup=admin_keyboard())
+            if not is_admin_user(uid):
                 return
-            rows = [[KeyboardButton(f"🗑 {d['name']}")] for d in doctors]
-            rows.append([KeyboardButton("⬅️ رجوع")])
-            context.user_data["state"] = "admin_doc_delete"
-            await update.message.reply_text(
-                "اختر الطبيب للحذف:",
-                reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
-            )
+            await delete_system.start_delete_doctors(update, context)
             return
 
     if state == "admin_doc_add_name":
@@ -3949,6 +3944,15 @@ def main():
                     except Exception as e:
                         logger.warning(f"فشل إشعار المستخدم {target_uid}: {e}")
             return
+
+        # ─── نظام الحذف المتكامل ───────────────────────────────────────────
+        if data.startswith("del_"):
+            if not is_admin_user(uid):
+                await query.answer("⛔️ للمشرفين فقط.", show_alert=True)
+                return
+            await delete_system.handle_delete_callback(query, uid, data, context)
+            return
+        # ─────────────────────────────────────────────────────────────────────
 
         await rh.handle_review_callback(query, uid, data, context.bot, ADMIN_IDS)
 
