@@ -786,6 +786,15 @@ def logos_keyboard():
         [KeyboardButton("⬅️ رجوع")],
     ], resize_keyboard=True)
 
+def logo_delete_type_keyboard():
+    """لوحة اختيار نوع الشعارات للحذف"""
+    return ReplyKeyboardMarkup([
+        [KeyboardButton("🏛 حذف شعارات الحكومية")],
+        [KeyboardButton("🏢 حذف شعارات الخاصة")],
+        [KeyboardButton("🏗 حذف شعارات المجمعات")],
+        [KeyboardButton("⬅️ رجوع")],
+    ], resize_keyboard=True)
+
 def logo_city_regions_keyboard():
     """مناطق لاختيار مدينة عند رفع شعار"""
     regions = list(KSA_REGIONS.keys())
@@ -2698,11 +2707,44 @@ async def handle_admin_router(update, context, text, uid, name):
             if not with_logo:
                 await update.message.reply_text("❌ لا توجد شعارات لحذفها.", reply_markup=logos_keyboard())
                 return
-            rows = [[KeyboardButton(f"🗑 {h['name']}")] for h in with_logo[:20]]
-            rows.append([KeyboardButton("⬅️ رجوع")])
-            context.user_data["state"] = "admin_logo_delete"
+            context.user_data["state"] = "admin_logo_delete_type"
             await update.message.reply_text(
-                "🗑 اختر المستشفى لحذف شعاره:",
+                "🗑 *حذف الشعارات*\n\nاختر نوع المستشفيات التي تريد حذف شعاراتها:",
+                parse_mode="Markdown",
+                reply_markup=logo_delete_type_keyboard()
+            )
+            return
+
+    # ── اختيار نوع المستشفيات للحذف ──
+    if state == "admin_logo_delete_type":
+        type_map = {
+            "🏛 حذف شعارات الحكومية": "حكومي",
+            "🏢 حذف شعارات الخاصة": "خاص",
+            "🏗 حذف شعارات المجمعات": "مجمعات",
+        }
+        if text == "⬅️ رجوع":
+            context.user_data["state"] = "admin_logos"
+            await update.message.reply_text("🖼️ *شعارات المستشفيات*", parse_mode="Markdown", reply_markup=logos_keyboard())
+            return
+        if text in type_map:
+            selected_type = type_map[text]
+            context.user_data["logo_delete_type"] = selected_type
+            hospitals = db.get_all_hospitals() if hasattr(db, "get_all_hospitals") else []
+            with_logo = [h for h in hospitals if has_logo(h) and h.get("hospital_type", "حكومي") == selected_type]
+            if not with_logo:
+                await update.message.reply_text(
+                    f"❌ لا توجد شعارات لمستشفيات *{selected_type}* لحذفها.",
+                    parse_mode="Markdown",
+                    reply_markup=logo_delete_type_keyboard()
+                )
+                return
+            rows = [[KeyboardButton(f"🗑 {h['name']}")] for h in with_logo[:25]]
+            rows.append([KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")])
+            context.user_data["state"] = "admin_logo_delete"
+            type_icon = {"حكومي": "🏛", "خاص": "🏢", "مجمعات": "🏗"}.get(selected_type, "🏥")
+            await update.message.reply_text(
+                f"{type_icon} *مستشفيات {selected_type} ({len(with_logo)})*\n\n🗑 اختر المستشفى لحذف شعاره:",
+                parse_mode="Markdown",
                 reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
             )
             return
@@ -2712,12 +2754,27 @@ async def handle_admin_router(update, context, text, uid, name):
         try:
             db.set_hospital_logo(hospital_name, logo_path=None)
             await update.message.reply_text(
-                f"✅ تم حذف شعار {hospital_name}.",
-                reply_markup=logos_keyboard()
+                f"✅ تم حذف شعار *{hospital_name}* بنجاح.",
+                parse_mode="Markdown",
+                reply_markup=logo_delete_type_keyboard()
             )
-            context.user_data["state"] = "admin_logos"
+            context.user_data["state"] = "admin_logo_delete_type"
         except Exception as e:
-            await update.message.reply_text(f"❌ خطأ: {e}", reply_markup=logos_keyboard())
+            await update.message.reply_text(f"❌ خطأ: {e}", reply_markup=logo_delete_type_keyboard())
+        return
+
+    if state == "admin_logo_delete" and text in ["⬅️ رجوع"]:
+        context.user_data["state"] = "admin_logo_delete_type"
+        await update.message.reply_text(
+            "🗑 *حذف الشعارات*\n\nاختر نوع المستشفيات:",
+            parse_mode="Markdown",
+            reply_markup=logo_delete_type_keyboard()
+        )
+        return
+
+    if state == "admin_logo_delete" and text == "🏠 القائمة الرئيسية":
+        context.user_data["state"] = "admin_logos"
+        await update.message.reply_text("🖼️ *شعارات المستشفيات*", parse_mode="Markdown", reply_markup=logos_keyboard())
         return
 
     if state == "admin_logo_no_logo_select":
