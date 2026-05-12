@@ -25,6 +25,44 @@ try:
 except ImportError:
     _DOCTORS_DATA_AVAILABLE = False
 
+# ── استيراد بيانات المستشفيات للتصنيف الصحيح (حكومي/خاص/مجمعات) ──
+try:
+    from hospitals_data import KSA_HOSPITALS, get_all_hospitals_flat
+    _HOSPITALS_DATA_AVAILABLE = True
+
+    def _build_hospital_type_map() -> dict:
+        """
+        يبني خريطة: اسم المستشفى → نوعه الصحيح من KSA_HOSPITALS.
+        يُستخدم لضمان تصنيف صحيح عند إضافة مستشفيات جديدة.
+        """
+        type_map = {}
+        for h in get_all_hospitals_flat():
+            type_map[h["name"].strip()] = h["type"]
+        return type_map
+
+    def _resolve_hospital_type(name: str, city: str = "") -> str:
+        """
+        يُحدد نوع المستشفى من KSA_HOSPITALS بدلاً من الافتراض 'حكومي'.
+        يبحث أولاً بالتطابق الكامل ثم الجزئي، ويستخدم 'خاص' كافتراضي آمن
+        للمستشفيات غير المُعرَّفة (لأن معظم المضافة يدوياً خاصة).
+        """
+        _map = _build_hospital_type_map()
+        name = name.strip()
+        # مطابقة كاملة
+        if name in _map:
+            return _map[name]
+        # مطابقة جزئية
+        for reg_name, h_type in _map.items():
+            if name in reg_name or reg_name in name:
+                return h_type
+        # إذا لم يُعثر عليه، افتراض 'خاص' (أكثر أماناً من 'حكومي')
+        return "خاص"
+
+except ImportError:
+    _HOSPITALS_DATA_AVAILABLE = False
+    def _resolve_hospital_type(name: str, city: str = "") -> str:
+        return "خاص"
+
 logger = logging.getLogger(__name__)
 
 # تخزين الملفات في قاعدة البيانات
@@ -233,8 +271,77 @@ def init_db():
     # ── تغذية الأطباء من doctors_data.py ──
     seed_doctors_from_data(conn)
 
+    # ── مزامنة تصنيف المستشفيات (حكومي/خاص/مجمعات) من hospitals_data.py ──
+    sync_hospital_types_from_data(conn)
+
     conn.commit()
     conn.close()
+
+
+# ═══════════════════════════════════════════════════════════════
+# مزامنة تصنيف المستشفيات من hospitals_data.py
+# ═══════════════════════════════════════════════════════════════
+
+def sync_hospital_types_from_data(conn=None):
+    """
+    يُزامن حقل hospital_type لجميع المستشفيات في قاعدة البيانات
+    استناداً إلى التصنيف الصحيح في KSA_HOSPITALS.
+
+    يحل مشكلة:
+    - المستشفيات الخاصة والمجمعات تظهر ضمن 'حكومي' بسبب القيمة الافتراضية
+    - seed_doctors_from_data يُضيف مستشفيات بـ hospital_type='خاص' افتراضياً
+      لكن قد تكون حكومية فعلاً
+
+    يُشغَّل تلقائياً عند تهيئة قاعدة البيانات.
+    """
+    if not _HOSPITALS_DATA_AVAILABLE:
+        logger.warning("⚠️ hospitals_data.py غير متوفر — تم تخطي مزامنة التصنيف")
+        return 0
+
+    close_after = conn is None
+    if close_after:
+        conn = get_conn()
+
+    updated = 0
+    try:
+        type_map = _build_hospital_type_map()
+        rows = conn.execute("SELECT id, name, hospital_type FROM hospitals").fetchall()
+
+        for row in rows:
+            row = dict(row)
+            h_id    = row["id"]
+            h_name  = row["name"].strip()
+            current = row.get("hospital_type") or "حكومي"
+
+            correct = type_map.get(h_name)
+            if correct is None:
+                # بحث جزئي
+                for reg_name, h_type in type_map.items():
+                    if h_name in reg_name or reg_name in h_name:
+                        correct = h_type
+                        break
+
+            if correct and correct != current:
+                conn.execute(
+                    "UPDATE hospitals SET hospital_type=? WHERE id=?",
+                    (correct, h_id)
+                )
+                updated += 1
+                logger.debug(f"🔄 {h_name}: {current} ➜ {correct}")
+
+        if updated > 0:
+            conn.commit()
+            logger.info(f"🔄 تم تصحيح تصنيف {updated} مستشفى من hospitals_data.py")
+        else:
+            logger.debug("✅ جميع تصنيفات المستشفيات صحيحة")
+
+    except Exception as e:
+        logger.warning(f"⚠️ sync_hospital_types_from_data: {e}")
+    finally:
+        if close_after:
+            conn.close()
+
+    return updated
 
 
 # ═══════════════════════════════════════════════════════════════
@@ -273,10 +380,11 @@ def seed_doctors_from_data(conn=None):
                 ).fetchone()
 
             if row is None:
-                # إضافة المستشفى إذا لم يكن موجوداً
+                # إضافة المستشفى إذا لم يكن موجوداً — التصنيف الصحيح من KSA_HOSPITALS
+                _correct_type = _resolve_hospital_type(hospital_name)
                 cur = conn.execute(
                     "INSERT OR IGNORE INTO hospitals (name, city, hospital_type) VALUES (?,?,?)",
-                    (hospital_name, "غير محدد", "حكومي")
+                    (hospital_name, "غير محدد", _correct_type)
                 )
                 hospital_id = cur.lastrowid
                 if hospital_id == 0:
