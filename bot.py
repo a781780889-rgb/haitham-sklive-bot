@@ -1827,6 +1827,99 @@ async def handle_charge_method(update, context, text, uid):
             )
             return
 
+# ══════════════════════════════════════════════════════════════
+# 🎫 شحن الرصيد بكود — الدالة الرئيسية (كانت مفقودة وهي سبب المشكلة)
+# ══════════════════════════════════════════════════════════════
+
+async def handle_voucher_redeem(update, context, text, uid):
+    """
+    يعالج إدخال كود الشحن ويُضيف الرصيد فوراً.
+    ✅ مع حماية من التكرار، Logs تفصيلية، ورسائل خطأ واضحة.
+    """
+    code = text.strip().upper()
+
+    logger.info(f"[VOUCHER] user={uid} trying code={code!r}")
+
+    # ── تحقق أساسي من تنسيق الكود ──────────────────────────
+    if not code or len(code) < 4:
+        logger.warning(f"[VOUCHER] user={uid} invalid code format: {code!r}")
+        await update.message.reply_text(
+            "❌ *كود غير صالح!*\n\n"
+            "يرجى إدخال الكود بشكل صحيح.\n"
+            "مثال: `3VE3-LRWZ-AGQE`",
+            parse_mode="Markdown", reply_markup=back_keyboard()
+        )
+        return
+
+    # ── محاولة صرف الكود من قاعدة البيانات ──────────────────
+    try:
+        result = db.use_voucher(code, uid)
+    except Exception as exc:
+        logger.error(f"[VOUCHER] user={uid} code={code!r} DB exception: {exc}", exc_info=True)
+        await update.message.reply_text(
+            "⚠️ *حدث خطأ في النظام!*\n\n"
+            "تعذّر التحقق من الكود الآن، يرجى المحاولة مرة أخرى.\n"
+            "إذا تكررت المشكلة تواصل مع الدعم.",
+            parse_mode="Markdown", reply_markup=back_keyboard()
+        )
+        return
+
+    # ── فشل: الكود خاطئ / مستخدم / منتهي ────────────────────
+    if not result.get("success"):
+        error_msg = result.get("error", "خطأ غير معروف")
+        logger.warning(f"[VOUCHER] user={uid} code={code!r} failed: {error_msg}")
+        await update.message.reply_text(
+            f"❌ *فشل الشحن!*\n\n"
+            f"السبب: {error_msg}\n\n"
+            f"• تأكد من صحة الكود\n"
+            f"• تأكد أن الكود لم يُستخدم من قبل\n"
+            f"• للمساعدة تواصل مع الدعم",
+            parse_mode="Markdown", reply_markup=back_keyboard()
+        )
+        return
+
+    # ── نجاح: تحديث الواجهة فوراً ────────────────────────────
+    amount = result.get("amount", 0.0)
+    logger.info(f"[VOUCHER] ✅ user={uid} code={code!r} credited={amount:.2f} SAR")
+
+    # جلب الرصيد الجديد مباشرة من DB لضمان الدقة
+    try:
+        user_data = db.get_user(uid)
+        new_balance = user_data.get("balance", 0.0) if user_data else amount
+    except Exception:
+        new_balance = amount  # fallback
+
+    # إعادة تعيين الحالة
+    context.user_data["state"] = "main"
+    context.user_data.pop("selected_package", None)
+    context.user_data.pop("selected_method", None)
+
+    await update.message.reply_text(
+        f"✅ *تم الشحن بنجاح!*\n\n"
+        f"🎫 الكود: `{code}`\n"
+        f"💰 المبلغ المُضاف: *{amount:.2f} ريال*\n"
+        f"💳 رصيدك الحالي: *{new_balance:.2f} ريال*\n\n"
+        f"يمكنك الآن إنشاء طلب جديد 🎉",
+        parse_mode="Markdown",
+        reply_markup=main_keyboard(db.get_user(uid) or {})
+    )
+
+    # إشعار للمشرف (اختياري — يُسجّل العملية)
+    try:
+        admin_ids = db.get_admin_ids() if hasattr(db, "get_admin_ids") else []
+        for admin_id in admin_ids[:1]:  # أول مشرف فقط
+            await context.bot.send_message(
+                admin_id,
+                f"🎫 *كود شحن مُستخدَم*\n\n"
+                f"👤 المستخدم: `{uid}`\n"
+                f"🎫 الكود: `{code}`\n"
+                f"💰 القيمة: *{amount:.2f} ريال*",
+                parse_mode="Markdown"
+            )
+    except Exception:
+        pass  # عدم إشعار الأدمن لا يوقف العملية
+
+
 # ── الرجوع ──
 
 async def handle_back(update, context, uid, name, state):

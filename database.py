@@ -1476,7 +1476,7 @@ def manual_add_balance(user_id, amount, admin_id):
 # ══════════════════════════════════════════════
 
 def init_vouchers_table(conn):
-    """يُنشئ جدول الأكواد إن لم يكن موجوداً"""
+    """يُنشئ/يُحدّث جدول الأكواد مع كل الفهارس اللازمة"""
     conn.execute("""CREATE TABLE IF NOT EXISTS voucher_codes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         code TEXT NOT NULL UNIQUE,
@@ -1486,10 +1486,20 @@ def init_vouchers_table(conn):
         used_at TEXT,
         created_by INTEGER,
         created_at TEXT DEFAULT (datetime('now')),
-        note TEXT DEFAULT ''
+        note TEXT DEFAULT '',
+        expires_at TEXT DEFAULT NULL
     )""")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_voucher_code ON voucher_codes(code)")
-    conn.execute("CREATE INDEX IF NOT EXISTS idx_voucher_used ON voucher_codes(is_used)")
+    # فهارس لتسريع البحث والتحقق
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_voucher_code    ON voucher_codes(code)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_voucher_used    ON voucher_codes(is_used)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_voucher_usedby  ON voucher_codes(used_by)")
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_voucher_created ON voucher_codes(created_at)")
+    # إضافة عمود expires_at إن لم يكن موجوداً (migration آمن)
+    try:
+        conn.execute("ALTER TABLE voucher_codes ADD COLUMN expires_at TEXT DEFAULT NULL")
+    except Exception:
+        pass  # العمود موجود مسبقاً
+
 
 
 def generate_voucher_code(length=12):
@@ -1534,49 +1544,87 @@ def create_voucher(amount: float, created_by: int, count: int = 1, note: str = "
 
 def use_voucher(code: str, user_id: int) -> dict:
     """
-    يصرف الكود ويُضيف الرصيد للمستخدم.
-    يُعيد: {"success": True/False, "amount": float, "error": str}
+    ✅ يصرف الكود ويُضيف الرصيد للمستخدم بشكل Atomic آمن.
+    - يمنع استخدام نفس الكود مرتين (race-condition safe)
+    - يُسجّل Logs تفصيلية
+    - يُعيد: {"success": True/False, "amount": float, "error": str}
     """
+    import logging
+    _log = logging.getLogger("voucher")
+
+    code_clean = code.strip().upper()
+    _log.info(f"[use_voucher] START user={user_id} code={code_clean!r}")
+
+    if not code_clean:
+        _log.warning(f"[use_voucher] EMPTY code from user={user_id}")
+        return {"success": False, "amount": 0.0, "error": "الكود فارغ ❌"}
+
     conn = get_conn()
     try:
+        # ── تفعيل WAL mode لتحسين التزامن ──────────────────────
+        conn.execute("PRAGMA journal_mode=WAL")
+
+        # ── التحقق المبدئي بدون قفل ───────────────────────────
         row = conn.execute(
-            "SELECT * FROM voucher_codes WHERE code=?",
-            (code.strip().upper(),)
+            "SELECT id, code, amount, is_used FROM voucher_codes WHERE code=?",
+            (code_clean,)
         ).fetchone()
 
         if not row:
-            return {"success": False, "error": "الكود غير موجود أو خاطئ ❌"}
+            _log.warning(f"[use_voucher] NOT_FOUND code={code_clean!r} user={user_id}")
+            return {"success": False, "amount": 0.0, "error": "الكود غير موجود أو خاطئ ❌"}
 
         if row["is_used"]:
-            return {"success": False, "error": "هذا الكود تم استخدامه مسبقاً ❌"}
+            _log.warning(f"[use_voucher] ALREADY_USED code={code_clean!r} user={user_id}")
+            return {"success": False, "amount": 0.0, "error": "هذا الكود تم استخدامه مسبقاً ❌"}
 
-        amount = row["amount"]
+        amount = float(row["amount"])
+        if amount <= 0:
+            _log.error(f"[use_voucher] INVALID_AMOUNT code={code_clean!r} amount={amount}")
+            return {"success": False, "amount": 0.0, "error": "قيمة الكود غير صالحة ❌"}
 
-        # خصم الكود وإضافة الرصيد — في عملية واحدة
+        # ── UPDATE Atomic: يفشل تلقائياً إذا سبقه شخص آخر ───────
         cur = conn.execute("""
             UPDATE voucher_codes
             SET is_used=1, used_by=?, used_at=datetime('now')
             WHERE code=? AND is_used=0
-        """, (user_id, code.strip().upper()))
+        """, (user_id, code_clean))
 
         if cur.rowcount == 0:
-            return {"success": False, "error": "الكود تم استخدامه للتو ❌"}
+            # شخص آخر استخدمه في نفس اللحظة (race condition)
+            _log.warning(f"[use_voucher] RACE_CONDITION code={code_clean!r} user={user_id}")
+            return {"success": False, "amount": 0.0, "error": "الكود تم استخدامه للتو ❌"}
 
-        conn.execute(
+        # ── إضافة الرصيد ────────────────────────────────────────
+        bal_cur = conn.execute(
             "UPDATE users SET balance=balance+? WHERE user_id=?",
             (amount, user_id)
         )
+        if bal_cur.rowcount == 0:
+            # المستخدم غير موجود — نتراجع عن تفعيل الكود
+            conn.rollback()
+            _log.error(f"[use_voucher] USER_NOT_FOUND user={user_id} code={code_clean!r}")
+            return {"success": False, "amount": 0.0, "error": "حساب المستخدم غير موجود ❌"}
+
+        # ── تسجيل المعاملة ──────────────────────────────────────
         conn.execute("""
-            INSERT INTO transactions (user_id, amount, type, status, notes)
-            VALUES (?,?,'voucher','approved',?)
-        """, (user_id, amount, f"كود شحن: {code}"))
+            INSERT INTO transactions (user_id, amount, type, status, notes, created_at)
+            VALUES (?, ?, 'voucher', 'approved', ?, datetime('now'))
+        """, (user_id, amount, f"كود شحن: {code_clean}"))
+
         conn.commit()
 
-        log_activity(user_id, "voucher_used", f"كود {code} — {amount:.2f} ريال")
+        _log.info(f"[use_voucher] ✅ SUCCESS user={user_id} code={code_clean!r} amount={amount:.2f}")
+        log_activity(user_id, "voucher_used", f"كود {code_clean} — {amount:.2f} ريال")
         return {"success": True, "amount": amount, "error": ""}
 
     except Exception as e:
-        return {"success": False, "error": f"خطأ: {e}"}
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        _log.error(f"[use_voucher] EXCEPTION user={user_id} code={code_clean!r}: {e}", exc_info=True)
+        return {"success": False, "amount": 0.0, "error": f"خطأ في النظام: {e}"}
     finally:
         conn.close()
 
