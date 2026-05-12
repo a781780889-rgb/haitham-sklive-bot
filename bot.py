@@ -2762,17 +2762,12 @@ async def handle_admin_router(update, context, text, uid, name):
         context.user_data["logo_browse_city"] = city
         context.user_data["state"] = "admin_logo_select_hospital"
         hospitals_db = db.get_hospitals_by_city(city)
-        await logo_city_hospitals_keyboard(city, hospitals_db)
-        rows = []
-        if hospitals_db:
-            for h in hospitals_db[:20]:
-                label = f"✅ {h['name']}" if has_logo(h) else h["name"]
-                rows.append([KeyboardButton(label)])
-        rows.append([KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")])
+        # ✅ إصلاح: logo_city_hospitals_keyboard دالة عادية (ليست async) تُرجع ReplyKeyboardMarkup
+        keyboard = logo_city_hospitals_keyboard(city, hospitals_db)
         await update.message.reply_text(
             f"🏥 *مستشفيات {city}:*\n✅ = لديه شعار",
             parse_mode="Markdown",
-            reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+            reply_markup=keyboard
         )
         return
 
