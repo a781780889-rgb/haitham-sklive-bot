@@ -777,12 +777,21 @@ def templates_keyboard():
 
 def logos_keyboard():
     return ReplyKeyboardMarkup([
-        [KeyboardButton("➕ رفع شعار مستشفى")],
+        [KeyboardButton("➕ رفع شعار (حسب النوع)")],
         [KeyboardButton("🏙️ رفع شعار (تصفح بالمدينة)")],
         [KeyboardButton("🔍 المستشفيات التي تحتاج شعار")],
         [KeyboardButton("🤖 تحميل الشعارات تلقائياً من الإنترنت")],
         [KeyboardButton("📋 عرض الشعارات الحالية")],
         [KeyboardButton("🗑 حذف شعار")],
+        [KeyboardButton("⬅️ رجوع")],
+    ], resize_keyboard=True)
+
+def logo_upload_type_keyboard():
+    """لوحة اختيار نوع المستشفى لرفع الشعار"""
+    return ReplyKeyboardMarkup([
+        [KeyboardButton("🏛 رفع شعارات الحكومية")],
+        [KeyboardButton("🏢 رفع شعارات الخاصة")],
+        [KeyboardButton("🏗 رفع شعارات المجمعات")],
         [KeyboardButton("⬅️ رجوع")],
     ], resize_keyboard=True)
 
@@ -2639,16 +2648,12 @@ async def handle_admin_router(update, context, text, uid, name):
 
     # ── شعارات المستشفيات ──
     if state == "admin_logos":
-        if text == "➕ رفع شعار مستشفى":
-            context.user_data["state"] = "admin_logo_select_hospital"
-            hospitals = db.get_hospitals_by_city(None) or []
-            all_h = db.get_all_hospitals() if hasattr(db, "get_all_hospitals") else []
+        if text == "➕ رفع شعار (حسب النوع)":
+            context.user_data["state"] = "admin_logo_upload_type"
             await update.message.reply_text(
-                "🏥 أرسل اسم المستشفى لرفع شعاره:",
-                reply_markup=ReplyKeyboardMarkup(
-                    [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]],
-                    resize_keyboard=True
-                )
+                "🏥 *رفع الشعارات حسب النوع*\n\nاختر نوع المستشفيات:",
+                parse_mode="Markdown",
+                reply_markup=logo_upload_type_keyboard()
             )
             return
 
@@ -2829,6 +2834,86 @@ async def handle_admin_router(update, context, text, uid, name):
         return
 
     # حالة اختيار مستشفى لرفع الشعار
+    # ── اختيار نوع المستشفى لرفع الشعار ──
+    if state == "admin_logo_upload_type":
+        type_map = {
+            "🏛 رفع شعارات الحكومية": "حكومي",
+            "🏢 رفع شعارات الخاصة": "خاص",
+            "🏗 رفع شعارات المجمعات": "مجمعات",
+        }
+        if text == "⬅️ رجوع":
+            context.user_data["state"] = "admin_logos"
+            await update.message.reply_text("🖼️ *شعارات المستشفيات*", parse_mode="Markdown", reply_markup=logos_keyboard())
+            return
+        if text in type_map:
+            selected_type = type_map[text]
+            context.user_data["logo_upload_type"] = selected_type
+            hospitals = db.get_all_hospitals() if hasattr(db, "get_all_hospitals") else []
+            typed_hospitals = [h for h in hospitals if h.get("hospital_type", "حكومي") == selected_type]
+            if not typed_hospitals:
+                await update.message.reply_text(
+                    f"❌ لا توجد مستشفيات *{selected_type}* في قاعدة البيانات.",
+                    parse_mode="Markdown",
+                    reply_markup=logo_upload_type_keyboard()
+                )
+                return
+            # تقسيم إلى: لديه شعار ✅ / بدون شعار
+            with_logo    = [h for h in typed_hospitals if has_logo(h)]
+            without_logo = [h for h in typed_hospitals if not has_logo(h)]
+            rows = []
+            # عرض بدون شعار أولاً (أولوية)
+            for h in without_logo[:15]:
+                rows.append([KeyboardButton(h["name"])])
+            for h in with_logo[:10]:
+                rows.append([KeyboardButton(f"✅ {h['name']}")])
+            rows.append([KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")])
+            context.user_data["state"] = "admin_logo_upload_type_select"
+            type_icon = {"حكومي": "🏛", "خاص": "🏢", "مجمعات": "🏗"}.get(selected_type, "🏥")
+            no_logo_count = len(without_logo)
+            await update.message.reply_text(
+                f"{type_icon} *مستشفيات {selected_type}* ({len(typed_hospitals)})\n"
+                f"❌ بدون شعار: *{no_logo_count}* | ✅ لديه شعار: *{len(with_logo)}*\n\n"
+                f"اختر المستشفى لرفع شعاره:",
+                parse_mode="Markdown",
+                reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+            )
+            return
+
+    # ── اختيار المستشفى من القائمة المصنّفة لرفع الشعار ──
+    if state == "admin_logo_upload_type_select":
+        clean_hospital = text.replace("✅ ", "").replace(" ✅", "").strip()
+        if clean_hospital == "⬅️ رجوع":
+            context.user_data["state"] = "admin_logo_upload_type"
+            await update.message.reply_text(
+                "🏥 *رفع الشعارات حسب النوع*\n\nاختر نوع المستشفيات:",
+                parse_mode="Markdown",
+                reply_markup=logo_upload_type_keyboard()
+            )
+            return
+        if clean_hospital == "🏠 القائمة الرئيسية":
+            context.user_data["state"] = "admin_logos"
+            await update.message.reply_text("🖼️ *شعارات المستشفيات*", parse_mode="Markdown", reply_markup=logos_keyboard())
+            return
+        context.user_data["admin_logo_hospital"] = clean_hospital
+        context.user_data["state"] = "admin_logo_upload"
+        existing_logo = db.get_hospital_logo(clean_hospital)
+        status_msg = "🔄 *سيتم استبدال الشعار الحالي*" if existing_logo else "➕ *سيُضاف شعار جديد*"
+        await update.message.reply_text(
+            f"🖼 *رفع شعار المستشفى*\n\n"
+            f"🏥 المستشفى: *{clean_hospital}*\n"
+            f"{status_msg}\n\n"
+            f"📤 أرسل صورة الشعار الآن:\n"
+            f"• PNG أو JPG\n"
+            f"• يُفضَّل بخلفية شفافة أو بيضاء\n"
+            f"• سيتم إزالة الخلفية تلقائياً ✅",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup(
+                [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]],
+                resize_keyboard=True
+            )
+        )
+        return
+
     if state == "admin_logo_select_hospital":
         clean_hospital = text.replace("✅ ", "").replace(" ✅", "").strip()
         if clean_hospital in ["⬅️ رجوع", "🏠 القائمة الرئيسية"]:
@@ -3632,17 +3717,40 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 mime_type="image/png"
             )
 
-            await update.message.reply_text(
-                f"✅ *تم رفع الشعار بنجاح!*\n\n"
-                f"🏥 المستشفى: *{hospital}*\n"
-                f"🖼 الشعار محفوظ وجاهز للاستخدام فوراً",
-                parse_mode="Markdown",
-                reply_markup=logos_keyboard()
-            )
+            came_from_type = context.user_data.get("logo_upload_type", "")
+            upload_type = context.user_data.get("logo_upload_type", "")
+            if came_from_type:
+                # الرجوع لقائمة مستشفيات النوع لرفع شعار آخر بسهولة
+                hospitals_all = db.get_all_hospitals() if hasattr(db, "get_all_hospitals") else []
+                typed_hospitals = [h for h in hospitals_all if h.get("hospital_type", "حكومي") == upload_type]
+                with_logo_list    = [h for h in typed_hospitals if has_logo(h)]
+                without_logo_list = [h for h in typed_hospitals if not has_logo(h)]
+                rows = []
+                for h in without_logo_list[:15]:
+                    rows.append([KeyboardButton(h["name"])])
+                for h in with_logo_list[:10]:
+                    rows.append([KeyboardButton(f"✅ {h['name']}")])
+                rows.append([KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")])
+                type_icon = {"حكومي": "🏛", "خاص": "🏢", "مجمعات": "🏗"}.get(upload_type, "🏥")
+                await update.message.reply_text(
+                    f"✅ *تم رفع شعار {hospital} بنجاح!*\n\n"
+                    f"{type_icon} *مستشفيات {upload_type}* ({len(typed_hospitals)})\n"
+                    f"❌ بدون شعار: *{len(without_logo_list)}* | ✅ لديه شعار: *{len(with_logo_list)}*\n\n"
+                    f"اختر مستشفى آخر أو اضغط رجوع:",
+                    parse_mode="Markdown",
+                    reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+                )
+                context.user_data["state"] = "admin_logo_upload_type_select"
+            else:
+                await update.message.reply_text(
+                    f"✅ *تم رفع الشعار بنجاح!*\n\n"
+                    f"🏥 المستشفى: *{hospital}*\n"
+                    f"🖼 الشعار محفوظ وجاهز للاستخدام فوراً",
+                    parse_mode="Markdown",
+                    reply_markup=logos_keyboard()
+                )
+                context.user_data["state"] = "admin_logos"
             context.user_data.pop("admin_logo_hospital", None)
-            context.user_data["state"] = "admin_logos"
-
-            # تحديث قائمة المستشفيات
             await refresh_city_logo_keyboard(update.message, context)
 
         except Exception as e:
