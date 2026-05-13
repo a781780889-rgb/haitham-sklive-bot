@@ -385,3 +385,226 @@ if __name__ == "__main__":
     print(f"   🗺️  المناطق:    {s['regions']}")
     print(f"   👨‍⚕️ الأطباء:    {s['doctors']}")
     print(f"   🖼️  الشعارات:   {s['logos']} (مرتبطة بمستشفيات: {s['hospitals_with_logo']})")
+
+
+# ════════════════════════════════════════════════════════════════
+# ── إضافات النظام الذكي v3 ──────────────────────────────────────
+# دوال تدمج مع duplicate_detector و smart_cache
+# ════════════════════════════════════════════════════════════════
+
+def add_hospital_smart(name: str, city: str = None, h_type: str = 'حكومي',
+                       force: bool = False) -> dict:
+    """
+    إضافة مستشفى مع فحص ذكي للتكرار.
+    
+    force=True: يتجاوز التحذير ويضيف حتى لو وُجد تشابه.
+    يُعيد: {'success': bool, 'id': int, 'warning': str, 'similar': [...]}
+    """
+    from duplicate_detector import find_duplicates, format_duplicate_warning
+    from smart_cache import invalidate_hospital_cache, invalidate_logo_cache
+    from normalizer import clean_spaces
+
+    name = clean_spaces(name.strip()) if name else ''
+    if not name or len(name) < 2:
+        return {'success': False, 'error': '⚠️ اسم المستشفى غير صالح.'}
+
+    # جلب قائمة الأسماء الحالية للمقارنة
+    existing = [h['name'] for h in get_all_hospitals(active_only=False)]
+    similar = find_duplicates(name, existing, threshold=0.78)
+
+    # تكرار تام ← رفض
+    if similar and similar[0][1] >= 0.95 and not force:
+        return {
+            'success': False,
+            'error': f'❌ "{similar[0][0]}" موجود مسبقاً (متطابق).',
+            'similar': similar,
+        }
+
+    # تشابه عالٍ ← تحذير فقط (يُضاف إذا force=True)
+    warning = ''
+    if similar and not force:
+        warning = format_duplicate_warning(name, similar)
+        return {
+            'success': False,
+            'needs_confirm': True,
+            'warning': warning,
+            'similar': similar,
+        }
+
+    # الإضافة الفعلية
+    new_id = add_hospital(name=name, city=city, h_type=h_type)
+    if new_id:
+        invalidate_hospital_cache(city)
+        invalidate_logo_cache()
+        return {
+            'success': True,
+            'id': new_id,
+            'name': name,
+            'warning': warning if force else '',
+        }
+    return {'success': False, 'error': '❌ فشل الحفظ في قاعدة البيانات.'}
+
+
+def delete_hospital_smart(hospital_id: int) -> dict:
+    """
+    حذف مستشفى مع حذف Cascade للأطباء والشعارات.
+    يُعيد: {'success': bool, 'deleted_doctors': int}
+    """
+    from smart_cache import invalidate_hospital_cache, invalidate_doctor_cache, invalidate_logo_cache
+
+    hosp = get_hospital_by_id(hospital_id)
+    if not hosp:
+        return {'success': False, 'error': '❌ المستشفى غير موجود.'}
+
+    city = hosp.get('city', '')
+    name = hosp.get('name', '')
+
+    # حذف الأطباء المرتبطين
+    doctors = get_doctors_by_hospital(hospital_id)
+    deleted_count = 0
+    for doc in doctors:
+        try:
+            delete_doctor(doc['id'])
+            deleted_count += 1
+        except Exception:
+            pass
+
+    # حذف الشعار
+    try:
+        logos = get_logo_by_hospital(hospital_id)
+        if logos:
+            for logo in (logos if isinstance(logos, list) else [logos]):
+                delete_logo(logo['id'])
+    except Exception:
+        pass
+
+    # حذف المستشفى
+    delete_hospital(hospital_id)
+
+    # إبطال الكاش
+    invalidate_hospital_cache(city)
+    invalidate_doctor_cache(name)
+    invalidate_logo_cache()
+
+    return {'success': True, 'deleted_doctors': deleted_count, 'name': name}
+
+
+def update_hospital_smart(hospital_id: int, new_name: str = None,
+                          new_city: str = None, **kwargs) -> dict:
+    """
+    تحديث بيانات مستشفى مع فحص التكرار عند تغيير الاسم.
+    """
+    from duplicate_detector import find_duplicates
+    from smart_cache import invalidate_hospital_cache, invalidate_doctor_cache
+
+    hosp = get_hospital_by_id(hospital_id)
+    if not hosp:
+        return {'success': False, 'error': '❌ المستشفى غير موجود.'}
+
+    old_name = hosp.get('name', '')
+    old_city = hosp.get('city', '')
+
+    # فحص تكرار الاسم الجديد إن وُجد
+    if new_name and new_name.strip() != old_name:
+        existing = [h['name'] for h in get_all_hospitals(active_only=False)
+                    if h['name'] != old_name]
+        similar = find_duplicates(new_name.strip(), existing, threshold=0.85)
+        if similar and similar[0][1] >= 0.95:
+            return {
+                'success': False,
+                'error': f'❌ "{similar[0][0]}" موجود مسبقاً.',
+                'similar': similar,
+            }
+        kwargs['name'] = new_name.strip()
+
+    if new_city:
+        kwargs['city'] = new_city.strip()
+
+    update_hospital(hospital_id, **kwargs)
+
+    # إبطال الكاش
+    invalidate_hospital_cache(old_city)
+    if new_city and new_city != old_city:
+        invalidate_hospital_cache(new_city)
+    invalidate_doctor_cache(old_name)
+
+    return {'success': True, 'id': hospital_id}
+
+
+def get_doctors_by_hospital_name(hospital_name: str) -> list:
+    """يجلب أطباء مستشفى بالاسم (لا بالـ ID)."""
+    from smart_cache import get_doctors_cached, set_doctors_cached
+
+    cached = get_doctors_cached(hospital_name)
+    if cached is not None:
+        return cached
+
+    hosp = get_hospital_by_name(hospital_name)
+    if not hosp:
+        return []
+    result = get_doctors_by_hospital(hosp['id'])
+    set_doctors_cached(hospital_name, result or [])
+    return result or []
+
+
+def get_hospital_logo(hospital_name: str):
+    """يجلب شعار المستشفى بالاسم."""
+    from smart_cache import get_logo_cached, set_logo_cached
+
+    cached = get_logo_cached(hospital_name)
+    if cached is not None:
+        return cached
+
+    hosp = get_hospital_by_name(hospital_name)
+    if not hosp:
+        set_logo_cached(hospital_name, None)
+        return None
+
+    logos = get_logo_by_hospital(hosp['id'])
+    logo = logos[0] if isinstance(logos, list) and logos else logos
+    set_logo_cached(hospital_name, logo)
+    return logo
+
+
+def get_all_hospitals(city: str = None, region: str = None,
+                      h_type: str = None, active_only: bool = True) -> list:
+    """
+    يجلب جميع المستشفيات مع دعم فلترة متعدد + كاش.
+    (تُغلّف get_all_hospitals الأصلية وتضيف الكاش)
+    """
+    from smart_cache import get_hospitals_cached, set_hospitals_cached
+
+    cached = get_hospitals_cached(city, h_type)
+    if cached is not None:
+        return cached
+
+    conn = _get_conn()
+    cursor = conn.cursor()
+    query = 'SELECT * FROM hospitals WHERE 1=1'
+    params = []
+    if active_only:
+        query += ' AND is_active = 1'
+    if city:
+        query += ' AND city = ?'
+        params.append(city)
+    if region:
+        query += ' AND region = ?'
+        params.append(region)
+    if h_type:
+        query += ' AND type = ?'
+        params.append(h_type)
+    query += ' ORDER BY name'
+
+    try:
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        cols = [d[0] for d in cursor.description]
+        result = [dict(zip(cols, r)) for r in rows]
+    except Exception as e:
+        logger.error(f'get_all_hospitals error: {e}')
+        result = []
+    finally:
+        conn.close()
+
+    set_hospitals_cached(result, city, h_type)
+    return result

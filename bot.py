@@ -4072,3 +4072,191 @@ if __name__ == "__main__":
     t = threading.Thread(target=_run_web, daemon=True)
     t.start()
     main()
+
+
+# ════════════════════════════════════════════════════════════════
+# ── إضافات النظام الذكي v3 ──────────────────────────────────────
+# تُضاف في نهاية bot.py للحفاظ على Backward Compatibility
+# ════════════════════════════════════════════════════════════════
+
+# ── استيراد المحركات الجديدة بأمان (لا يُوقف البوت عند فشل الاستيراد) ──
+try:
+    from smart_parser import (
+        smart_parse,
+        smart_parse_full,
+        parse_any_date as _smart_parse_any_date,
+        build_missing_prompt as _smart_missing_prompt,
+        build_smart_preview as _smart_preview,
+        merge_parsed_data,
+        detect_field_update,
+    )
+    from date_intelligence import parse_smart_date, parse_date_range_smart
+    from duplicate_detector import find_duplicates, format_duplicate_warning
+    from smart_cache import (
+        invalidate_hospital_cache,
+        invalidate_doctor_cache,
+        get_cache_stats,
+        periodic_cache_cleanup,
+    )
+    from cities_hospitals_manager import (
+        validate_new_hospital,
+        validate_new_city,
+        build_hospitals_keyboard as _cm_hospitals_keyboard,
+        build_hospital_type_keyboard as _cm_type_keyboard,
+        smart_search_hospitals,
+        smart_search_cities,
+        build_duplicate_confirm_keyboard,
+    )
+    from smart_validator import (
+        validate_full_name,
+        validate_id_number,
+        validate_workplace,
+        validate_date,
+        validate_days_count,
+        format_validation_errors,
+    )
+    _SMART_ENGINE_AVAILABLE = True
+    logger.info('✅ النظام الذكي v3 تم تحميله بنجاح')
+except ImportError as _e:
+    _SMART_ENGINE_AVAILABLE = False
+    logger.warning(f'⚠️ النظام الذكي غير متاح — {_e}. يعمل بالنظام الأصلي.')
+
+
+# ── دوال wrapper ذكية ──────────────────────────────────────────
+
+def smart_parse_message(text: str) -> dict:
+    """
+    يُحلّل رسالة المستخدم بالمحرك الذكي مع fallback.
+    تستبدل parse_free_text_order لكنها backward compatible.
+    """
+    if not text:
+        return {}
+    if _SMART_ENGINE_AVAILABLE:
+        try:
+            return smart_parse_full(text)
+        except Exception as e:
+            logger.warning(f'smart_parse_message fallback: {e}')
+    return parse_free_text_order(text)
+
+
+def smart_parse_date_v3(raw: str):
+    """
+    يُحلّل التاريخ بالمحرك الذكي مع دعم التواريخ النسبية.
+    تستبدل normalize_date_input.
+    """
+    if not raw:
+        return None
+    if _SMART_ENGINE_AVAILABLE:
+        try:
+            return _smart_parse_any_date(raw)
+        except Exception:
+            pass
+    return normalize_date_input(raw)
+
+
+def validate_hospital_add_smart(name: str, city: str) -> dict:
+    """
+    يتحقق من صحة اسم مستشفى جديد مع كشف التكرار.
+    يُعيد: {'valid': bool, 'warning': str, 'similar': [...]}
+    """
+    if not _SMART_ENGINE_AVAILABLE:
+        return {'valid': bool(name and len(name.strip()) >= 2), 'similar': []}
+    try:
+        import hospital_management as hm
+        return validate_new_hospital(name, city, hm)
+    except Exception as e:
+        logger.warning(f'validate_hospital_add_smart: {e}')
+        return {'valid': True, 'similar': []}
+
+
+def build_enhanced_hospitals_keyboard(hospitals: list, city: str = '',
+                                      h_type: str = '', page: int = 0,
+                                      search_query: str = '') -> object:
+    """
+    يبني لوحة مفاتيح المستشفيات المحسّنة مع Pagination.
+    Fallback لـ static_hospitals_keyboard عند عدم توفر النظام الجديد.
+    """
+    if _SMART_ENGINE_AVAILABLE:
+        try:
+            return _cm_hospitals_keyboard(
+                hospitals, city=city, h_type=h_type,
+                page=page, search_query=search_query
+            )
+        except Exception:
+            pass
+    return static_hospitals_keyboard(hospitals, page)
+
+
+async def show_duplicate_warning(update, context, new_name: str,
+                                 similar: list, action_data: str = ''):
+    """
+    يعرض تحذير التكرار للمشرف مع خيارات التأكيد.
+    """
+    if not similar:
+        return
+    
+    if _SMART_ENGINE_AVAILABLE:
+        warning_text = format_duplicate_warning(new_name, similar)
+        best_match = similar[0][0]
+        kb = build_duplicate_confirm_keyboard(new_name, best_match, action_data)
+        await update.message.reply_text(
+            warning_text, parse_mode='Markdown', reply_markup=kb
+        )
+    else:
+        names = '\n'.join(f'• {n}' for n, _ in similar[:3])
+        await update.message.reply_text(
+            f'⚠️ توجد أسماء مشابهة:\n{names}\n\n'
+            f'هل تريد إضافة "{new_name}" على أي حال؟',
+        )
+
+
+async def cmd_cache_stats(update, context):
+    """أمر إدارة: عرض إحصائيات الكاش."""
+    if not is_admin_user(update.effective_user.id):
+        return
+    if not _SMART_ENGINE_AVAILABLE:
+        await update.message.reply_text('⚠️ النظام الذكي غير مفعّل.')
+        return
+    stats = get_cache_stats()
+    lines = ['📊 *إحصائيات الكاش:*\n']
+    for name, s in stats.items():
+        lines.append(
+            f'*{name}:* {s["size"]}/{s["maxsize"]} '
+            f'— معدل الإصابة {s["hit_rate"]}'
+        )
+    await update.message.reply_text('\n'.join(lines), parse_mode='Markdown')
+
+
+async def cmd_search_hospital(update, context):
+    """بحث ذكي في المستشفيات من الأمر /search."""
+    if not _SMART_ENGINE_AVAILABLE:
+        await update.message.reply_text('⚠️ البحث الذكي غير متاح.')
+        return
+    
+    args = context.args
+    if not args:
+        await update.message.reply_text(
+            '🔍 استخدم: `/search اسم المستشفى`\n'
+            'مثال: `/search مستشفى الملك فهد`',
+            parse_mode='Markdown'
+        )
+        return
+    
+    query = ' '.join(args)
+    try:
+        import hospital_management as hm
+        results = smart_search_hospitals(query, hm, limit=10)
+        if not results:
+            await update.message.reply_text(
+                f'🔍 لا توجد نتائج لـ "*{query}*"', parse_mode='Markdown'
+            )
+            return
+        
+        lines = [f'🔍 نتائج البحث عن "*{query}*":\n']
+        for r in results[:10]:
+            pct = int(r['score'] * 100)
+            lines.append(f'🏥 *{r["name"]}* — {r["city"]} ({pct}%)')
+        
+        await update.message.reply_text('\n'.join(lines), parse_mode='Markdown')
+    except Exception as e:
+        await update.message.reply_text(f'❌ خطأ: {str(e)[:100]}')
