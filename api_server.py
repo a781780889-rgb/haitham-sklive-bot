@@ -28,9 +28,33 @@ PDF_STORAGE_DIR = os.path.join(UPLOADS_DIR, 'pdfs')
 for d in [UPLOADS_DIR, PDF_STORAGE_DIR]:
     os.makedirs(d, exist_ok=True)
 
+# ══════════════════════════════════════════════
+# [Cloudflare Fix] ProxyFix
+# ══════════════════════════════════════════════
+from werkzeug.middleware.proxy_fix import ProxyFix
+
 # تكوين التطبيق
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+# تطبيق ProxyFix لقراءة IP الحقيقي خلف Cloudflare
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+# ══════════════════════════════════════════════
+# [Cloudflare Fix] Security Headers
+# ══════════════════════════════════════════════
+@app.after_request
+def add_security_headers(response):
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    # السماح بـ CORS للـ API فقط
+    if request.path.startswith('/api/'):
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, X-API-Key'
+    return response
 
 # إعداد السجلات
 logging.basicConfig(

@@ -9,11 +9,40 @@ import os, sys, base64
 from datetime import datetime, timedelta
 from flask import Flask, request, jsonify
 
+# ══════════════════════════════════════════════
+# [Cloudflare Fix] ProxyFix — مطلوب خلف Cloudflare
+# ══════════════════════════════════════════════
+from werkzeug.middleware.proxy_fix import ProxyFix
+
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _THIS_DIR)
 import database as db
 
 app = Flask(__name__)
+
+# ══════════════════════════════════════════════
+# [Cloudflare Fix] تطبيق ProxyFix
+# x_for=1   → يقرأ X-Forwarded-For (IP الحقيقي)
+# x_proto=1 → يقرأ X-Forwarded-Proto (https/http)
+# x_host=1  → يقرأ X-Forwarded-Host
+# ══════════════════════════════════════════════
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+
+# ══════════════════════════════════════════════
+# [Cloudflare Fix] Security Headers تلقائية
+# ══════════════════════════════════════════════
+@app.after_request
+def add_security_headers(response):
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    if request.is_secure:
+        response.headers['Strict-Transport-Security'] = (
+            'max-age=31536000; includeSubDomains'
+        )
+    return response
 
 
 def get_bg_b64():
