@@ -436,7 +436,7 @@ def normalize_date_input(text: str) -> str:
 # ══════════════════════════════════════════════
 
 ORDER_FIELDS = [
-    {"key": "full_name",        "label": "الاسم",                                "example": "هيثم عبده قائد احمد"},
+    {"key": "full_name",        "label": "الاسم",                                "example": "حكيم"},
     {"key": "id_number",        "label": "رقم الهوية (مهم)",                     "example": "1234535456"},
     {"key": "birth_year",       "label": "تاريخ الميلاد",                        "example": "1995"},
     {"key": "phone",            "label": "رقم الجوال",                           "example": "0555555555"},
@@ -2111,9 +2111,8 @@ async def ask_patient_data(update, context):
         lines.append(f"- {f['label']}: ")
     fields = "\n".join(lines)
     await update.message.reply_text(
-        f"\u2705 *{hospital}*\n\U0001f468\u200d\u2695\ufe0f {doctor} \u2014 {specialty}\n\n"
-        f"\u0623\u0631\u0633\u0644 \u0628\u064a\u0627\u0646\u0627\u062a \u0627\u0644\u0645\u0631\u064a\u0636:\n\n"
-        f"\U0001f4cb *\u0627\u0646\u0633\u062e \u0627\u0644\u0642\u0627\u0644\u0628 \u0648\u0623\u0643\u0645\u0644 \u0627\u0644\u0628\u064a\u0627\u0646\u0627\u062a:*\n{fields}",
+        f"أرسل بيانات المريض:\n\n"
+        f"📋 *انسخ القالب وأكمل البيانات:*\n{fields}",
         parse_mode="Markdown", reply_markup=back_keyboard()
     )
 
