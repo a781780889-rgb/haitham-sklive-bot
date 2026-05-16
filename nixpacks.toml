@@ -1,0 +1,22 @@
+[phases.setup]
+nixPkgs = [
+  "python311",
+  "gcc",
+  "freetype",
+  "fontconfig",
+  "zlib",
+  "libjpeg",
+  "libpng",
+  "cairo",
+  "pango",
+  "gdk-pixbuf",
+  "libffi",
+  "gobject-introspection",
+  "harfbuzz"
+]
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
+
+[start]
+cmd = "python3 bot.py"
