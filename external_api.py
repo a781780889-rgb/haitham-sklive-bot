@@ -1,30 +1,28 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-external_api.py — مزامنة بيانات الإجازة إلى قاعدة البيانات المشتركة
-═══════════════════════════════════════════════════════════════════════
-✅ يحفظ patient_id كنص عادي (لا تشفير) ليتوافق مع بحث الموقع
-✅ يحفظ أيضاً SHA256 hash لـ patient_id للمقارنة الآمنة
-✅ يحافظ على نفس الواجهة `send_leave_to_external_api`
+external_api.py — مزامنة بيانات الإجازة إلى Supabase (قاعدة البيانات المشتركة)
+═══════════════════════════════════════════════════════════════════════════════
+✅ يكتب في جدول query_records (نفس ما يقرأه sehasaa.com)
+✅ يستخدم excuse_code و id_number (نفس أسماء الأعمدة في الموقع)
+✅ بدون أي تشفير — رقم الهوية يُحفظ كنص عادي للمطابقة المباشرة
 
-الإعداد المطلوب على Railway:
-    SHARED_DATABASE_URL أو DATABASE_URL = postgresql://...
+متغيرات البيئة المطلوبة في Railway:
+    SHARED_DATABASE_URL = postgresql://...   ← اتصال Supabase
 """
 
 from __future__ import annotations
 import os
 import sys
-import hashlib
 import logging
 import asyncio
 import threading
-import json
 from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
 
 # ══════════════════════════════════════════════════════════════
-# 1) قاعدة البيانات (psycopg2)
+# اتصال قاعدة البيانات
 # ══════════════════════════════════════════════════════════════
 DATABASE_URL = (
     os.environ.get("SHARED_DATABASE_URL")
@@ -32,7 +30,6 @@ DATABASE_URL = (
     or ""
 ).strip()
 
-# Railway قد يُعيد URL بصيغة postgres:// المهجورة
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
@@ -41,26 +38,11 @@ try:
     _HAS_PG = True
 except ImportError:
     _HAS_PG = False
-    logger.warning("⚠️ psycopg2 غير مثبت — مزامنة الموقع معطّلة")
+    logger.warning("⚠️ psycopg2 غير مثبت — مزامنة Supabase معطّلة")
 
-# ══════════════════════════════════════════════════════════════
-# 2) دالة Hash آمنة وثابتة لرقم الهوية
-#    SHA256 دائماً ينتج نفس النتيجة للنفس المدخل
-# ══════════════════════════════════════════════════════════════
-def _hash_id(text: str) -> str:
-    """تحوّل رقم الهوية إلى SHA256 hash ثابت وغير قابل للعكس."""
-    if not text:
-        return ""
-    return hashlib.sha256(text.strip().encode("utf-8")).hexdigest()
-
-
-# ══════════════════════════════════════════════════════════════
-# 3) إعدادات أخرى
-# ══════════════════════════════════════════════════════════════
-SOURCE_BOT = os.environ.get("BOT_SOURCE_NAME", "bot1")
-_executor = ThreadPoolExecutor(max_workers=2)
-_SCHEMA_INITIALIZED = False
-_SCHEMA_LOCK = threading.Lock()
+_executor   = ThreadPoolExecutor(max_workers=2)
+_SCHEMA_OK  = False
+_SCHEMA_LCK = threading.Lock()
 
 
 def _connect():
@@ -69,60 +51,55 @@ def _connect():
     try:
         return psycopg2.connect(DATABASE_URL, connect_timeout=10)
     except Exception as e:
-        logger.error(f"❌ فشل الاتصال بقاعدة البيانات: {e}")
+        logger.error(f"❌ فشل الاتصال بـ Supabase: {e}")
         return None
 
 
 # ══════════════════════════════════════════════════════════════
-# 4) تهيئة الجدول
+# تهيئة الجدول — نفس هيكل query_records الذي يقرأه sehasaa.com
 # ══════════════════════════════════════════════════════════════
 _CREATE_SQL = """
-CREATE TABLE IF NOT EXISTS reports (
-    id              SERIAL PRIMARY KEY,
-    report_number   TEXT UNIQUE NOT NULL,
-    report_type     TEXT DEFAULT 'official',
-    user_id         BIGINT DEFAULT 0,
-    patient_name    TEXT DEFAULT '',
-    patient_id      TEXT DEFAULT '',
-    patient_id_hash TEXT DEFAULT '',
-    nationality     TEXT DEFAULT '',
-    employer        TEXT DEFAULT '',
-    leave_date      TEXT DEFAULT '',
-    days            TEXT DEFAULT '0',
-    doctor_name     TEXT DEFAULT '',
-    doctor_specialty TEXT DEFAULT '',
-    hospital_name   TEXT DEFAULT '',
-    hospital_id     TEXT DEFAULT '',
-    pdf_path        TEXT DEFAULT '',
-    report_data     TEXT DEFAULT '',
-    source_bot      TEXT DEFAULT '',
-    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE IF NOT EXISTS query_records (
+    id           SERIAL PRIMARY KEY,
+    excuse_code  TEXT UNIQUE NOT NULL,
+    id_number    TEXT NOT NULL,
+    full_name    TEXT DEFAULT '',
+    hospital     TEXT DEFAULT '',
+    doctor       TEXT DEFAULT '',
+    specialty    TEXT DEFAULT '',
+    excuse_date  TEXT DEFAULT '',
+    days_count   INTEGER DEFAULT 0,
+    pdf_path     TEXT DEFAULT '',
+    user_id      BIGINT DEFAULT 0,
+    nationality  TEXT DEFAULT '',
+    employer     TEXT DEFAULT '',
+    source_bot   TEXT DEFAULT '',
+    created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at   TIMESTAMP,
+    access_count INTEGER DEFAULT 0,
+    last_accessed TIMESTAMP
 );
 """
 
 _ALTER_STMTS = [
-    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS source_bot      TEXT DEFAULT ''",
-    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS user_id         BIGINT DEFAULT 0",
-    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS hospital_id     TEXT DEFAULT ''",
-    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS pdf_path        TEXT DEFAULT ''",
-    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS report_data     TEXT DEFAULT ''",
-    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS report_type     TEXT DEFAULT 'official'",
-    # العمود الجديد لـ hash رقم الهوية
-    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS patient_id_hash TEXT DEFAULT ''",
+    "ALTER TABLE query_records ADD COLUMN IF NOT EXISTS nationality TEXT DEFAULT ''",
+    "ALTER TABLE query_records ADD COLUMN IF NOT EXISTS employer    TEXT DEFAULT ''",
+    "ALTER TABLE query_records ADD COLUMN IF NOT EXISTS source_bot  TEXT DEFAULT ''",
+    "ALTER TABLE query_records ADD COLUMN IF NOT EXISTS user_id     BIGINT DEFAULT 0",
 ]
 
 
-def _ensure_schema():
-    global _SCHEMA_INITIALIZED
-    if _SCHEMA_INITIALIZED:
+def _ensure_schema() -> bool:
+    global _SCHEMA_OK
+    if _SCHEMA_OK:
         return True
     if not DATABASE_URL or not _HAS_PG:
         return False
-    with _SCHEMA_LOCK:
-        if _SCHEMA_INITIALIZED:
+    with _SCHEMA_LCK:
+        if _SCHEMA_OK:
             return True
         conn = _connect()
-        if conn is None:
+        if not conn:
             return False
         try:
             with conn.cursor() as cur:
@@ -132,13 +109,12 @@ def _ensure_schema():
                         cur.execute(stmt)
                     except Exception:
                         conn.rollback()
-                        continue
             conn.commit()
-            _SCHEMA_INITIALIZED = True
-            logger.info("✅ جدول reports المشترك جاهز")
+            _SCHEMA_OK = True
+            logger.info("✅ جدول query_records جاهز في Supabase")
             return True
         except Exception as e:
-            logger.error(f"❌ فشل تهيئة المخطط: {e}")
+            logger.error(f"❌ فشل تهيئة الجدول: {e}")
             try: conn.rollback()
             except: pass
             return False
@@ -148,89 +124,77 @@ def _ensure_schema():
 
 
 # ══════════════════════════════════════════════════════════════
-# 5) الإدراج المتزامن (يُنفّذ في thread)
+# الإدراج المتزامن في thread منفصل
 # ══════════════════════════════════════════════════════════════
-def _insert_leave_sync(
-    gsl_code:         str,
-    patient_name:     str,
-    patient_id:       str,
-    nationality:      str,
-    employer:         str,
-    leave_date:       str,
+def _insert_sync(
+    gsl_code:    str,
+    patient_name:str,
+    patient_id:  str,
+    nationality: str,
+    employer:    str,
+    leave_date:  str,
     days,
-    doctor_name:      str,
+    doctor_name: str,
     doctor_specialty: str,
-    hospital_name:    str,
+    hospital_name: str,
 ) -> bool:
-    """تُنفّذ في خيط منفصل — لا تحجب البوت."""
 
     if not DATABASE_URL or not _HAS_PG:
-        logger.warning(f"⚠️ DATABASE_URL غير مُعدّ — تخطّي مزامنة {gsl_code}")
+        logger.warning(f"⚠️ SHARED_DATABASE_URL غير مُعدّ — تخطّي {gsl_code}")
         return False
 
     if not _ensure_schema():
         return False
 
-    # ✅ patient_id محفوظ كنص عادي للبحث المباشر
-    patient_id_plain = (patient_id or "").strip()
-    # ✅ hash ثابت للمقارنة الآمنة
-    patient_id_hash  = _hash_id(patient_id_plain)
-
-    rdata = json.dumps({
-        "patient_name": patient_name or "",
-        "source":       SOURCE_BOT,
-    }, ensure_ascii=False)
+    # تحويل الأيام إلى رقم صحيح
+    try:
+        days_int = int(str(days).strip()) if days else 0
+    except Exception:
+        days_int = 0
 
     sql = """
-        INSERT INTO reports
-            (report_number, report_type, patient_name, patient_id,
-             patient_id_hash, nationality, employer, leave_date, days,
-             doctor_name, doctor_specialty, hospital_name,
-             source_bot, report_data)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-        ON CONFLICT (report_number) DO UPDATE SET
-            patient_name     = EXCLUDED.patient_name,
-            patient_id       = EXCLUDED.patient_id,
-            patient_id_hash  = EXCLUDED.patient_id_hash,
-            nationality      = EXCLUDED.nationality,
-            employer         = EXCLUDED.employer,
-            leave_date       = EXCLUDED.leave_date,
-            days             = EXCLUDED.days,
-            doctor_name      = EXCLUDED.doctor_name,
-            doctor_specialty = EXCLUDED.doctor_specialty,
-            hospital_name    = EXCLUDED.hospital_name,
-            source_bot       = EXCLUDED.source_bot,
-            report_data      = EXCLUDED.report_data
+        INSERT INTO query_records
+            (excuse_code, id_number, full_name, hospital, doctor,
+             specialty, excuse_date, days_count, nationality, employer, source_bot)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (excuse_code) DO UPDATE SET
+            id_number   = EXCLUDED.id_number,
+            full_name   = EXCLUDED.full_name,
+            hospital    = EXCLUDED.hospital,
+            doctor      = EXCLUDED.doctor,
+            specialty   = EXCLUDED.specialty,
+            excuse_date = EXCLUDED.excuse_date,
+            days_count  = EXCLUDED.days_count,
+            nationality = EXCLUDED.nationality,
+            employer    = EXCLUDED.employer,
+            source_bot  = EXCLUDED.source_bot
     """
 
     values = (
-        (gsl_code or "").strip(),
-        "official",
-        patient_name or "",
-        patient_id_plain,   # ← نص عادي للبحث المباشر
-        patient_id_hash,    # ← hash ثابت للمقارنة الآمنة
-        nationality or "",
-        employer or "",
-        leave_date or "",
-        str(days) if days is not None else "0",
-        doctor_name or "",
-        doctor_specialty or "",
-        hospital_name or "",
-        SOURCE_BOT,
-        rdata,
+        (gsl_code      or "").strip(),   # excuse_code
+        (patient_id    or "").strip(),   # id_number ← نص عادي بدون تشفير
+        (patient_name  or "").strip(),   # full_name
+        (hospital_name or "").strip(),   # hospital
+        (doctor_name   or "").strip(),   # doctor
+        (doctor_specialty or "").strip(),# specialty
+        (leave_date    or "").strip(),   # excuse_date
+        days_int,                        # days_count
+        (nationality   or "").strip(),   # nationality
+        (employer      or "").strip(),   # employer
+        "bot1",                          # source_bot
     )
 
     conn = _connect()
-    if conn is None:
+    if not conn:
         return False
     try:
         with conn.cursor() as cur:
             cur.execute(sql, values)
         conn.commit()
-        logger.info(f"✅ تمت مزامنة {gsl_code} (المصدر: {SOURCE_BOT})")
+        logger.info(f"✅ تم حفظ {gsl_code} في Supabase (query_records)")
         return True
     except Exception as e:
-        logger.error(f"❌ فشل مزامنة {gsl_code}: {e}")
+        logger.error(f"❌ فشل حفظ {gsl_code}: {e}")
         try: conn.rollback()
         except: pass
         return False
@@ -240,7 +204,7 @@ def _insert_leave_sync(
 
 
 # ══════════════════════════════════════════════════════════════
-# 6) الواجهة الرئيسية (نفس توقيع الدالة الأصلي)
+# الواجهة الرئيسية — نفس توقيع الدالة الأصلي
 # ══════════════════════════════════════════════════════════════
 async def send_leave_to_external_api(
     gsl_code:         str,
@@ -255,15 +219,15 @@ async def send_leave_to_external_api(
     hospital_name:    str,
 ) -> bool:
     """
-    إرسال بيانات الإجازة إلى قاعدة البيانات المشتركة بطريقة non-blocking.
-
-    ✅ patient_id يُحفظ كنص عادي — يتوافق مع بحث الموقع مباشرة
-    ✅ patient_id_hash (SHA256) يُحفظ للمقارنة الآمنة إذا احتاجها الموقع
+    يحفظ بيانات الإجازة في Supabase داخل جدول query_records
+    بنفس الأعمدة التي يقرأها sehasaa.com:
+        excuse_code = gsl_code
+        id_number   = patient_id (نص عادي)
     """
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(
         _executor,
-        _insert_leave_sync,
+        _insert_sync,
         gsl_code,
         patient_name,
         patient_id,
