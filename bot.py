@@ -4056,8 +4056,24 @@ def main():
     # ✅ معالج الصور — لاستقبال شعارات المستشفيات عبر البوت
     application.add_handler(MessageHandler(filters.PHOTO | filters.Document.IMAGE, handle_photo))
 
-    logger.info("✅ البوت يعمل الآن...")
-    application.run_polling(drop_pending_updates=True)
+    # ── انتظر حتى يتحرر البوت من أي instance سابق (حل 409 Conflict) ──
+    import time as _time
+    _max_retries = 10
+    for _attempt in range(_max_retries):
+        try:
+            logger.info(f"✅ البوت يعمل الآن... (محاولة {_attempt + 1})")
+            application.run_polling(
+                drop_pending_updates=True,
+                allowed_updates=["message", "callback_query", "my_chat_member"],
+            )
+            break  # نجح، اخرج من الحلقة
+        except Exception as _e:
+            if "Conflict" in str(_e) or "409" in str(_e):
+                wait_sec = 5 * (_attempt + 1)
+                logger.warning(f"⚠️ 409 Conflict — instance آخر يعمل. انتظار {wait_sec}s...")
+                _time.sleep(wait_sec)
+            else:
+                raise  # خطأ مختلف، أوقف البوت
 
 
 import threading
