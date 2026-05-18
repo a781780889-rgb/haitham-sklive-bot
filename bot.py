@@ -4056,24 +4056,40 @@ def main():
     # ✅ معالج الصور — لاستقبال شعارات المستشفيات عبر البوت
     application.add_handler(MessageHandler(filters.PHOTO | filters.Document.IMAGE, handle_photo))
 
-    # ── انتظر حتى يتحرر البوت من أي instance سابق (حل 409 Conflict) ──
-    import time as _time
-    _max_retries = 10
-    for _attempt in range(_max_retries):
-        try:
-            logger.info(f"✅ البوت يعمل الآن... (محاولة {_attempt + 1})")
-            application.run_polling(
-                drop_pending_updates=True,
-                allowed_updates=["message", "callback_query", "my_chat_member"],
-            )
-            break  # نجح، اخرج من الحلقة
-        except Exception as _e:
-            if "Conflict" in str(_e) or "409" in str(_e):
-                wait_sec = 5 * (_attempt + 1)
-                logger.warning(f"⚠️ 409 Conflict — instance آخر يعمل. انتظار {wait_sec}s...")
-                _time.sleep(wait_sec)
-            else:
-                raise  # خطأ مختلف، أوقف البوت
+    # ══════════════════════════════════════════════════════════════
+    # تشغيل البوت — Webhook إذا توفّر WEBHOOK_URL وإلا Polling
+    # ══════════════════════════════════════════════════════════════
+    WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "").strip()
+
+    if WEBHOOK_URL:
+        # ── وضع Webhook (مستحسن على Railway — بدون تعارض 409) ────
+        logger.info(f"🌐 تشغيل بوضع Webhook: {WEBHOOK_URL}")
+        application.run_webhook(
+            listen="0.0.0.0",
+            port=int(os.environ.get("BOT_WEBHOOK_PORT", 8443)),
+            url_path=f"/{BOT_TOKEN}",
+            webhook_url=f"{WEBHOOK_URL}/{BOT_TOKEN}",
+            drop_pending_updates=True,
+        )
+    else:
+        # ── وضع Polling مع انتظار لحل تعارض 409 ────────────────
+        import time as _time, signal as _signal
+
+        # انتظر 10 ثواني لضمان إيقاف أي instance سابق أرسله Railway
+        logger.info("⏳ انتظار 10 ثواني قبل بدء Polling...")
+        _time.sleep(10)
+
+        def _sigterm(*_):
+            logger.info("🛑 SIGTERM — إيقاف البوت...")
+            raise SystemExit(0)
+
+        _signal.signal(_signal.SIGTERM, _sigterm)
+
+        logger.info("✅ البوت يعمل الآن (Polling)...")
+        application.run_polling(
+            drop_pending_updates=True,
+            allowed_updates=["message", "callback_query", "my_chat_member"],
+        )
 
 
 import threading
