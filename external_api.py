@@ -3,24 +3,22 @@
 """
 external_api.py — مزامنة بيانات الإجازة إلى قاعدة البيانات المشتركة
 ═══════════════════════════════════════════════════════════════════════
-✅ النسخة الموحّدة: تستخدم نفس آلية التشفير الموجودة في:
-   - بوت 2 (jdjdn)  → يشفّر patient_id بـ Fernet
-   - الموقع (app.py) → يفك التشفير بنفس المفتاح
-✅ يحافظ على نفس الواجهة `send_leave_to_external_api` (لا تغيير على bot.py)
+✅ يحفظ patient_id كنص عادي (لا تشفير) ليتوافق مع بحث الموقع
+✅ يحفظ أيضاً SHA256 hash لـ patient_id للمقارنة الآمنة
+✅ يحافظ على نفس الواجهة `send_leave_to_external_api`
 
-الإعداد المطلوب على Railway لبوت 1:
-    DATABASE_URL = postgresql://...           (نفس قاعدة بوت 2 والموقع)
-    ENC_KEY      = نفس المفتاح في بوت 2 والموقع   (إجباري)
+الإعداد المطلوب على Railway:
+    SHARED_DATABASE_URL أو DATABASE_URL = postgresql://...
 """
 
 from __future__ import annotations
 import os
 import sys
 import hashlib
-import base64
 import logging
 import asyncio
 import threading
+import json
 from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
@@ -46,62 +44,15 @@ except ImportError:
     logger.warning("⚠️ psycopg2 غير مثبت — مزامنة الموقع معطّلة")
 
 # ══════════════════════════════════════════════════════════════
-# 2) التشفير — نفس آلية بوت 2 والموقع تماماً
+# 2) دالة Hash آمنة وثابتة لرقم الهوية
+#    SHA256 دائماً ينتج نفس النتيجة للنفس المدخل
 # ══════════════════════════════════════════════════════════════
-_ENC_KEY_RAW = os.environ.get("ENC_KEY", "").strip()
+def _hash_id(text: str) -> str:
+    """تحوّل رقم الهوية إلى SHA256 hash ثابت وغير قابل للعكس."""
+    if not text:
+        return ""
+    return hashlib.sha256(text.strip().encode("utf-8")).hexdigest()
 
-try:
-    from cryptography.fernet import Fernet as _Fernet
-    _HAS_FERNET = True
-except ImportError:
-    _HAS_FERNET = False
-
-_enc = None  # ستُملأ أدناه
-
-if not _ENC_KEY_RAW:
-    logger.warning(
-        "⚠️ ENC_KEY غير موجود في بوت 1 — patient_id سيُحفظ بدون تشفير. "
-        "أضف ENC_KEY بنفس قيمته في بوت 2 لتفعيل التشفير."
-    )
-    def _enc(text: str) -> str:
-        return text or ""
-
-elif _HAS_FERNET:
-    # ✅ نفس المنطق الموجود في بوت 2 والموقع بالحرف
-    try:
-        _FERNET = _Fernet(
-            _ENC_KEY_RAW.encode() if len(_ENC_KEY_RAW) == 44
-            else base64.urlsafe_b64encode(hashlib.sha256(_ENC_KEY_RAW.encode()).digest())
-        )
-    except Exception:
-        _FERNET = _Fernet(
-            base64.urlsafe_b64encode(hashlib.sha256(_ENC_KEY_RAW.encode()).digest())
-        )
-
-    def _enc(text: str) -> str:
-        if not text:
-            return ""
-        try:
-            return _FERNET.encrypt(text.encode()).decode()
-        except Exception:
-            return text
-    logger.info("🔐 تشفير Fernet مفعّل — patient_id سيُحفظ مشفّراً")
-
-else:
-    # XOR fallback — نفس آلية بوت 2 لما لا تكون cryptography مثبتة
-    logger.warning("⚠️ cryptography غير مثبتة — يُستخدم XOR الضعيف")
-    _ENC_B64 = base64.urlsafe_b64encode(hashlib.sha256(_ENC_KEY_RAW.encode()).digest()[:16])
-
-    def _enc(text: str) -> str:
-        if not text:
-            return ""
-        try:
-            key = _ENC_B64 * (len(text) // len(_ENC_B64) + 1)
-            return base64.urlsafe_b64encode(
-                bytes(a ^ b for a, b in zip(text.encode(), key[:len(text)]))
-            ).decode()
-        except Exception:
-            return text
 
 # ══════════════════════════════════════════════════════════════
 # 3) إعدادات أخرى
@@ -123,7 +74,7 @@ def _connect():
 
 
 # ══════════════════════════════════════════════════════════════
-# 4) تهيئة الجدول — نفس مخطط بوت 2 والموقع
+# 4) تهيئة الجدول
 # ══════════════════════════════════════════════════════════════
 _CREATE_SQL = """
 CREATE TABLE IF NOT EXISTS reports (
@@ -133,6 +84,7 @@ CREATE TABLE IF NOT EXISTS reports (
     user_id         BIGINT DEFAULT 0,
     patient_name    TEXT DEFAULT '',
     patient_id      TEXT DEFAULT '',
+    patient_id_hash TEXT DEFAULT '',
     nationality     TEXT DEFAULT '',
     employer        TEXT DEFAULT '',
     leave_date      TEXT DEFAULT '',
@@ -149,12 +101,14 @@ CREATE TABLE IF NOT EXISTS reports (
 """
 
 _ALTER_STMTS = [
-    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS source_bot TEXT DEFAULT ''",
-    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS user_id    BIGINT DEFAULT 0",
-    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS hospital_id TEXT DEFAULT ''",
-    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS pdf_path    TEXT DEFAULT ''",
-    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS report_data TEXT DEFAULT ''",
-    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS report_type TEXT DEFAULT 'official'",
+    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS source_bot      TEXT DEFAULT ''",
+    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS user_id         BIGINT DEFAULT 0",
+    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS hospital_id     TEXT DEFAULT ''",
+    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS pdf_path        TEXT DEFAULT ''",
+    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS report_data     TEXT DEFAULT ''",
+    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS report_type     TEXT DEFAULT 'official'",
+    # العمود الجديد لـ hash رقم الهوية
+    "ALTER TABLE reports ADD COLUMN IF NOT EXISTS patient_id_hash TEXT DEFAULT ''",
 ]
 
 
@@ -217,26 +171,27 @@ def _insert_leave_sync(
     if not _ensure_schema():
         return False
 
-    # ✅ تشفير patient_id بنفس آلية بوت 2 والموقع
-    patient_id_enc = _enc(patient_id) if patient_id else ""
+    # ✅ patient_id محفوظ كنص عادي للبحث المباشر
+    patient_id_plain = (patient_id or "").strip()
+    # ✅ hash ثابت للمقارنة الآمنة
+    patient_id_hash  = _hash_id(patient_id_plain)
 
-    # ✅ نخزن أيضاً النسخة المشفّرة في report_data كاحتياط (مثل بوت 2)
-    import json as _json
-    rdata_enc = _json.dumps({
-        "patient_name":   patient_name or "",
-        "patient_id_enc": patient_id_enc,
+    rdata = json.dumps({
+        "patient_name": patient_name or "",
+        "source":       SOURCE_BOT,
     }, ensure_ascii=False)
 
     sql = """
         INSERT INTO reports
             (report_number, report_type, patient_name, patient_id,
-             nationality, employer, leave_date, days,
+             patient_id_hash, nationality, employer, leave_date, days,
              doctor_name, doctor_specialty, hospital_name,
              source_bot, report_data)
-        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
         ON CONFLICT (report_number) DO UPDATE SET
             patient_name     = EXCLUDED.patient_name,
             patient_id       = EXCLUDED.patient_id,
+            patient_id_hash  = EXCLUDED.patient_id_hash,
             nationality      = EXCLUDED.nationality,
             employer         = EXCLUDED.employer,
             leave_date       = EXCLUDED.leave_date,
@@ -252,7 +207,8 @@ def _insert_leave_sync(
         (gsl_code or "").strip(),
         "official",
         patient_name or "",
-        patient_id_enc,                     # ← مشفّر
+        patient_id_plain,   # ← نص عادي للبحث المباشر
+        patient_id_hash,    # ← hash ثابت للمقارنة الآمنة
         nationality or "",
         employer or "",
         leave_date or "",
@@ -261,7 +217,7 @@ def _insert_leave_sync(
         doctor_specialty or "",
         hospital_name or "",
         SOURCE_BOT,
-        rdata_enc,
+        rdata,
     )
 
     conn = _connect()
@@ -301,8 +257,8 @@ async def send_leave_to_external_api(
     """
     إرسال بيانات الإجازة إلى قاعدة البيانات المشتركة بطريقة non-blocking.
 
-    ✅ patient_id يُشفّر بـ Fernet قبل الحفظ (نفس آلية بوت 2 والموقع)
-    ✅ الموقع يفك التشفير عند البحث ويطابق رقم الهوية الذي يُدخله المستخدم
+    ✅ patient_id يُحفظ كنص عادي — يتوافق مع بحث الموقع مباشرة
+    ✅ patient_id_hash (SHA256) يُحفظ للمقارنة الآمنة إذا احتاجها الموقع
     """
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(
