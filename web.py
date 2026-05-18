@@ -637,3 +637,23 @@ def api_stats():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
+
+
+# ── DEBUG ENDPOINT مؤقت — احذفه بعد حل المشكلة ──────────────
+@app.route("/api/debug-orders")
+def debug_orders():
+    try:
+        conn = db.get_conn()
+        rows = conn.execute(
+            "SELECT id, gsl_code, id_number, status, full_name, created_at FROM orders ORDER BY id DESC LIMIT 10"
+        ).fetchall()
+        conn.close()
+        result = []
+        for r in rows:
+            row = dict(r)
+            idn = str(row.get("id_number", "") or "")
+            row["id_number"] = idn[:3] + "****" + idn[-2:] if len(idn) > 5 else idn
+            result.append(row)
+        return jsonify({"orders": result, "count": len(result)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
