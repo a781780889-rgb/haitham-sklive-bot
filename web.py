@@ -156,14 +156,14 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
 
 /* ── صفحة النتيجة - إخفاء وإظهار ── */
 .result-page {
-  display: none;
+  display: none !important;
   position: fixed;
   inset: 0;
   z-index: 500;
   overflow-y: auto;
   direction: rtl;
 }
-.result-page.active { display: flex; }
+.result-page.active { display: flex !important; }
 
   .phone {
     width: 100%;
