@@ -352,16 +352,16 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
     font-family: 'Cairo', Arial, Tahoma, sans-serif;
   }
   .data-value {
-    font-size: 12px;
+    font-size: 14px;
     font-weight: 400;
-    color: #aaa;
+    color: #8c8c8c;
     text-align: center;
     min-height: 15px;
     display: block;
     font-family: 'Cairo', Arial, Tahoma, sans-serif;
   }
   .data-value.dot {
-    color: #ccc;
+    color: #b0b0b0;
     font-size: 16px;
     line-height: 1;
   }
