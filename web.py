@@ -158,11 +158,18 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
 .result-page {
   display: none !important;
   position: fixed;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 100% !important;
   z-index: 500;
   overflow-y: auto;
   direction: rtl;
   background: #f0f2f5;
+  justify-content: center;
 }
 .result-page.active { display: flex !important; }
 
@@ -603,7 +610,8 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
 </div>
 
 
-<div class="result-page phone" id="resultPage">
+<div class="result-page" id="resultPage">
+<div class="phone">
 
   <!-- ═══ HEADER ═══ -->
   <header class="header">
@@ -884,6 +892,7 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
 
   </footer>
 </div><!-- /phone -->
+</div><!-- /result-page -->
 
 <!-- صفحة الإدخال -->
 <div id="pageWrap">
