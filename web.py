@@ -162,6 +162,7 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
   z-index: 500;
   overflow-y: auto;
   direction: rtl;
+  background: #f0f2f5;
 }
 .result-page.active { display: flex !important; }
 
@@ -957,6 +958,7 @@ async function doQuery() {
     }
     document.getElementById('resultPage').classList.add('active');
     document.getElementById('resultPage').scrollTop=0;
+    document.getElementById('pageWrap').style.display='none';
   } catch(e) {
     document.getElementById('loadingOverlay').classList.remove('active');
     document.getElementById('errTitle').textContent='خطأ في الاتصال';
@@ -964,6 +966,7 @@ async function doQuery() {
     document.getElementById('successSection').style.display='none';
     document.getElementById('errorSection').style.display='block';
     document.getElementById('resultPage').classList.add('active');
+    document.getElementById('pageWrap').style.display='none';
   }
   document.getElementById('btnQuery').disabled=false;
 }
@@ -975,6 +978,7 @@ function doReset() {
   document.getElementById('gslError').classList.remove('show');
   document.getElementById('idError').classList.remove('show');
   document.getElementById('resultPage').classList.remove('active');
+  document.getElementById('pageWrap').style.display='block';
   document.getElementById('successSection').style.display='none';
   document.getElementById('errorSection').style.display='none';
   ['v-name','v-issue','v-from','v-to','v-days','v-doctor','v-job'].forEach(id=>{document.getElementById(id).textContent='—';});
