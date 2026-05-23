@@ -354,7 +354,7 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
   /* ── DATA CARD ── */
   .data-card {
     width: 100%;
-    background: #f7f8fa;
+    background: #ffffff;
     border: 1px solid #d8dce2;
     border-radius: 10px;
     padding: 0;
@@ -372,18 +372,18 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
   }
 
   .data-label {
-    font-size: 13.5px;
+    font-size: 18px;
     font-weight: 700;
-    color: #111;
+    color: #1a1a1a;
     text-align: center;
     display: block;
     margin-bottom: 6px;
     font-family: 'Cairo', Arial, Tahoma, sans-serif;
   }
   .data-value {
-    font-size: 14px;
+    font-size: 16px;
     font-weight: 400;
-    color: #8c8c8c;
+    color: #4a4a4a;
     text-align: center;
     min-height: 15px;
     display: block;
