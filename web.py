@@ -865,7 +865,7 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
               <rect x="2" y="4" width="20" height="16" rx="2"/>
               <polyline points="22,6 12,13 2,6"/>
             </svg>
-            <span style="font-size:11px;">support@seha.sa</span>
+            <span style="font-size:11px;">support&#64;seha&#46;sa</span>
           </div>
           <div class="contact-line">
             <!-- WhatsApp icon -->
