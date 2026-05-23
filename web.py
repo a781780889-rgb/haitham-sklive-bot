@@ -390,7 +390,7 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
     font-family: 'Cairo', Arial, Tahoma, sans-serif;
   }
   .data-value.dot {
-    color: #b0b0b0;
+    color: #4a4a4a;
     font-size: 16px;
     line-height: 1;
   }
