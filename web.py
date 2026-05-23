@@ -171,7 +171,7 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
   direction: rtl;
   background: #ffffff;
 }
-.result-page.active { display: flex !important; justify-content: center; }
+.result-page.active { display: flex !important; }
 
   .phone {
     width: 100%;
@@ -801,9 +801,9 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
     <!-- ── Description ── -->
     <p class="ft-desc">
       منصة صحة تخدم جميع المنشآت الطبية من خلال تقديم<br>
-      الخدمات الصحية إلكترونياً لجميع المنشآت الطبية وتسعى<br>
-      إلى توحيد وأتمتة الإجراءات والخدمات بما في دوره رفع<br>
-      جودة الأداء وخفض التكاليف.
+      الخدمات الصحية إلكترونياً لجميع المنشآت الطبية<br>
+      وتسعى إلى توحيد وأتمتة الاجراءات والخدمات بما في<br>
+      دوره رفع جودة الاداء وخفض التكاليف.
     </p>
 
     <!-- ── Main Menu ── -->
