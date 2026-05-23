@@ -322,7 +322,7 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
   }
   .result-input-display {
     width: 100%;
-    background: rgba(255,255,255,0.97);
+    background: #795548;
     border: 1.5px solid #2d5fa6;
     border-radius: 6px;
     padding: 10px 12px;
