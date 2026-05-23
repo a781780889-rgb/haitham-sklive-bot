@@ -865,7 +865,9 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
               <rect x="2" y="4" width="20" height="16" rx="2"/>
               <polyline points="22,6 12,13 2,6"/>
             </svg>
-            <span style="font-size:11px;" id="contact-email"></span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="130" height="15" style="vertical-align:middle;display:inline-block;">
+              <text x="0" y="12" font-family="Cairo,Tajawal,Arial,sans-serif" font-size="11" fill="rgba(255,255,255,0.92)">support@seha.sa</text>
+            </svg>
           </div>
           <div class="contact-line">
             <!-- WhatsApp icon -->
@@ -941,11 +943,6 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
 </div>
 
 <script>
-// Inject email at runtime to bypass Cloudflare email protection
-(function(){
-  var el=document.getElementById('contact-email');
-  if(el) el.textContent = 'support' + String.fromCharCode(64) + 'seha.sa';
-})();
 
 function setupInput(id) {
   const el = document.getElementById(id);
