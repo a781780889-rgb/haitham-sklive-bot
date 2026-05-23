@@ -108,7 +108,9 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
   color:#555555; direction:rtl; text-align:right; caret-color:#555555; padding:0 12px;
 }
 .form-input::placeholder { color:#aaaaaa; }
-.form-input:focus,.form-input.has-value { background:#ffffff!important; border-radius:10px; border:1.5px solid #c0c0c0!important; box-shadow:none!important; }
+.form-input:focus-visible { outline:none!important; box-shadow:none!important; }
+.form-input:focus-within { outline:none!important; box-shadow:none!important; }
+.form-input:focus,.form-input.has-value { background:#ffffff!important; border-radius:10px; border:1.5px solid #d6d6d6!important; outline:none!important; box-shadow:none!important; -webkit-tap-highlight-color:transparent; }
 #gslInp { top:15.0%; height:2.3%; }
 #idInp  { top:18.8%; height:2.2%; }
 .btn-transparent {
