@@ -171,7 +171,7 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
   direction: rtl;
   background: #ffffff;
 }
-.result-page.active { display: flex !important; }
+.result-page.active { display: flex !important; justify-content: center; }
 
   .phone {
     width: 100%;
