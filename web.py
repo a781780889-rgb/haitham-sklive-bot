@@ -322,16 +322,16 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
   }
   .result-input-display {
     width: 100%;
-    background: #795548;
-    border: 1.5px solid #2d5fa6;
-    border-radius: 6px;
+    background: rgba(255,255,255,0.97);
+    border: 1.5px solid #c5cdd6;
+    border-radius: 10px;
     padding: 10px 12px;
     font-family: 'Cairo', 'Tajawal', sans-serif;
     font-size: clamp(13px, 3.5vw, 15px);
     color: #1a3472;
     direction: rtl;
     text-align: right;
-    box-shadow: 0 0 0 3px rgba(45,95,166,0.10);
+    box-shadow: none;
     pointer-events: none;
     user-select: none;
     min-height: 40px;
