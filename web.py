@@ -189,7 +189,7 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
     background: #ffffff;
     display: flex;
     align-items: center;
-    justify-content: center;
+    justify-content: space-between;
     padding: 10px 15px;
     border-bottom: 1px solid #f0f0f0;
     height: 55px;
@@ -518,7 +518,7 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
     display: flex;
     flex-direction: row-reverse;
     align-items: flex-start;
-    justify-content: center;
+    justify-content: space-between;
     gap: 10px;
     margin-top: 14px;
   }
@@ -527,7 +527,7 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
   .govt-logos {
     display: flex;
     gap: 12px;
-    align-items: center;
+    align-items: flex-end;
   }
   .govt-item {
     display: flex;
@@ -548,7 +548,7 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
     display: flex;
     flex-direction: column;
     gap: 9px;
-    align-items: center;
+    align-items: flex-end;
   }
   .contact-line {
     display: flex;
