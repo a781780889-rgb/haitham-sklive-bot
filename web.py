@@ -170,6 +170,7 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
   overflow-y: auto;
   direction: rtl;
   background: #ffffff;
+  justify-content: center;
 }
 .result-page.active { display: flex !important; }
 
