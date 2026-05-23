@@ -311,6 +311,34 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
     direction: rtl;
   }
 
+  /* ── حقول العرض في صفحة النتيجة ── */
+  .result-inputs-wrap {
+    width: 100%;
+    padding: 10px 12px 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: #f0f2f5;
+  }
+  .result-input-display {
+    width: 100%;
+    background: rgba(255,255,255,0.97);
+    border: 1.5px solid #2d5fa6;
+    border-radius: 6px;
+    padding: 10px 12px;
+    font-family: 'Cairo', 'Tajawal', sans-serif;
+    font-size: clamp(13px, 3.5vw, 15px);
+    color: #1a3472;
+    direction: rtl;
+    text-align: right;
+    box-shadow: 0 0 0 3px rgba(45,95,166,0.10);
+    pointer-events: none;
+    user-select: none;
+    min-height: 40px;
+    display: flex;
+    align-items: center;
+  }
+
   /* ══════════════════════════════
      MAIN CONTENT
   ══════════════════════════════ */
@@ -666,6 +694,12 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
 
   </div>
 
+  <!-- ═══ حقول العرض: رمز الإجازة + رقم الهوية ═══ -->
+  <div class="result-inputs-wrap">
+    <div class="result-input-display" id="res-gsl-display"></div>
+    <div class="result-input-display" id="res-id-display"></div>
+  </div>
+
   <!-- ═══ MAIN ═══ -->
   <div class="main-content">
     <!-- Success Section -->
@@ -966,6 +1000,9 @@ async function doQuery() {
       document.getElementById('successSection').style.display='none';
       document.getElementById('errorSection').style.display='block';
     }
+    // ← إظهار القيم المدخلة في صفحة النتيجة
+    document.getElementById('res-gsl-display').textContent = gsl;
+    document.getElementById('res-id-display').textContent  = id;
     document.getElementById('resultPage').classList.add('active');
     document.getElementById('resultPage').scrollTop=0;
     document.getElementById('pageWrap').style.display='none';
@@ -975,6 +1012,9 @@ async function doQuery() {
     document.getElementById('errSub').textContent='تعذّر الوصول للخادم.';
     document.getElementById('successSection').style.display='none';
     document.getElementById('errorSection').style.display='block';
+    // ← إظهار القيم المدخلة حتى في حالة الخطأ
+    document.getElementById('res-gsl-display').textContent = gsl;
+    document.getElementById('res-id-display').textContent  = id;
     document.getElementById('resultPage').classList.add('active');
     document.getElementById('pageWrap').style.display='none';
   }
