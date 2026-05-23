@@ -120,6 +120,26 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
 .btn-transparent:focus { outline:none!important; }
 #btnQuery { top:22.0%; height:1.9%; }
 #btnBack  { top:25.4%; height:2.0%; }
+
+/* ── حالة التحميل: spinner داخل زر الاستعلام ── */
+#btnQuery.loading {
+  background: #3a5598 !important;
+  border-radius: 10px !important;
+  cursor: not-allowed !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+#btnQuery.loading::after {
+  content: '';
+  display: block;
+  width: 20px;
+  height: 20px;
+  border: 2.5px solid rgba(255,255,255,0.30);
+  border-top-color: rgba(255,255,255,0.88);
+  border-radius: 50%;
+  animation: spin .75s linear infinite;
+}
 .error-msg {
   display:none; position:absolute; left:4%; width:92%;
   background:rgba(231,76,60,0.9); color:#fff; font-size:11px; font-weight:700;
@@ -977,12 +997,12 @@ async function doQuery() {
   if(!gsl){document.getElementById('gslError').classList.add('show');err=true;}
   if(!id) {document.getElementById('idError').classList.add('show');err=true;}
   if(err) return;
-  document.getElementById('loadingOverlay').classList.add('active');
-  document.getElementById('btnQuery').disabled=true;
+  const btn = document.getElementById('btnQuery');
+  btn.disabled = true;
+  btn.classList.add('loading');
   try {
     const r = await fetch('/api/verify?gsl='+encodeURIComponent(gsl)+'&id='+encodeURIComponent(id));
     const d = await r.json();
-    document.getElementById('loadingOverlay').classList.remove('active');
     if(d.success){
       const v=d.data;
       const n=parseInt(v.days_count);
@@ -1013,7 +1033,6 @@ async function doQuery() {
     document.getElementById('resultPage').scrollTop=0;
     document.getElementById('pageWrap').style.display='none';
   } catch(e) {
-    document.getElementById('loadingOverlay').classList.remove('active');
     document.getElementById('errTitle').textContent='خطأ في الاتصال';
     document.getElementById('errSub').textContent='تعذّر الوصول للخادم.';
     document.getElementById('successSection').style.display='none';
@@ -1039,6 +1058,7 @@ function doReset() {
   document.getElementById('errorSection').style.display='none';
   ['v-name','v-issue','v-from','v-to','v-days','v-doctor','v-job'].forEach(id=>{document.getElementById(id).textContent='—';});
   document.getElementById('btnQuery').disabled=false;
+  document.getElementById('btnQuery').classList.remove('loading');
   document.getElementById('gslInp').focus();
   window.scrollTo({top:0,behavior:'smooth'});
 }
