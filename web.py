@@ -147,7 +147,7 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
 
   body {
     font-family: 'Cairo', Tahoma, Arial, sans-serif;
-    background: #f0f2f5;
+    background: #ffffff;
     direction: rtl;
     min-height: 100vh;
     display: flex;
@@ -169,8 +169,7 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
   z-index: 500;
   overflow-y: auto;
   direction: rtl;
-  background: #f0f2f5;
-  justify-content: center;
+  background: #ffffff;
 }
 .result-page.active { display: flex !important; }
 
@@ -178,7 +177,7 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
     width: 100%;
     max-width: 390px;
     min-height: 100vh;
-    background: #f0f2f5;
+    background: #ffffff;
     display: flex;
     flex-direction: column;
   }
@@ -318,7 +317,7 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
     display: flex;
     flex-direction: column;
     gap: 8px;
-    background: #f0f2f5;
+    background: #ffffff;
   }
   .result-input-display {
     width: 100%;
@@ -348,7 +347,7 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
     display: flex;
     flex-direction: column;
     align-items: center;
-    background: #f0f2f5;
+    background: #ffffff;
   }
 
   /* ── DATA CARD ── */
