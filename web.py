@@ -75,7 +75,7 @@ def build_html():
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>الإجازات المرضية - منصة صحة</title>
-<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800&display=swap" rel="stylesheet">
 <style>
 :root {
   --seha-blue:   #1565c0;
@@ -354,54 +354,45 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
   /* ── DATA CARD ── */
   .data-card {
     width: 100%;
-    background: #FFFFFF;
-    border: 1px solid #D9D9D9;
-    border-radius: 8px;
-    padding: 35px 45px;
+    background: #f7f8fa;
+    border: 1px solid #d8dce2;
+    border-radius: 10px;
+    padding: 0;
     margin-bottom: 18px;
-    box-sizing: border-box;
-    direction: rtl;
-    text-align: center;
-    font-family: 'Cairo', sans-serif;
+    overflow: hidden;
   }
 
   .data-row {
-    margin-bottom: 40px;
+    padding: 15px 18px 13px;
+    border-bottom: 1px solid #e4e7ec;
     text-align: center;
   }
   .data-row:last-child {
-    margin-bottom: 0;
+    border-bottom: none;
   }
 
   .data-label {
-    font-size: 24px;
+    font-size: 13.5px;
     font-weight: 700;
-    color: #1A1A1A;
+    color: #111;
     text-align: center;
     display: block;
-    margin-bottom: 8px;
-    font-family: 'Cairo', sans-serif;
-    line-height: 34px;
-    letter-spacing: 0;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    margin-bottom: 6px;
+    font-family: 'Cairo', Arial, Tahoma, sans-serif;
   }
   .data-value {
-    font-size: 20px;
+    font-size: 14px;
     font-weight: 400;
-    color: #3D3D3D;
+    color: #8c8c8c;
     text-align: center;
+    min-height: 15px;
     display: block;
-    font-family: 'Cairo', sans-serif;
-    line-height: 30px;
-    letter-spacing: 0;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    font-family: 'Cairo', Arial, Tahoma, sans-serif;
   }
   .data-value.dot {
-    color: #3D3D3D;
-    font-size: 20px;
-    line-height: 30px;
+    color: #b0b0b0;
+    font-size: 16px;
+    line-height: 1;
   }
 
   /* ── BUTTONS ── */
