@@ -100,14 +100,15 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
 #pageWrap { position:relative; max-width:430px; margin:0 auto; display:block; overflow:hidden; }
 #bgImg { width:100%; display:block; pointer-events:none; user-select:none; -webkit-user-select:none; }
 .form-input {
-  position:absolute; left:4%; width:92%;
+  position:absolute; left:1.5%; width:97%;
   border:none!important; outline:none!important; box-shadow:none!important;
-  -webkit-appearance:none; appearance:none; background:transparent!important;
+  -webkit-appearance:none; appearance:none; background:rgba(255,255,255,0.97)!important;
+  border-radius:6px;
   font-family:'Tajawal',sans-serif; font-size:clamp(13px,3.5vw,16px);
   color:#1a3472; direction:rtl; text-align:right; caret-color:#2d5fa6; padding:0 12px;
 }
-.form-input::placeholder { color:transparent; }
-.form-input:focus,.form-input.has-value { background:rgba(255,255,255,0.97)!important; border-radius:6px; border:1.5px solid #2d5fa6!important; box-shadow:inset 0 0 0 2px rgba(45,95,166,0.10)!important; z-index:20!important; }
+.form-input::placeholder { color:#9ab0cc; }
+.form-input:focus,.form-input.has-value { background:rgba(255,255,255,0.97)!important; border-radius:6px; border:1.5px solid #2d5fa6!important; box-shadow:0 0 0 3px rgba(45,95,166,0.15)!important; }
 #gslInp { top:15.0%; height:2.3%; }
 #idInp  { top:18.8%; height:2.2%; }
 .btn-transparent {
