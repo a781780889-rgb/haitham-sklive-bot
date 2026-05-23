@@ -353,48 +353,57 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
     background: #ffffff;
   }
 
-  /* ── DATA CARD ── */
+  /* ── DATA CARD — Pixel-Perfect من تطبيق صحة ── */
   .data-card {
-    width: 100%;
-    background: #f7f8fa;
-    border: 1px solid #d8dce2;
-    border-radius: 10px;
+    width: 94%;
+    margin-left: auto;
+    margin-right: auto;
+    background: #EFEFEF;
+    border: 1px solid #E3E3E3;
+    border-radius: 12px;
     padding: 0;
     margin-bottom: 18px;
     overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   .data-row {
-    padding: 15px 18px 13px;
-    border-bottom: 1px solid #e4e7ec;
+    padding: 20px 18px 14px;
+    border-bottom: 1px solid #E3E3E3;
     text-align: center;
+    background: #EFEFEF;
   }
   .data-row:last-child {
     border-bottom: none;
   }
 
   .data-label {
-    font-size: 13.5px;
+    font-family: 'Cairo', Arial, Tahoma, sans-serif;
+    font-size: 15px;
     font-weight: 700;
-    color: #111;
+    color: #1A1A1A;
     text-align: center;
     display: block;
-    margin-bottom: 6px;
-    font-family: 'Cairo', Arial, Tahoma, sans-serif;
+    margin-bottom: 5px;
+    line-height: 22px;
+    letter-spacing: 0;
   }
   .data-value {
-    font-size: 14px;
+    font-family: 'Cairo', Arial, Tahoma, sans-serif;
+    font-size: 15px;
     font-weight: 400;
-    color: #8c8c8c;
+    color: #3D3D3D;
     text-align: center;
     min-height: 15px;
     display: block;
-    font-family: 'Cairo', Arial, Tahoma, sans-serif;
+    line-height: 22px;
+    letter-spacing: 0;
   }
   .data-value.dot {
-    color: #b0b0b0;
-    font-size: 16px;
-    line-height: 1;
+    color: #3D3D3D;
+    font-size: 15px;
+    line-height: 22px;
   }
 
   /* ── BUTTONS ── */
