@@ -943,9 +943,8 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
 <script>
 // Inject email at runtime to bypass Cloudflare email protection
 (function(){
-  var u='support', d='seha', t='sa';
   var el=document.getElementById('contact-email');
-  if(el) el.textContent = u + '\u0040' + d + '.' + t;
+  if(el) el.textContent = 'support' + String.fromCharCode(64) + 'seha.sa';
 })();
 
 function setupInput(id) {
