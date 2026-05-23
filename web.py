@@ -865,7 +865,7 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
               <rect x="2" y="4" width="20" height="16" rx="2"/>
               <polyline points="22,6 12,13 2,6"/>
             </svg>
-            <span style="font-size:11px;">support&#64;seha&#46;sa</span>
+            <span style="font-size:11px;" id="contact-email"></span>
           </div>
           <div class="contact-line">
             <!-- WhatsApp icon -->
@@ -941,6 +941,13 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
 </div>
 
 <script>
+// Inject email at runtime to bypass Cloudflare email protection
+(function(){
+  var u='support', d='seha', t='sa';
+  var el=document.getElementById('contact-email');
+  if(el) el.textContent = u + '\u0040' + d + '.' + t;
+})();
+
 function setupInput(id) {
   const el = document.getElementById(id);
   el.addEventListener('focus', () => el.classList.add('has-value'));
