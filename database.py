@@ -87,6 +87,28 @@ def get_conn():
     return get_connection()
 
 
+def _migrate_add_tier_column():
+    """
+    Migration مستقل تماماً — يضيف عمود tier لجدول users.
+    يعمل مع SQLite وPostgreSQL. يُستدعى بعد init_db مباشرة.
+    """
+    conn2 = get_conn()
+    try:
+        conn2.execute("ALTER TABLE users ADD COLUMN tier TEXT DEFAULT 'basic'")
+        conn2.commit()
+    except Exception:
+        # العمود موجود مسبقاً — تجاهل
+        try:
+            conn2.rollback()
+        except Exception:
+            pass
+    finally:
+        try:
+            conn2.close()
+        except Exception:
+            pass
+
+
 def init_db():
     conn = get_conn()
     c = conn.cursor()
@@ -97,17 +119,6 @@ def init_db():
         user_type TEXT DEFAULT 'user', is_banned INTEGER DEFAULT 0,
         tier TEXT DEFAULT 'basic',
         created_at TEXT DEFAULT (datetime('now')))""")
-
-    # ─── Migration: add tier column if it doesn't exist (SQLite + PostgreSQL) ───
-    try:
-        c.execute("ALTER TABLE users ADD COLUMN tier TEXT DEFAULT 'basic'")
-        conn.commit()
-    except Exception:
-        # العمود موجود مسبقاً — تجاهل الخطأ
-        try:
-            conn.rollback()
-        except Exception:
-            pass
 
     c.execute("""CREATE TABLE IF NOT EXISTS hospitals (
         id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, city TEXT NOT NULL,
@@ -1734,4 +1745,13 @@ def delete_voucher(code: str) -> bool:
         return cur.rowcount > 0
     finally:
         conn.close()
+
+
+# ════════════════════════════════════════════════════════════
+# ─── تشغيل Migration عند استيراد الملف تلقائياً ───
+# ════════════════════════════════════════════════════════════
+try:
+    _migrate_add_tier_column()
+except Exception as _e:
+    logging.getLogger(__name__).warning(f"tier migration warning: {_e}")
 
