@@ -1171,10 +1171,12 @@ def generate_gsl_code(hospital_type: str = "حكومي"):
     توليد رمز الإجازة بالصيغة الجديدة:
       - حكومي: GSL + YY + MM + DD + 5 أرقام عشوائية  ->  GSL260525XXXXX
       - خاص:   PSL + YY + MM + DD + 5 أرقام عشوائية  ->  PSL260525XXXXX
+    التوقيت: السعودية UTC+3 لضمان صحة التاريخ بغض النظر عن توقيت السيرفر
     """
-    from datetime import datetime as _dt
+    from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+    _riyadh = _tz(_td(hours=3))
     prefix = "PSL" if hospital_type == "خاص" else "GSL"
-    date_part = _dt.now().strftime("%y%m%d")   # مثال: 260525
+    date_part = _dt.now(_riyadh).strftime("%y%m%d")   # مثال: 260525
     conn = get_conn()
     try:
         for _ in range(200):
