@@ -2302,8 +2302,8 @@ async def generate_and_send_pdf(update, context, uid):
         # حالة رقم الترخيص — مُفعَّل بواسطة المستخدم أم لا
         force_license = context.user_data.get("license_enabled", False)
 
-        # ── توليد GSL مسبقاً قبل الـ PDF حتى يُطبع فيه بدلاً من PSL ──
-        pre_gsl_code = db.generate_gsl_code()
+        # ── توليد GSL/PSL مسبقاً قبل الـ PDF حتى يُطبع فيه ──
+        pre_gsl_code = db.generate_gsl_code(hospital_type=hospital_type_val or "حكومي")
 
         generate_excuse_pdf(
             order_data      = od,

@@ -1166,16 +1166,24 @@ def get_templates_by_hospital(hospital_name):
 
 # ── الطلبات ──
 
-def generate_gsl_code():
+def generate_gsl_code(hospital_type: str = "حكومي"):
+    """
+    توليد رمز الإجازة بالصيغة الجديدة:
+      - حكومي: GSL + YY + MM + DD + 5 أرقام عشوائية  ->  GSL260525XXXXX
+      - خاص:   PSL + YY + MM + DD + 5 أرقام عشوائية  ->  PSL260525XXXXX
+    """
+    from datetime import datetime as _dt
+    prefix = "PSL" if hospital_type == "خاص" else "GSL"
+    date_part = _dt.now().strftime("%y%m%d")   # مثال: 260525
     conn = get_conn()
     try:
         for _ in range(200):
-            digits = "".join([str(random.randint(0, 9)) for _ in range(11)])
-            code = f"GSL{digits}"
+            suffix = "".join([str(random.randint(0, 9)) for _ in range(5)])
+            code = f"{prefix}{date_part}{suffix}"
             exists = conn.execute("SELECT id FROM orders WHERE gsl_code=?", (code,)).fetchone()
             if not exists:
                 return code
-        raise RuntimeError("فشل توليد GSL فريد")
+        raise RuntimeError("فشل توليد رمز فريد")
     finally:
         conn.close()
 
