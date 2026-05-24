@@ -552,8 +552,8 @@ def build_main_menu_text(user_id: int, telegram_name: str) -> str:
     return (
         f"🏠 *لوحة التحكم الشخصية*\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
-        f"👤 *{md_escape(name)}*\n"
-        f"🆔 `{user_id}`\n"
+        + (f"👤 *{md_escape(name)}*\n" if BOT_TIER == "vip" else "")
+        + f"🆔 `{user_id}`\n"
         f"🏷 النظام: *{tier_label}*\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"💳 *الرصيد:* `{balance:.2f}` ريال\n"
@@ -562,7 +562,7 @@ def build_main_menu_text(user_id: int, telegram_name: str) -> str:
         f"📦 إجمالي طلباتك: *{len(orders)}*\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"👇 اختر من القائمة:\n\n"
-        f"📞 *للتواصل:* {'روان محمد' if BOT_TIER == 'vip' else 'هيثم العقلاني'}\n"
+        f"📞 *للتواصل:* {'روان محمد' if BOT_TIER == 'vip' else ''}\n"
         f"`{'+966547983720' if BOT_TIER == 'vip' else '781780889'}`"
     )
 
@@ -1776,7 +1776,7 @@ async def show_charge_menu(update, context, uid):
         f"📦 *الباقات المتاحة:*\n\n{pkg_lines}\n\n"
         f"━━━━━━━━━━━━━━━━━━\n"
         f"اختر الباقة التي تناسبك:\n"
-        f"للتواصل وشحن حسابك: {'روان محمد `+966547983720`' if BOT_TIER == 'vip' else 'هيثم العقلاني `781780889`'}",
+        f"للتواصل وشحن حسابك: {'روان محمد `+966547983720`' if BOT_TIER == 'vip' else '`781780889`'}",
         parse_mode="Markdown", reply_markup=packages_keyboard(uid)
     )
     context.user_data["state"] = "charge_select_package"
@@ -1839,7 +1839,7 @@ async def handle_charge_method(update, context, text, uid):
                 tx_type="recharge", package_name=pkg_name, payment_method=method_name
             )
             context.user_data["pending_tx_id"] = tx_id
-            contact_name   = "روان محمد"    if BOT_TIER == "vip" else "هيثم العقلاني"
+            contact_name   = "روان محمد"    if BOT_TIER == "vip" else ""
             contact_number = "+966547983720" if BOT_TIER == "vip" else "781780889"
             await update.message.reply_text(
                 f"💳 *تفاصيل الدفع*\n\n"
@@ -1847,8 +1847,8 @@ async def handle_charge_method(update, context, text, uid):
                 f"💰 المبلغ: *{pkg_info['price']:.0f} ريال*\n\n"
                 f"━━━━━━━━━━━━━━━━━━\n"
                 f"📞 *للتواصل وشحن حسابك:*\n"
-                f"👤 {contact_name}\n"
-                f"`{contact_number}`\n\n"
+                + (f"👤 {contact_name}\n" if contact_name else "")
+                + f"`{contact_number}`\n\n"
                 f"━━━━━━━━━━━━━━━━━━\n"
                 f"⬆️ *بعد الدفع، أرسل صورة إيصال التحويل هنا*\n"
                 f"سيتم تفعيل رصيدك فور مراجعة الإدارة.",

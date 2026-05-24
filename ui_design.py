@@ -191,7 +191,7 @@ def build_main_menu_text(name: str, user_id: int, balance: float,
         f"<i>اختر من القائمة بالأسفل {ARROW_DBL}</i>\n"
         f"\n"
         f"<b>{ICON['shield']} الدعم الفني</b>\n"
-        f"هيثم العقلاني  ·  <code>781780889</code>"
+        f"<code>781780889</code>"
     )
 
 
