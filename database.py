@@ -98,10 +98,16 @@ def init_db():
         tier TEXT DEFAULT 'basic',
         created_at TEXT DEFAULT (datetime('now')))""")
 
-    # ─── Migration: add tier column if it doesn't exist (existing DBs) ───
-    existing_cols = [r[1] for r in c.execute("PRAGMA table_info(users)").fetchall()]
-    if "tier" not in existing_cols:
+    # ─── Migration: add tier column if it doesn't exist (SQLite + PostgreSQL) ───
+    try:
         c.execute("ALTER TABLE users ADD COLUMN tier TEXT DEFAULT 'basic'")
+        conn.commit()
+    except Exception:
+        # العمود موجود مسبقاً — تجاهل الخطأ
+        try:
+            conn.rollback()
+        except Exception:
+            pass
 
     c.execute("""CREATE TABLE IF NOT EXISTS hospitals (
         id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, city TEXT NOT NULL,
