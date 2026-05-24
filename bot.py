@@ -953,12 +953,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid  = update.effective_user.id
     name = update.effective_user.full_name or "مستخدم"
 
-    # ── إنشاء المستخدم وتعيين التير حسب البوت الذي دخل منه ──
-    is_new = db.create_user(uid, name)
-    if is_new:
-        # مستخدم جديد → يأخذ تير البوت الذي استخدمه
-        db.set_user_tier(uid, BOT_TIER)
-    # المستخدمون الحاليون: تيرهم لا يتغير إلا من لوحة الإدارة
+    # ── إنشاء المستخدم وتعيين التير دائماً حسب البوت المستخدم ──
+    db.create_user(uid, name)
+    db.set_user_tier(uid, BOT_TIER)
 
     # فحص الحظر
     if db.is_banned(uid) and uid not in ADMIN_IDS:
