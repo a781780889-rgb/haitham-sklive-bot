@@ -384,11 +384,7 @@ html,body { font-family:'Tajawal',sans-serif; direction:rtl; background:var(--bg
 
   .data-row {
     padding: 15px 18px 13px;
-    border-bottom: 1px solid #e4e7ec;
     text-align: center;
-  }
-  .data-row:last-child {
-    border-bottom: none;
   }
 
   .data-label {
