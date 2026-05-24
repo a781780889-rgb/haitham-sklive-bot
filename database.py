@@ -530,11 +530,16 @@ def get_user(user_id):
         conn.close()
 
 
-def create_user(user_id, name):
+def create_user(user_id, name) -> bool:
+    """إنشاء مستخدم جديد. يُرجع True إذا تم الإنشاء الآن، False إذا كان موجوداً مسبقاً."""
     conn = get_conn()
     try:
-        conn.execute("INSERT OR IGNORE INTO users (user_id, name) VALUES (?,?)", (user_id, name))
+        cur = conn.execute(
+            "INSERT OR IGNORE INTO users (user_id, name) VALUES (?,?)",
+            (user_id, name)
+        )
         conn.commit()
+        return cur.lastrowid != 0 and cur.rowcount > 0
     finally:
         conn.close()
 

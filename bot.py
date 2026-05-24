@@ -534,20 +534,23 @@ def build_main_menu_text(user_id: int, telegram_name: str) -> str:
     if not user:
         db.create_user(user_id, telegram_name)
         user = db.get_user(user_id)
-    name      = user.get("name", telegram_name)
-    balance   = user.get("balance", 0.0)
-    price     = get_scaffold_price(user_id)
-    orders    = db.get_user_orders(user_id)
-    can_order = int(balance / price) if price > 0 else 0
-    bar       = "🟩" * min(can_order, 5) + "⬜" * max(0, 5 - min(can_order, 5))
+    name        = user.get("name", telegram_name)
+    balance     = user.get("balance", 0.0)
+    tier        = user.get("tier") or "basic"
+    price       = get_scaffold_price(user_id)
+    orders      = db.get_user_orders(user_id)
+    can_order   = int(balance / price) if price > 0 else 0
+    bar         = "🟩" * min(can_order, 5) + "⬜" * max(0, 5 - min(can_order, 5))
+    tier_label  = "💎 VIP" if tier == "vip" else "💲 أساسي"
     return (
         f"🏠 *لوحة التحكم الشخصية*\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"👤 *{md_escape(name)}*\n"
         f"🆔 `{user_id}`\n"
+        f"🏷 النظام: *{tier_label}*\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
         f"💳 *الرصيد:* `{balance:.2f}` ريال\n"
-        f"🏷 *السعر:* `{price:.0f}` ريال/طلب\n"
+        f"💵 *سعر الطلب:* `{price:.0f}` ريال\n"
         f"⚡ طلبات متاحة: *{can_order}*  {bar}\n"
         f"📦 إجمالي طلباتك: *{len(orders)}*\n"
         f"━━━━━━━━━━━━━━━━━━━━\n"
@@ -942,18 +945,17 @@ def orders_admin_keyboard():
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid  = update.effective_user.id
     name = update.effective_user.full_name or "مستخدم"
-    db.create_user(uid, name)
 
-    # ── تعيين التير عند أول دخول فقط (لا يتغير لاحقاً إلا من الإدارة) ──
-    existing_tier = db.get_user_tier(uid)
-    if context.args:
+    # ── إنشاء المستخدم إن لم يكن موجوداً ──
+    is_new = db.create_user(uid, name)   # True إذا أنشئ للتو، False إذا كان موجوداً
+
+    # ── تعيين التير: فقط للمستخدمين الجدد عبر الرابط ──
+    # المستخدمون الحاليون: لا يتغير تيرهم عبر الرابط (فقط من لوحة الإدارة)
+    if is_new and context.args:
         payload = context.args[0].lower()
-        if payload == "vip" and existing_tier == "basic":
-            # نسمح بالترقية للـ VIP عند أول دخول فقط
+        if payload == "vip":
             db.set_user_tier(uid, "vip")
-        elif payload == "basic" and existing_tier == "vip":
-            # منع تخفيض VIP → basic عبر الرابط
-            pass
+        # basic هو الافتراضي — لا حاجة لتغييره
 
     # فحص الحظر
     if db.is_banned(uid) and uid not in ADMIN_IDS:
@@ -1825,7 +1827,11 @@ async def handle_charge_method(update, context, text, uid):
         if text == f"{method_info['emoji']} {method_name}":
             pkg_name = context.user_data.get("selected_package")
             pkgs     = db.get_packages_for_tier(db.get_user_tier(uid))
-            pkg_info = pkgs[pkg_name]
+            pkg_info = pkgs.get(pkg_name)
+            if not pkg_info:
+                # الباقة غير متوافقة مع تير المستخدم — أعد عرض القائمة
+                await show_charge_menu(update, context, uid)
+                return
             context.user_data["selected_method"] = method_name
             context.user_data["state"] = "charge_await_screenshot"
             tx_id = db.add_transaction(
@@ -3056,9 +3062,10 @@ async def handle_admin_router(update, context, text, uid, name):
             users = db.get_all_users()
             lines = []
             for u in users[:20]:
-                banned = "🚫" if u.get("is_banned") else "✅"
-                lines.append(f"{banned} {u.get('name','—')} | `{u['user_id']}` | {u.get('balance',0):.0f}ر")
-            msg = f"👥 *المستخدمين ({len(users)}):*\n\n" + ("\n".join(lines) if lines else "لا مستخدمين.")
+                banned     = "🚫" if u.get("is_banned") else "✅"
+                tier_icon  = "💎" if u.get("tier") == "vip" else "💲"
+                lines.append(f"{banned}{tier_icon} {u.get('name','—')} | `{u['user_id']}` | {u.get('balance',0):.0f}ر")
+            msg = f"👥 *المستخدمين ({len(users)}):*\n💲=أساسي  💎=VIP\n\n" + ("\n".join(lines) if lines else "لا مستخدمين.")
             await update.message.reply_text(msg, parse_mode="Markdown", reply_markup=users_admin_keyboard())
             return
 
