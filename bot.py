@@ -325,7 +325,11 @@ def to_western_nums(text):
         return text
     return str(text).translate(_AR_DIGITS)
 
-def get_scaffold_price():
+def get_scaffold_price(uid: int = None) -> float:
+    """إرجاع سعر الطلب حسب تير المستخدم (basic=5 ريال، vip=30 ريال)."""
+    if uid is not None:
+        tier = db.get_user_tier(uid)
+        return db.get_price_for_tier(tier)
     return float(db.get_setting("scaffold_price", "5.0"))
 
 def get_website_url():
@@ -532,7 +536,7 @@ def build_main_menu_text(user_id: int, telegram_name: str) -> str:
         user = db.get_user(user_id)
     name      = user.get("name", telegram_name)
     balance   = user.get("balance", 0.0)
-    price     = get_scaffold_price()
+    price     = get_scaffold_price(user_id)
     orders    = db.get_user_orders(user_id)
     can_order = int(balance / price) if price > 0 else 0
     bar       = "🟩" * min(can_order, 5) + "⬜" * max(0, 5 - min(can_order, 5))
@@ -738,9 +742,10 @@ def confirm_inline_keyboard(license_enabled: bool = False):
         [InlineKeyboardButton("❌ إلغاء", callback_data="cancel_order")],
     ])
 
-def packages_keyboard():
+def packages_keyboard(uid: int = None):
+    pkgs = db.get_packages_for_tier(db.get_user_tier(uid)) if uid else db.BASIC_PACKAGES
     rows = []
-    for name, info in db.PACKAGES.items():
+    for name, info in pkgs.items():
         rows.append([KeyboardButton(f"{info['emoji']} باقة {name} — {info['price']:.0f} ريال ({info['credits']} طلبات)")])
     rows.append([KeyboardButton("🎫 شحن برصيد كود")])
     rows.append([KeyboardButton("📋 سجل معاملاتي")])
@@ -904,7 +909,8 @@ def doctors_admin_keyboard(hospitals):
 
 def settings_keyboard():
     return ReplyKeyboardMarkup([
-        [KeyboardButton("💲 تعديل سعر الطلب")],
+        [KeyboardButton("💲 تعديل سعر النظام الأساسي (5)")],
+        [KeyboardButton("💎 تعديل سعر النظام VIP (30)")],
         [KeyboardButton("🌐 تعديل رابط التحقق")],
         [KeyboardButton("🔲 تغيير صورة الباركود")],
         [KeyboardButton("📋 عرض جميع الإعدادات")],
@@ -917,6 +923,7 @@ def users_admin_keyboard():
         [KeyboardButton("🔍 بحث عن مستخدم")],
         [KeyboardButton("🚫 حظر مستخدم"), KeyboardButton("✅ رفع الحظر")],
         [KeyboardButton("💰 إضافة رصيد")],
+        [KeyboardButton("🔄 تغيير نظام مستخدم")],
         [KeyboardButton("⬅️ رجوع")],
     ], resize_keyboard=True)
 
@@ -936,6 +943,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid  = update.effective_user.id
     name = update.effective_user.full_name or "مستخدم"
     db.create_user(uid, name)
+
+    # ── تعيين التير عند أول دخول فقط (لا يتغير لاحقاً إلا من الإدارة) ──
+    existing_tier = db.get_user_tier(uid)
+    if context.args:
+        payload = context.args[0].lower()
+        if payload == "vip" and existing_tier == "basic":
+            # نسمح بالترقية للـ VIP عند أول دخول فقط
+            db.set_user_tier(uid, "vip")
+        elif payload == "basic" and existing_tier == "vip":
+            # منع تخفيض VIP → basic عبر الرابط
+            pass
 
     # فحص الحظر
     if db.is_banned(uid) and uid not in ADMIN_IDS:
@@ -1012,7 +1030,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == "📝 إرسال طلب جديد /go":
         context.user_data.clear()
         user_check = db.get_user(uid)
-        price_check = get_scaffold_price()
+        price_check = get_scaffold_price(uid)
         if user_check and user_check.get("balance", 0) < price_check:
             # رصيد غير كافٍ → عرض قائمة الشحن مباشرة
             await show_charge_menu(update, context, uid)
@@ -1646,7 +1664,7 @@ async def cmd_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = update.effective_user.full_name or "مستخدم"
     db.create_user(uid, name)
     user  = db.get_user(uid)
-    price = get_scaffold_price()
+    price = get_scaffold_price(uid)
     bal   = user.get("balance", 0.0)
     cnt   = len(db.get_user_orders(uid))
     can   = int(bal / price) if price > 0 else 0
@@ -1673,7 +1691,8 @@ async def cmd_myorders(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """أمر /help"""
-    price = get_scaffold_price()
+    uid   = update.effective_user.id
+    price = get_scaffold_price(uid)
     await update.message.reply_text(
         f"ℹ️ *كيف يعمل البوت؟*\n"
         f"━━━━━━━━━━━━━━━━━━\n\n"
@@ -1742,10 +1761,11 @@ async def show_my_orders(update, uid):
     )
 
 async def show_charge_menu(update, context, uid):
-    user = db.get_user(uid)
+    user  = db.get_user(uid)
+    pkgs  = db.get_packages_for_tier(db.get_user_tier(uid))
     pkg_lines = "\n".join([
         f"{i['emoji']} *باقة {n}*  —  `{i['price']:.0f} ريال`  ←  {i['credits']} طلبات"
-        for n, i in db.PACKAGES.items()
+        for n, i in pkgs.items()
     ])
     await update.message.reply_text(
         f"💳 *نظام الشحن التجاري*\n\n"
@@ -1755,12 +1775,13 @@ async def show_charge_menu(update, context, uid):
         f"━━━━━━━━━━━━━━━━━━\n"
         f"اختر الباقة التي تناسبك:\n"
         f"للتواصل: هيثم العقلاني واتس: `781780889`",
-        parse_mode="Markdown", reply_markup=packages_keyboard()
+        parse_mode="Markdown", reply_markup=packages_keyboard(uid)
     )
     context.user_data["state"] = "charge_select_package"
 
 async def handle_charge_package(update, context, text, uid):
-    for pkg_name, pkg_info in db.PACKAGES.items():
+    pkgs = db.get_packages_for_tier(db.get_user_tier(uid))
+    for pkg_name, pkg_info in pkgs.items():
         btn_text = f"{pkg_info['emoji']} باقة {pkg_name} — {pkg_info['price']:.0f} ريال ({pkg_info['credits']} طلبات)"
         if text == btn_text:
             context.user_data["selected_package"] = pkg_name
@@ -1803,7 +1824,8 @@ async def handle_charge_method(update, context, text, uid):
     for method_name, method_info in db.PAYMENT_METHODS.items():
         if text == f"{method_info['emoji']} {method_name}":
             pkg_name = context.user_data.get("selected_package")
-            pkg_info = db.PACKAGES[pkg_name]
+            pkgs     = db.get_packages_for_tier(db.get_user_tier(uid))
+            pkg_info = pkgs[pkg_name]
             context.user_data["selected_method"] = method_name
             context.user_data["state"] = "charge_await_screenshot"
             tx_id = db.add_transaction(
@@ -2151,9 +2173,7 @@ async def generate_and_send_pdf(update, context, uid):
     doctor    = context.user_data.get("selected_doctor", "—")
     specialty = context.user_data.get("selected_doctor_specialty", "—")
 
-    price = get_scaffold_price()
-
-    # ✅ Atomic deduction — يمنع race condition تماماً
+    price = get_scaffold_price(uid)
     if not db.try_deduct_balance(uid, price):
         user = db.get_user(uid)
         await update.effective_message.reply_text(
@@ -2642,10 +2662,12 @@ async def handle_admin_router(update, context, text, uid, name):
 
     if text == "⚙️ الإعدادات":
         context.user_data["state"] = "admin_settings"
-        current_price = db.get_setting("order_price") or "غير محدد"
+        basic_p = db.get_setting("scaffold_price") or "5"
+        vip_p   = db.get_setting("vip_scaffold_price") or "30"
         await update.message.reply_text(
             f"⚙️ *إعدادات النظام*\n\n"
-            f"💲 السعر الحالي للطلب: *{current_price}* ريال\n\n"
+            f"💲 سعر النظام الأساسي: *{basic_p}* ريال\n"
+            f"💎 سعر النظام VIP: *{vip_p}* ريال\n\n"
             f"اختر الإعداد المطلوب:",
             parse_mode="Markdown", reply_markup=settings_keyboard()
         )
@@ -3080,12 +3102,15 @@ async def handle_admin_router(update, context, text, uid, name):
             users = db.get_all_users()
             user = next((u for u in users if text.lower() in (u.get("name") or "").lower()), None)
         if user:
-            banned = "🚫 محظور" if user.get("is_banned") else "✅ نشط"
+            banned     = "🚫 محظور" if user.get("is_banned") else "✅ نشط"
+            user_tier  = user.get("tier") or "basic"
+            tier_label = "💎 VIP (30 ريال)" if user_tier == "vip" else "💲 أساسي (5 ريال)"
             msg = (
                 f"👤 *معلومات المستخدم*\n\n"
                 f"🆔 ID: `{user['user_id']}`\n"
                 f"👤 الاسم: {user.get('name','—')}\n"
                 f"💰 الرصيد: {user.get('balance',0):.2f} ريال\n"
+                f"🏷 النظام: {tier_label}\n"
                 f"📊 الحالة: {banned}\n"
                 f"📅 التسجيل: {user.get('created_at','—')}"
             )
@@ -3144,6 +3169,63 @@ async def handle_admin_router(update, context, text, uid, name):
         context.user_data["state"] = "admin_users"
         return
 
+    # ── تغيير نظام (تير) المستخدم ──
+    if state == "admin_users" and text == "🔄 تغيير نظام مستخدم":
+        context.user_data["state"] = "admin_change_tier_uid"
+        await update.message.reply_text(
+            "🔄 *تغيير نظام مستخدم*\n\nأرسل ID المستخدم:",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup([[KeyboardButton("⬅️ رجوع")]], resize_keyboard=True)
+        )
+        return
+
+    if state == "admin_change_tier_uid":
+        try:
+            target_uid = int(text.strip())
+            target_user = db.get_user(target_uid)
+            if not target_user:
+                await update.message.reply_text("❌ المستخدم غير موجود.", reply_markup=users_admin_keyboard())
+                context.user_data["state"] = "admin_users"
+                return
+            context.user_data["admin_tier_target"] = target_uid
+            context.user_data["state"] = "admin_change_tier_select"
+            current_tier = target_user.get("tier") or "basic"
+            tier_label   = "💎 VIP" if current_tier == "vip" else "💲 أساسي"
+            await update.message.reply_text(
+                f"👤 المستخدم: `{target_uid}` — {target_user.get('name','—')}\n"
+                f"🏷 النظام الحالي: {tier_label}\n\n"
+                f"اختر النظام الجديد:",
+                parse_mode="Markdown",
+                reply_markup=ReplyKeyboardMarkup([
+                    [KeyboardButton("💲 تحويل للنظام الأساسي (5 ريال)")],
+                    [KeyboardButton("💎 تحويل لنظام VIP (30 ريال)")],
+                    [KeyboardButton("⬅️ رجوع")],
+                ], resize_keyboard=True)
+            )
+        except ValueError:
+            await update.message.reply_text("❌ ID غير صحيح.", reply_markup=users_admin_keyboard())
+            context.user_data["state"] = "admin_users"
+        return
+
+    if state == "admin_change_tier_select":
+        target_uid = context.user_data.get("admin_tier_target")
+        if text == "💲 تحويل للنظام الأساسي (5 ريال)":
+            db.set_user_tier(target_uid, "basic")
+            await update.message.reply_text(
+                f"✅ تم تحويل المستخدم `{target_uid}` للنظام الأساسي (5 ريال).",
+                parse_mode="Markdown", reply_markup=users_admin_keyboard()
+            )
+            context.user_data["state"] = "admin_users"
+            return
+        if text == "💎 تحويل لنظام VIP (30 ريال)":
+            db.set_user_tier(target_uid, "vip")
+            await update.message.reply_text(
+                f"✅ تم تحويل المستخدم `{target_uid}` لنظام VIP (30 ريال).",
+                parse_mode="Markdown", reply_markup=users_admin_keyboard()
+            )
+            context.user_data["state"] = "admin_users"
+            return
+
     # ── إدارة الطلبات ──
     if state == "admin_orders":
         if text == "📋 آخر الطلبات":
@@ -3187,11 +3269,21 @@ async def handle_admin_router(update, context, text, uid, name):
 
     # ── إعدادات النظام ──
     if state == "admin_settings":
-        if text == "💲 تعديل سعر الطلب":
-            context.user_data["state"] = "admin_set_price"
-            current = db.get_setting("order_price") or "5"
+        if text == "💲 تعديل سعر النظام الأساسي (5)":
+            context.user_data["state"] = "admin_set_price_basic"
+            current = db.get_setting("scaffold_price") or "5"
             await update.message.reply_text(
-                f"💲 السعر الحالي: *{current}* ريال\n\nأرسل السعر الجديد:",
+                f"💲 *سعر النظام الأساسي الحالي:* `{current}` ريال\n\nأرسل السعر الجديد:",
+                parse_mode="Markdown",
+                reply_markup=ReplyKeyboardMarkup([[KeyboardButton("⬅️ رجوع")]], resize_keyboard=True)
+            )
+            return
+
+        if text == "💎 تعديل سعر النظام VIP (30)":
+            context.user_data["state"] = "admin_set_price_vip"
+            current = db.get_setting("vip_scaffold_price") or "30"
+            await update.message.reply_text(
+                f"💎 *سعر النظام VIP الحالي:* `{current}` ريال\n\nأرسل السعر الجديد:",
                 parse_mode="Markdown",
                 reply_markup=ReplyKeyboardMarkup([[KeyboardButton("⬅️ رجوع")]], resize_keyboard=True)
             )
@@ -3208,22 +3300,55 @@ async def handle_admin_router(update, context, text, uid, name):
             return
 
         if text == "📋 عرض جميع الإعدادات":
-            price = db.get_setting("order_price") or "—"
-            url = db.get_setting("website_url") or "—"
+            basic_price = db.get_setting("scaffold_price") or "5"
+            vip_price   = db.get_setting("vip_scaffold_price") or "30"
+            url         = db.get_setting("website_url") or "—"
             maintenance = db.get_setting("maintenance_mode") or "0"
             await update.message.reply_text(
                 f"📋 *إعدادات النظام الحالية:*\n\n"
-                f"💲 سعر الطلب: *{price}* ريال\n"
+                f"💲 سعر النظام الأساسي: *{basic_price}* ريال\n"
+                f"💎 سعر النظام VIP: *{vip_price}* ريال\n"
                 f"🌐 رابط التحقق: `{url}`\n"
-                f"🔧 وضع الصيانة: {'مفعّل ⚠️' if maintenance == '1' else 'معطّل ✅'}",
+                f"🔧 وضع الصيانة: {'مفعّل ⚠️' if maintenance == '1' else 'معطّل ✅'}\n\n"
+                f"📌 *روابط التيار:*\n"
+                f"• الأساسي: `t.me/YourBot?start=basic`\n"
+                f"• VIP: `t.me/YourBot?start=vip`",
                 parse_mode="Markdown", reply_markup=settings_keyboard()
             )
             return
 
-    if state == "admin_set_price":
+    if state == "admin_set_price_basic":
+        try:
+            price = float(text.strip())
+            db.set_setting("scaffold_price", str(price))
+            db.set_setting("order_price", str(price))  # backward compat
+            await update.message.reply_text(
+                f"✅ تم تحديث سعر النظام الأساسي إلى *{price:.2f}* ريال.",
+                parse_mode="Markdown", reply_markup=settings_keyboard()
+            )
+        except ValueError:
+            await update.message.reply_text("❌ سعر غير صحيح.", reply_markup=settings_keyboard())
+        context.user_data["state"] = "admin_settings"
+        return
+
+    if state == "admin_set_price_vip":
+        try:
+            price = float(text.strip())
+            db.set_setting("vip_scaffold_price", str(price))
+            await update.message.reply_text(
+                f"✅ تم تحديث سعر النظام VIP إلى *{price:.2f}* ريال.",
+                parse_mode="Markdown", reply_markup=settings_keyboard()
+            )
+        except ValueError:
+            await update.message.reply_text("❌ سعر غير صحيح.", reply_markup=settings_keyboard())
+        context.user_data["state"] = "admin_settings"
+        return
+
+    if state == "admin_set_price":  # backward compat
         try:
             price = float(text.strip())
             db.set_setting("order_price", str(price))
+            db.set_setting("scaffold_price", str(price))
             await update.message.reply_text(
                 f"✅ تم تحديث السعر إلى *{price:.2f}* ريال.",
                 parse_mode="Markdown", reply_markup=settings_keyboard()
@@ -3625,10 +3750,12 @@ async def handle_dashboard_router(update, context, text, uid, name):
     # ── إدارة الأسعار ──
     if text == "💰 إدارة الأسعار":
         context.user_data["state"] = "admin_settings"
-        current_price = db.get_setting("order_price") or "غير محدد"
+        basic_p = db.get_setting("scaffold_price") or "5"
+        vip_p   = db.get_setting("vip_scaffold_price") or "30"
         await update.message.reply_text(
             f"💰 *إدارة الأسعار*\n\n"
-            f"💲 السعر الحالي للطلب: *{current_price}*\n\n"
+            f"💲 سعر النظام الأساسي: *{basic_p}* ريال\n"
+            f"💎 سعر النظام VIP: *{vip_p}* ريال\n\n"
             f"اختر العملية المطلوبة:",
             parse_mode="Markdown", reply_markup=settings_keyboard()
         )
@@ -3995,8 +4122,10 @@ def main():
                     except Exception:
                         pass
                     return
-                pkg_name = tx.get("package_name", "")
-                pkg = db.PACKAGES.get(pkg_name, {})
+                pkg_name  = tx.get("package_name", "")
+                # ── احتساب الطلبات المضافة حسب تير المستخدم ──
+                user_tier_cb = db.get_user_tier(target_uid or tx.get("user_id", 0))
+                pkg          = db.get_packages_for_tier(user_tier_cb).get(pkg_name, {})
                 credits_added = pkg.get("credits", 0)
                 try:
                     await query.edit_message_caption(

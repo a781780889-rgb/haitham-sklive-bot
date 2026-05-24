@@ -95,7 +95,13 @@ def init_db():
         user_id INTEGER PRIMARY KEY, name TEXT DEFAULT 'مستخدم جديد',
         balance REAL DEFAULT 0.0, is_admin INTEGER DEFAULT 0,
         user_type TEXT DEFAULT 'user', is_banned INTEGER DEFAULT 0,
+        tier TEXT DEFAULT 'basic',
         created_at TEXT DEFAULT (datetime('now')))""")
+
+    # ─── Migration: add tier column if it doesn't exist (existing DBs) ───
+    existing_cols = [r[1] for r in c.execute("PRAGMA table_info(users)").fetchall()]
+    if "tier" not in existing_cols:
+        c.execute("ALTER TABLE users ADD COLUMN tier TEXT DEFAULT 'basic'")
 
     c.execute("""CREATE TABLE IF NOT EXISTS hospitals (
         id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, city TEXT NOT NULL,
@@ -195,6 +201,7 @@ def init_db():
     # ── إعدادات افتراضية ──
     for k, v in [
         ("scaffold_price",       "5.0"),
+        ("vip_scaffold_price",   "30.0"),
         ("website_url",          "https://www.sehasaa.com/#/inquiries/slenquiry"),
         ("bot_name",             "بوت الأعذار الطبية"),
         ("excuse_validity_days", "30"),
@@ -1332,12 +1339,57 @@ def get_analytics():
 
 # ── المعاملات المالية ──
 
-PACKAGES = {
+# ── الباقات: نظام أساسي (5 ريال/ملف) ──
+BASIC_PACKAGES = {
     "برونزية":  {"price": 10.0,  "credits": 2,  "emoji": "🥉"},
     "فضية":    {"price": 25.0,  "credits": 6,  "emoji": "🥈"},
     "ذهبية":   {"price": 50.0,  "credits": 15, "emoji": "🥇"},
     "بلاتينية": {"price": 100.0, "credits": 35, "emoji": "💎"},
 }
+
+# ── الباقات: نظام VIP (30 ريال/ملف) ──
+VIP_PACKAGES = {
+    "فردية":   {"price": 30.0,  "credits": 1,  "emoji": "1️⃣"},
+    "برونزية":  {"price": 90.0,  "credits": 3,  "emoji": "🥉"},
+    "فضية":    {"price": 150.0, "credits": 5,  "emoji": "🥈"},
+    "ذهبية":   {"price": 300.0, "credits": 10, "emoji": "🥇"},
+    "بلاتينية": {"price": 600.0, "credits": 20, "emoji": "💎"},
+}
+
+# backward compat — يشير دائماً للباقات الأساسية
+PACKAGES = BASIC_PACKAGES
+
+
+def get_packages_for_tier(tier: str) -> dict:
+    """إرجاع الباقات حسب نوع التير."""
+    return VIP_PACKAGES if tier == "vip" else BASIC_PACKAGES
+
+
+def get_price_for_tier(tier: str) -> float:
+    """إرجاع سعر الملف حسب نوع التير."""
+    if tier == "vip":
+        return float(get_setting("vip_scaffold_price", "30.0"))
+    return float(get_setting("scaffold_price", "5.0"))
+
+
+def get_user_tier(user_id: int) -> str:
+    """إرجاع تير المستخدم (basic أو vip)."""
+    user = get_user(user_id)
+    if not user:
+        return "basic"
+    return user.get("tier") or "basic"
+
+
+def set_user_tier(user_id: int, tier: str) -> None:
+    """تعيين تير المستخدم — لا يتغير إلا من هنا أو من لوحة الإدارة."""
+    if tier not in ("basic", "vip"):
+        return
+    conn = get_conn()
+    try:
+        conn.execute("UPDATE users SET tier=? WHERE user_id=?", (tier, user_id))
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def _build_payment_methods():
@@ -1383,8 +1435,11 @@ def approve_transaction(tx_id, admin_id):
         if not row or row["status"] == "approved":
             return None
         tx = dict(row)
-        pkg = PACKAGES.get(tx.get("package_name", ""), {})
-        price = float(get_setting("scaffold_price", "5.0"))
+        # ── احتساب الرصيد حسب تير المستخدم ──
+        user_tier   = get_user_tier(tx["user_id"])
+        all_pkgs    = get_packages_for_tier(user_tier)
+        pkg         = all_pkgs.get(tx.get("package_name", ""), {})
+        price       = get_price_for_tier(user_tier)
         credits_val = pkg.get("credits", 0) * price
         conn.execute("UPDATE transactions SET status='approved', admin_id=? WHERE id=?", (admin_id, tx_id))
         conn.execute("UPDATE users SET balance=balance+? WHERE user_id=?", (credits_val, tx["user_id"]))
