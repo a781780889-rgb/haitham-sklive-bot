@@ -64,6 +64,13 @@ ADMIN_IDS  = [
     for x in os.getenv("ADMIN_IDS", "8436565004").split(",")
     if x.strip().isdigit()
 ]
+
+# ── تير البوت: يُحدَّد من متغير البيئة BOT_TIER ──
+# basic → بوت 5 ريال  |  vip → بوت 30 ريال
+BOT_TIER = os.getenv("BOT_TIER", "basic").lower().strip()
+if BOT_TIER not in ("basic", "vip"):
+    BOT_TIER = "basic"
+
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN غير موجود في .env")
 
@@ -946,16 +953,12 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid  = update.effective_user.id
     name = update.effective_user.full_name or "مستخدم"
 
-    # ── إنشاء المستخدم إن لم يكن موجوداً ──
-    is_new = db.create_user(uid, name)   # True إذا أنشئ للتو، False إذا كان موجوداً
-
-    # ── تعيين التير: فقط للمستخدمين الجدد عبر الرابط ──
-    # المستخدمون الحاليون: لا يتغير تيرهم عبر الرابط (فقط من لوحة الإدارة)
-    if is_new and context.args:
-        payload = context.args[0].lower()
-        if payload == "vip":
-            db.set_user_tier(uid, "vip")
-        # basic هو الافتراضي — لا حاجة لتغييره
+    # ── إنشاء المستخدم وتعيين التير حسب البوت الذي دخل منه ──
+    is_new = db.create_user(uid, name)
+    if is_new:
+        # مستخدم جديد → يأخذ تير البوت الذي استخدمه
+        db.set_user_tier(uid, BOT_TIER)
+    # المستخدمون الحاليون: تيرهم لا يتغير إلا من لوحة الإدارة
 
     # فحص الحظر
     if db.is_banned(uid) and uid not in ADMIN_IDS:
