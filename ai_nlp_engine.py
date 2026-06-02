@@ -16,7 +16,10 @@ Production-Level AI/NLP Processing Engine
 """
 
 import re
+import json
 import logging
+import urllib.request
+import urllib.error
 from typing import Optional, Dict, List, Tuple, Any
 from datetime import datetime
 
@@ -28,6 +31,117 @@ from normalizer import (
 from date_intelligence import (
     parse_smart_date, parse_date_range_smart, is_valid_date
 )
+
+# ═══════════════════════════════════════════════════════════════
+# Gemini API — استخراج ذكي بالذكاء الاصطناعي
+# ═══════════════════════════════════════════════════════════════
+
+_GEMINI_API_KEY  = 'AQ.Ab8RN6Lw7WEknRHCrQpv-0pldBlZbSh9tfhQZqA8cHtP_BkKFQ'
+_GEMINI_API_URL  = (
+    'https://generativelanguage.googleapis.com/v1beta/models/'
+    'gemini-2.0-flash:generateContent?key=' + _GEMINI_API_KEY
+)
+
+_GEMINI_PROMPT_PREFIX = """\
+أنت مساعد متخصص في استخراج بيانات الموظفين من رسائل الواتساب والتيليجرام العربية.
+مهمتك: استخرج الحقول التالية من النص المُدخل وأعدها بصيغة JSON فقط بدون أي نص إضافي.
+
+الحقول المطلوبة:
+- full_name: الاسم الكامل للشخص
+- id_number: رقم الهوية الوطنية أو الإقامة (أرقام فقط)
+- workplace: جهة العمل أو اسم المدرسة أو الشركة
+- nationality: الجنسية
+- city: المدينة التابعة لجهة العمل
+- excuse_date: تاريخ الإجازة بصيغة DD/MM/YYYY
+- days_count: عدد الأيام (رقم فقط)
+- phone: رقم الجوال
+- birth_year: تاريخ الميلاد
+
+قواعد مهمة:
+1. إذا لم يُذكر الحقل في النص اتركه فارغاً "" ولا تخترع بيانات
+2. رقم الهوية: أرقام فقط بدون مسافات أو شرطات
+3. التاريخ: حوّله لصيغة DD/MM/YYYY دائماً (مثال: 02/06/2026)
+4. أعد JSON فقط بدون markdown أو backticks أو أي نص آخر
+5. مثال: {"full_name":"محمد علي","id_number":"1033379809","workplace":"ابتدائية 24","nationality":"سعودي","city":"حائل","excuse_date":"02/06/2026","days_count":"3","phone":"","birth_year":""}
+
+النص المُدخل:
+"""
+
+
+def _gemini_api_parse(text: str) -> Optional[Dict[str, Any]]:
+    """
+    يستدعي Gemini API لاستخراج البيانات من النص بذكاء.
+    يُعيد dict عند النجاح أو None عند الفشل (يُطلق Fallback تلقائياً).
+    """
+    if not text or not _GEMINI_API_KEY:
+        return None
+
+    try:
+        prompt = _GEMINI_PROMPT_PREFIX + text.strip()
+
+        payload = json.dumps({
+            'contents': [
+                {'parts': [{'text': prompt}]}
+            ],
+            'generationConfig': {
+                'temperature': 0.1,
+                'maxOutputTokens': 512,
+            },
+        }).encode('utf-8')
+
+        req = urllib.request.Request(
+            _GEMINI_API_URL,
+            data=payload,
+            headers={'Content-Type': 'application/json'},
+            method='POST',
+        )
+
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            body = json.loads(resp.read().decode('utf-8'))
+
+        # استخراج النص من رد Gemini
+        raw_text = (
+            body.get('candidates', [{}])[0]
+                .get('content', {})
+                .get('parts', [{}])[0]
+                .get('text', '')
+                .strip()
+        )
+
+        if not raw_text:
+            return None
+
+        # تنظيف أي markdown محتمل
+        raw_text = re.sub(r'^```(?:json)?\s*', '', raw_text)
+        raw_text = re.sub(r'\s*```$', '', raw_text)
+        raw_text = raw_text.strip()
+
+        parsed = json.loads(raw_text)
+        if not isinstance(parsed, dict):
+            return None
+
+        # تطبيع النتائج عبر محرك المعالجة الموجود
+        result: Dict[str, Any] = {}
+        for key, val in parsed.items():
+            if not val or not str(val).strip():
+                continue
+            val_str = str(val).strip()
+            processed = _process_field_value(key, val_str)
+            if processed:
+                result[key] = processed
+
+        logger.debug(f'[GeminiAPI] نجح الاستخراج: {list(result.keys())}')
+        return result if result else None
+
+    except urllib.error.HTTPError as e:
+        logger.warning(f'[GeminiAPI] HTTP {e.code}: {e.reason}')
+        return None
+    except (json.JSONDecodeError, KeyError, IndexError) as e:
+        logger.warning(f'[GeminiAPI] خطأ في تحليل الرد: {e}')
+        return None
+    except Exception as e:
+        logger.warning(f'[GeminiAPI] خطأ غير متوقع: {e}')
+        return None
 
 logger = logging.getLogger(__name__)
 
@@ -454,31 +568,33 @@ def ai_parse(text: str) -> Dict[str, Any]:
     يُحلّل النص بالكامل ويستخرج جميع الحقول الممكنة.
     
     المراحل:
+    0. Claude API — استخراج ذكي أولاً (الأدق)
     1. تطبيع النص
-    2. استخراج من النص المُهيكل (label: value)
+    2. استخراج من النص المُهيكل (label: value) — Fallback
     3. استخراج inline (أنماط خاصة)
     4. استخراج من النص الحر
-    5. تنظيف نهائي
+    5. دمج نتائج API مع Regex لملء الفراغات
+    6. تنظيف نهائي
     
     يُعيد dict بالحقول المستخرجة مع قيمها.
     """
     if not text:
         return {}
-    
+
+    # ── 0. Gemini API (الطبقة الأولى — الأدق) ──
+    api_result = _gemini_api_parse(text)
+
     # ── 1. تطبيع النص ──
     text = to_western_digits(str(text).strip())
-    
+
     result: Dict[str, Any] = {}
-    
-    # ── 2. الاستخراج المُهيكل ──
+
+    # ── 2. الاستخراج المُهيكل (Regex) ──
     structured = _extract_structured(text)
     result.update(structured)
-    
+
     # ── 3. معالجة تواريخ الإجازة مع النطاق ──
     if 'excuse_date' in result:
-        # تحليل النطاق الزمني من التاريخ المستخرج
-        raw_date = result['excuse_date']
-        # ابحث عن قيمة الحقل الأصلية (قبل المعالجة)
         lines = text.splitlines()
         for line in lines:
             for sep in [':', '：', '=']:
@@ -497,22 +613,28 @@ def ai_parse(text: str) -> Dict[str, Any]:
                         elif days == 1:
                             result.setdefault('days_count', '1')
                         break
-    
+
     # ── 4. استخراج inline ──
     inline = _extract_inline(text, result)
     for k, v in inline.items():
         if k not in result:
             result[k] = v
-    
+
     # ── 5. استخراج من النص الحر ──
     freeform = _extract_freeform(text, result)
     for k, v in freeform.items():
         if k not in result:
             result[k] = v
-    
-    # ── 6. تنظيف نهائي ──
+
+    # ── 6. دمج نتائج Claude API (تُقدَّم على Regex عند التعارض) ──
+    if api_result:
+        for k, v in api_result.items():
+            # Claude API يُقدَّم دائماً — أكثر دقة من Regex
+            result[k] = v
+
+    # ── 7. تنظيف نهائي ──
     result = {k: v for k, v in result.items() if v}
-    
+
     return result
 
 
