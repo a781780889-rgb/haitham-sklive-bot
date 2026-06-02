@@ -310,9 +310,20 @@ def _process_field_value(key: str, value: str) -> Optional[str]:
     # معالجة الاسم
     if key == 'full_name':
         cleaned = normalize_name(value)
-        if len(cleaned.split()) < 2:
-            return None  # اسم ناقص
-        return cleaned
+        # رفض نصوص القوالب والأوامر حتى لو جاءت من حقل مُهيكل
+        _REJECT_PHRASES = [
+            'انسخ القالب', 'اكمل البيانات', 'أكمل البيانات',
+            'بيانات المريض', 'بيانات الموظف', 'fill data',
+            'copy template', 'انسخ القالب واكمل',
+        ]
+        from normalizer import normalize_for_comparison as _nfc
+        cleaned_norm = _nfc(cleaned)
+        if any(_nfc(ph) in cleaned_norm for ph in _REJECT_PHRASES):
+            return None
+        # قبول الاسم حتى لو كلمة واحدة (المستخدم قد يكتب اسمه الأول فقط)
+        if len(cleaned) >= 2:
+            return cleaned
+        return None
     
     # معالجة رقم الهوية
     if key == 'id_number':
@@ -514,23 +525,53 @@ def _extract_freeform(text: str, existing: Dict[str, Any]) -> Dict[str, Any]:
             'سعودي', 'مصري', 'يمني', 'باكستاني', 'هندي', 'سوري',
             'اردني', 'فلسطيني', 'لبناني', 'سوداني',
         }
-        
+        # نصوص القوالب والأوامر — يجب تجاهلها تماماً
+        _TEMPLATE_PHRASES = {
+            'انسخ القالب', 'اكمل البيانات', 'أكمل البيانات',
+            'أرسل بيانات', 'ارسل بيانات', 'بيانات المريض',
+            'بيانات الموظف', 'انسخ القالب واكمل', 'القالب واكمل',
+            'copy template', 'fill data', 'fill the form',
+            'يرجى ملء', 'يرجى تعبئة', 'أدخل البيانات',
+            'ادخل البيانات', 'بيانات طلب', 'طلب الإجازة',
+            'طلب الاجازة', 'نموذج الإجازة', 'نموذج الاجازة',
+        }
+        # أفعال/كلمات تدل على أن السطر أمر وليس اسماً
+        _COMMAND_WORDS = {
+            'انسخ', 'أرسل', 'ارسل', 'أكمل', 'اكمل', 'أدخل', 'ادخل',
+            'يرجى', 'اضغط', 'اختر', 'أختر', 'تابع', 'أرسله',
+            'copy', 'send', 'fill', 'enter', 'select', 'press',
+        }
+
         for line in lines:
             line_w = to_western_digits(line)
-            # تجاهل الأسطر التي تحتوي على أرقام فقط
+            # تجاهل الأسطر التي تحتوي على أرقام
             if re.search(r'\d', line_w):
                 continue
-            # تجاهل أسطر المدن والجنسيات
+            # تجاهل الأسطر التي تحتوي على رموز تعبيرية بدون نص اسم حقيقي
+            line_clean = re.sub(r'[^\u0600-\u06FFa-zA-Z\s]', ' ', line).strip()
+            if not line_clean:
+                continue
             line_norm = normalize_for_comparison(line)
+            # تجاهل نصوص القوالب
+            if any(normalize_for_comparison(ph) in line_norm for ph in _TEMPLATE_PHRASES):
+                continue
+            # تجاهل الأسطر التي تبدأ بفعل أمر
+            first_word = line_clean.split()[0] if line_clean.split() else ''
+            if normalize_for_comparison(first_word) in {
+                normalize_for_comparison(w) for w in _COMMAND_WORDS
+            }:
+                continue
+            # تجاهل أسطر المدن والجنسيات
             if any(normalize_for_comparison(c) in line_norm for c in _CITIES | _NATIONALITIES):
                 continue
             # تجاهل أسطر الحقول المعروفة
-            if _match_field(line):
+            if _match_field(line_clean):
                 continue
             # المُرشّح للاسم: سطر يحتوي على كلمتين أو أكثر
-            words = line.split()
-            if len(words) >= 2:
-                candidate = normalize_name(line.strip())
+            # والكلمات يجب أن تكون قصيرة (أسماء) وليست جملاً طويلة
+            words = line_clean.split()
+            if 2 <= len(words) <= 6:
+                candidate = normalize_name(line_clean)
                 if candidate and len(candidate.split()) >= 2:
                     result['full_name'] = candidate
                     break
