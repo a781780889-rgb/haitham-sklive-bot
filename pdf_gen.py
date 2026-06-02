@@ -516,25 +516,20 @@ def to_hijri(date_str):
 def to_hijri_duration(days, start_str, end_str):
     """
     يُنتج نص مدة الإجازة بالهجري داخل الشريط الداكن.
-    ✅ الترتيب المنطقي: {days} {يوم/أيام} ({h_start} الى {h_end})
+    ✅ الترتيب البصري المطلوب (RTL): {days} {يوم/أيام} ({h_start} الى {h_end})
 
-    العرض البصري بعد BiDi(base_dir='R') للقارئ العربي (RTL):
-        1 يوم (1447-10-21 الى 1447-10-21)
-        3 أيام (1447-11-14 الى 1447-11-16)
-
-    - بدون عكس الحروف العربية بـ [::-1].
-    - مسار الرسم لاحقاً في reshape_only يطبّق:
-        1) arabic_reshaper.reshape() لتوصيل الحروف العربية (الى / يوم / أيام).
-        2) get_display(..., base_dir='R') لتحويل الترتيب المنطقي إلى البصري
-           RTL فتنعكس الأقواس المحايدة (mirror pairs) حول التواريخ بشكل سليم.
-    - يُستخدم خط Times New Roman لكل النصوص في هذا السلوت.
-
+    ملاحظة BiDi:
+    - بعد get_display(base_dir='R') يُعكس الترتيب المنطقي بصرياً.
+    - لذلك نضع h_end قبل h_start في النص المنطقي،
+      فيظهر h_start قبل h_end بصرياً (RTL) كما هو مطلوب.
+    - الناتج البصري: 2 أيام (27-10-1447 الى 28-10-1447)
     """
     h_start  = to_hijri(start_str)
     h_end    = to_hijri(end_str)
     _dwe_ar  = "يوم" if days == 1 else "أيام"
     _ela_ar  = "الى"
-    return f"{days} {_dwe_ar} ({h_start} {_ela_ar} {h_end})"
+    # h_end أولاً في المنطقي → h_start أولاً بصرياً بعد BiDi
+    return f"{days} {_dwe_ar} ({h_end} {_ela_ar} {h_start})"
 
 
 def _jdn_to_gregorian(jdn: int) -> datetime:
