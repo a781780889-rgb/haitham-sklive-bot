@@ -515,22 +515,19 @@ def to_hijri(date_str):
 
 def to_hijri_duration(days, start_str, end_str):
     """
-    يُنتج نص مدة الإجازة بالهجري داخل الشريط الداكن.
+    يُنتج نص مدة الإجازة بالهجري للرسم في PDF.
 
-    الناتج البصري المطلوب (RTL):
+    الناتج البصري المطلوب:
         2 أيام ( 1447-10-27 الى 1447-10-28 )
         1 يوم  ( 1447-10-27 الى 1447-10-27 )
 
-    ملاحظة BiDi:
-    - get_display(base_dir='R') يعكس الترتيب المنطقي بصرياً.
-    - لذلك نضع h_end قبل h_start في المنطقي مع مسافة داخل الأقواس،
-      فيظهر h_start أولاً بصرياً كما هو مطلوب.
+    يُرسل هذا النص لـ reshape فقط (بدون get_display)،
+    فيرسمه PDF بالترتيب الطبيعي والأرقام كما هي.
     """
     h_start = to_hijri(start_str)
     h_end   = to_hijri(end_str)
     _dwe_ar = "يوم" if days == 1 else "أيام"
-    # h_end أولاً في المنطقي → h_start أولاً بصرياً بعد BiDi
-    return f"{days} {_dwe_ar} ( {h_end} الى {h_start} )"
+    return f"{days} {_dwe_ar} ( {h_start} الى {h_end} )"
 
 
 def _jdn_to_gregorian(jdn: int) -> datetime:
@@ -1493,24 +1490,22 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
         #    في أماكنها الصحيحة حول التواريخ الهجرية.
         if slot.get('reshape_only'):
             # نص يحتوي عربي + أرقام + أقواس
-            # نستخدم Noto للعربي و Times للأقواس/الأرقام (الأقواس غير موجودة في Noto)
+            # نستخدم Noto للعربي و Times للأقواس/الأرقام
             ar_font = FONT_AR_BOLD if is_bold else FONT_AR_REG
             en_font = FONT_EN_BOLD if is_bold else FONT_EN_REG
             if _BIDI_OK:
                 try:
-                    reshaped = arabic_reshaper.reshape(text_str)
-                    # base_dir='R' يفرض السياق RTL فتنعكس الأقواس المحايدة
-                    # (mirror pairs) لتُحيط التواريخ بشكل صحيح في العرض.
-                    shaped = get_display(reshaped, base_dir='R')
+                    # reshape فقط لتوصيل الحروف — بدون get_display
+                    # لأن النص في to_hijri_duration مبني بصرياً مسبقاً
+                    # بالترتيب الصحيح للرسم LTR في PDF
+                    shaped = arabic_reshaper.reshape(text_str)
                 except Exception:
                     shaped = text_str
             else:
                 shaped = text_str
             max_w = MAX_WIDTHS.get(slot_id, 0) * x_scale
             if max_w > 0:
-                # نقيس بخط العربي للتقدير (الأرقام عرضها متقارب)
                 font_size = _fit_font_size(shaped, ar_font, font_size, max_w)
-            # رسم متعدد الخطوط: العربي بـ Noto، والأقواس/الأرقام بـ Times
             _draw_string_runs(c, x, rl_y, shaped, ar_font, en_font, font_size, align)
             continue
 
