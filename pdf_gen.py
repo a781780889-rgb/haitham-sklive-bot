@@ -516,20 +516,21 @@ def to_hijri(date_str):
 def to_hijri_duration(days, start_str, end_str):
     """
     يُنتج نص مدة الإجازة بالهجري داخل الشريط الداكن.
-    ✅ الترتيب البصري المطلوب (RTL): {days} {يوم/أيام} ({h_start} الى {h_end})
+
+    الناتج البصري المطلوب (RTL):
+        2 أيام ( 1447-10-27 الى 1447-10-28 )
+        1 يوم  ( 1447-10-27 الى 1447-10-27 )
 
     ملاحظة BiDi:
-    - بعد get_display(base_dir='R') يُعكس الترتيب المنطقي بصرياً.
-    - لذلك نضع h_end قبل h_start في النص المنطقي،
-      فيظهر h_start قبل h_end بصرياً (RTL) كما هو مطلوب.
-    - الناتج البصري: 2 أيام (27-10-1447 الى 28-10-1447)
+    - get_display(base_dir='R') يعكس الترتيب المنطقي بصرياً.
+    - لذلك نضع h_end قبل h_start في المنطقي مع مسافة داخل الأقواس،
+      فيظهر h_start أولاً بصرياً كما هو مطلوب.
     """
-    h_start  = to_hijri(start_str)
-    h_end    = to_hijri(end_str)
-    _dwe_ar  = "يوم" if days == 1 else "أيام"
-    _ela_ar  = "الى"
+    h_start = to_hijri(start_str)
+    h_end   = to_hijri(end_str)
+    _dwe_ar = "يوم" if days == 1 else "أيام"
     # h_end أولاً في المنطقي → h_start أولاً بصرياً بعد BiDi
-    return f"{days} {_dwe_ar} ({h_end} {_ela_ar} {h_start})"
+    return f"{days} {_dwe_ar} ( {h_end} الى {h_start} )"
 
 
 def _jdn_to_gregorian(jdn: int) -> datetime:
