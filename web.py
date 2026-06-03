@@ -1106,12 +1106,23 @@ def api_verify():
             db.add_order_log(order["id"], "verified", f"IP:{request.remote_addr}")
         except Exception:
             pass
+        # ── حساب تاريخ النهاية مع دعم جميع صيغ التاريخ المخزَّنة ──
+        end_date = order.get("excuse_date", "")
         try:
-            start    = datetime.strptime(order["excuse_date"], "%Y-%m-%d")
-            end      = start + timedelta(days=max(int(order["days_count"]) - 1, 0))
-            end_date = end.strftime("%Y-%m-%d")
+            raw_excuse = (order.get("excuse_date") or "").strip()
+            raw_days   = order.get("days_count", 1)
+            days_int   = max(int(raw_days) - 1, 0) if raw_days else 0
+            start      = None
+            for _fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y"):
+                try:
+                    start = datetime.strptime(raw_excuse, _fmt)
+                    break
+                except Exception:
+                    continue
+            if start:
+                end_date = (start + timedelta(days=days_int)).strftime("%d-%m-%Y")
         except Exception:
-            end_date = order.get("excuse_date", "")
+            pass  # end_date بقيت = excuse_date كقيمة احتياطية
         return jsonify({"success":True,"data":{
             "gsl_code":    order["gsl_code"],
             "full_name":   order.get("full_name",""),
