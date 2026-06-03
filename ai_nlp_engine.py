@@ -16,10 +16,7 @@ Production-Level AI/NLP Processing Engine
 """
 
 import re
-import json
 import logging
-import urllib.request
-import urllib.error
 from typing import Optional, Dict, List, Tuple, Any
 from datetime import datetime
 
@@ -31,117 +28,6 @@ from normalizer import (
 from date_intelligence import (
     parse_smart_date, parse_date_range_smart, is_valid_date
 )
-
-# ═══════════════════════════════════════════════════════════════
-# Gemini API — استخراج ذكي بالذكاء الاصطناعي
-# ═══════════════════════════════════════════════════════════════
-
-_GEMINI_API_KEY  = 'AQ.Ab8RN6Lw7WEknRHCrQpv-0pldBlZbSh9tfhQZqA8cHtP_BkKFQ'
-_GEMINI_API_URL  = (
-    'https://generativelanguage.googleapis.com/v1beta/models/'
-    'gemini-2.0-flash:generateContent?key=' + _GEMINI_API_KEY
-)
-
-_GEMINI_PROMPT_PREFIX = """\
-أنت مساعد متخصص في استخراج بيانات الموظفين من رسائل الواتساب والتيليجرام العربية.
-مهمتك: استخرج الحقول التالية من النص المُدخل وأعدها بصيغة JSON فقط بدون أي نص إضافي.
-
-الحقول المطلوبة:
-- full_name: الاسم الكامل للشخص
-- id_number: رقم الهوية الوطنية أو الإقامة (أرقام فقط)
-- workplace: جهة العمل أو اسم المدرسة أو الشركة
-- nationality: الجنسية
-- city: المدينة التابعة لجهة العمل
-- excuse_date: تاريخ الإجازة بصيغة DD/MM/YYYY
-- days_count: عدد الأيام (رقم فقط)
-- phone: رقم الجوال
-- birth_year: تاريخ الميلاد
-
-قواعد مهمة:
-1. إذا لم يُذكر الحقل في النص اتركه فارغاً "" ولا تخترع بيانات
-2. رقم الهوية: أرقام فقط بدون مسافات أو شرطات
-3. التاريخ: حوّله لصيغة DD/MM/YYYY دائماً (مثال: 02/06/2026)
-4. أعد JSON فقط بدون markdown أو backticks أو أي نص آخر
-5. مثال: {"full_name":"محمد علي","id_number":"1033379809","workplace":"ابتدائية 24","nationality":"سعودي","city":"حائل","excuse_date":"02/06/2026","days_count":"3","phone":"","birth_year":""}
-
-النص المُدخل:
-"""
-
-
-def _gemini_api_parse(text: str) -> Optional[Dict[str, Any]]:
-    """
-    يستدعي Gemini API لاستخراج البيانات من النص بذكاء.
-    يُعيد dict عند النجاح أو None عند الفشل (يُطلق Fallback تلقائياً).
-    """
-    if not text or not _GEMINI_API_KEY:
-        return None
-
-    try:
-        prompt = _GEMINI_PROMPT_PREFIX + text.strip()
-
-        payload = json.dumps({
-            'contents': [
-                {'parts': [{'text': prompt}]}
-            ],
-            'generationConfig': {
-                'temperature': 0.1,
-                'maxOutputTokens': 512,
-            },
-        }).encode('utf-8')
-
-        req = urllib.request.Request(
-            _GEMINI_API_URL,
-            data=payload,
-            headers={'Content-Type': 'application/json'},
-            method='POST',
-        )
-
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            body = json.loads(resp.read().decode('utf-8'))
-
-        # استخراج النص من رد Gemini
-        raw_text = (
-            body.get('candidates', [{}])[0]
-                .get('content', {})
-                .get('parts', [{}])[0]
-                .get('text', '')
-                .strip()
-        )
-
-        if not raw_text:
-            return None
-
-        # تنظيف أي markdown محتمل
-        raw_text = re.sub(r'^```(?:json)?\s*', '', raw_text)
-        raw_text = re.sub(r'\s*```$', '', raw_text)
-        raw_text = raw_text.strip()
-
-        parsed = json.loads(raw_text)
-        if not isinstance(parsed, dict):
-            return None
-
-        # تطبيع النتائج عبر محرك المعالجة الموجود
-        result: Dict[str, Any] = {}
-        for key, val in parsed.items():
-            if not val or not str(val).strip():
-                continue
-            val_str = str(val).strip()
-            processed = _process_field_value(key, val_str)
-            if processed:
-                result[key] = processed
-
-        logger.debug(f'[GeminiAPI] نجح الاستخراج: {list(result.keys())}')
-        return result if result else None
-
-    except urllib.error.HTTPError as e:
-        logger.warning(f'[GeminiAPI] HTTP {e.code}: {e.reason}')
-        return None
-    except (json.JSONDecodeError, KeyError, IndexError) as e:
-        logger.warning(f'[GeminiAPI] خطأ في تحليل الرد: {e}')
-        return None
-    except Exception as e:
-        logger.warning(f'[GeminiAPI] خطأ غير متوقع: {e}')
-        return None
 
 logger = logging.getLogger(__name__)
 
@@ -310,20 +196,9 @@ def _process_field_value(key: str, value: str) -> Optional[str]:
     # معالجة الاسم
     if key == 'full_name':
         cleaned = normalize_name(value)
-        # رفض نصوص القوالب والأوامر حتى لو جاءت من حقل مُهيكل
-        _REJECT_PHRASES = [
-            'انسخ القالب', 'اكمل البيانات', 'أكمل البيانات',
-            'بيانات المريض', 'بيانات الموظف', 'fill data',
-            'copy template', 'انسخ القالب واكمل',
-        ]
-        from normalizer import normalize_for_comparison as _nfc
-        cleaned_norm = _nfc(cleaned)
-        if any(_nfc(ph) in cleaned_norm for ph in _REJECT_PHRASES):
-            return None
-        # قبول الاسم حتى لو كلمة واحدة (المستخدم قد يكتب اسمه الأول فقط)
-        if len(cleaned) >= 2:
-            return cleaned
-        return None
+        if len(cleaned.split()) < 2:
+            return None  # اسم ناقص
+        return cleaned
     
     # معالجة رقم الهوية
     if key == 'id_number':
@@ -525,53 +400,23 @@ def _extract_freeform(text: str, existing: Dict[str, Any]) -> Dict[str, Any]:
             'سعودي', 'مصري', 'يمني', 'باكستاني', 'هندي', 'سوري',
             'اردني', 'فلسطيني', 'لبناني', 'سوداني',
         }
-        # نصوص القوالب والأوامر — يجب تجاهلها تماماً
-        _TEMPLATE_PHRASES = {
-            'انسخ القالب', 'اكمل البيانات', 'أكمل البيانات',
-            'أرسل بيانات', 'ارسل بيانات', 'بيانات المريض',
-            'بيانات الموظف', 'انسخ القالب واكمل', 'القالب واكمل',
-            'copy template', 'fill data', 'fill the form',
-            'يرجى ملء', 'يرجى تعبئة', 'أدخل البيانات',
-            'ادخل البيانات', 'بيانات طلب', 'طلب الإجازة',
-            'طلب الاجازة', 'نموذج الإجازة', 'نموذج الاجازة',
-        }
-        # أفعال/كلمات تدل على أن السطر أمر وليس اسماً
-        _COMMAND_WORDS = {
-            'انسخ', 'أرسل', 'ارسل', 'أكمل', 'اكمل', 'أدخل', 'ادخل',
-            'يرجى', 'اضغط', 'اختر', 'أختر', 'تابع', 'أرسله',
-            'copy', 'send', 'fill', 'enter', 'select', 'press',
-        }
-
+        
         for line in lines:
             line_w = to_western_digits(line)
-            # تجاهل الأسطر التي تحتوي على أرقام
+            # تجاهل الأسطر التي تحتوي على أرقام فقط
             if re.search(r'\d', line_w):
                 continue
-            # تجاهل الأسطر التي تحتوي على رموز تعبيرية بدون نص اسم حقيقي
-            line_clean = re.sub(r'[^\u0600-\u06FFa-zA-Z\s]', ' ', line).strip()
-            if not line_clean:
-                continue
-            line_norm = normalize_for_comparison(line)
-            # تجاهل نصوص القوالب
-            if any(normalize_for_comparison(ph) in line_norm for ph in _TEMPLATE_PHRASES):
-                continue
-            # تجاهل الأسطر التي تبدأ بفعل أمر
-            first_word = line_clean.split()[0] if line_clean.split() else ''
-            if normalize_for_comparison(first_word) in {
-                normalize_for_comparison(w) for w in _COMMAND_WORDS
-            }:
-                continue
             # تجاهل أسطر المدن والجنسيات
+            line_norm = normalize_for_comparison(line)
             if any(normalize_for_comparison(c) in line_norm for c in _CITIES | _NATIONALITIES):
                 continue
             # تجاهل أسطر الحقول المعروفة
-            if _match_field(line_clean):
+            if _match_field(line):
                 continue
             # المُرشّح للاسم: سطر يحتوي على كلمتين أو أكثر
-            # والكلمات يجب أن تكون قصيرة (أسماء) وليست جملاً طويلة
-            words = line_clean.split()
-            if 2 <= len(words) <= 6:
-                candidate = normalize_name(line_clean)
+            words = line.split()
+            if len(words) >= 2:
+                candidate = normalize_name(line.strip())
                 if candidate and len(candidate.split()) >= 2:
                     result['full_name'] = candidate
                     break
@@ -609,33 +454,31 @@ def ai_parse(text: str) -> Dict[str, Any]:
     يُحلّل النص بالكامل ويستخرج جميع الحقول الممكنة.
     
     المراحل:
-    0. Claude API — استخراج ذكي أولاً (الأدق)
     1. تطبيع النص
-    2. استخراج من النص المُهيكل (label: value) — Fallback
+    2. استخراج من النص المُهيكل (label: value)
     3. استخراج inline (أنماط خاصة)
     4. استخراج من النص الحر
-    5. دمج نتائج API مع Regex لملء الفراغات
-    6. تنظيف نهائي
+    5. تنظيف نهائي
     
     يُعيد dict بالحقول المستخرجة مع قيمها.
     """
     if not text:
         return {}
-
-    # ── 0. Gemini API (الطبقة الأولى — الأدق) ──
-    api_result = _gemini_api_parse(text)
-
+    
     # ── 1. تطبيع النص ──
     text = to_western_digits(str(text).strip())
-
+    
     result: Dict[str, Any] = {}
-
-    # ── 2. الاستخراج المُهيكل (Regex) ──
+    
+    # ── 2. الاستخراج المُهيكل ──
     structured = _extract_structured(text)
     result.update(structured)
-
+    
     # ── 3. معالجة تواريخ الإجازة مع النطاق ──
     if 'excuse_date' in result:
+        # تحليل النطاق الزمني من التاريخ المستخرج
+        raw_date = result['excuse_date']
+        # ابحث عن قيمة الحقل الأصلية (قبل المعالجة)
         lines = text.splitlines()
         for line in lines:
             for sep in [':', '：', '=']:
@@ -654,28 +497,22 @@ def ai_parse(text: str) -> Dict[str, Any]:
                         elif days == 1:
                             result.setdefault('days_count', '1')
                         break
-
+    
     # ── 4. استخراج inline ──
     inline = _extract_inline(text, result)
     for k, v in inline.items():
         if k not in result:
             result[k] = v
-
+    
     # ── 5. استخراج من النص الحر ──
     freeform = _extract_freeform(text, result)
     for k, v in freeform.items():
         if k not in result:
             result[k] = v
-
-    # ── 6. دمج نتائج Claude API (تُقدَّم على Regex عند التعارض) ──
-    if api_result:
-        for k, v in api_result.items():
-            # Claude API يُقدَّم دائماً — أكثر دقة من Regex
-            result[k] = v
-
-    # ── 7. تنظيف نهائي ──
+    
+    # ── 6. تنظيف نهائي ──
     result = {k: v for k, v in result.items() if v}
-
+    
     return result
 
 
