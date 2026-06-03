@@ -895,6 +895,402 @@ _TITLE_MAP = {
 _TRANS_CACHE = {}
 
 
+# ══════════════════════════════════════════════════════════════
+# قاموس أسماء المستشفيات والمنشآت الصحية السعودية
+# الأسماء الإنجليزية الرسمية المعتمدة — لا ترجمة آلية
+# ══════════════════════════════════════════════════════════════
+_HOSPITAL_MAP = {
+    # ── مدن طبية حكومية ──────────────────────────────────────
+    "مدينة الأمير سلطان الطبية العسكرية":          "Prince Sultan Military Medical City",
+    "مدينة الملك سعود الطبية":                      "King Saud Medical City",
+    "مدينة الملك سلمان بن عبد العزيز الطبية":       "King Salman Bin Abdulaziz Medical City",
+    "مدينة الملك عبد العزيز الطبية - جدة":          "King Abdulaziz Medical City - Jeddah",
+    "مدينة الملك عبد العزيز الطبية للحرس الوطني":   "King Abdulaziz Medical City (National Guard)",
+    "مدينة الملك عبد الله الطبية":                  "King Abdullah Medical City",
+    "مدينة الملك فهد الطبية":                       "King Fahad Medical City",
+
+    # ── مستشفيات الملك فيصل التخصصية ─────────────────────────
+    "مستشفى الملك فيصل التخصصي":                    "King Faisal Specialist Hospital and Research Centre",
+    "مستشفى الملك فيصل التخصصي - أبها":             "King Faisal Specialist Hospital - Abha",
+    "مستشفى الملك فيصل التخصصي - المدينة":          "King Faisal Specialist Hospital - Madinah",
+    "مستشفى الملك فيصل التخصصي - جدة":              "King Faisal Specialist Hospital - Jeddah",
+    "مستشفى الملك فيصل - مكة":                      "King Faisal Hospital - Makkah",
+
+    # ── مستشفيات الملك فهد ───────────────────────────────────
+    "مستشفى الملك فهد التخصصي - الدمام":            "King Fahd Specialist Hospital - Dammam",
+    "مستشفى الملك فهد التخصصي - بريدة":             "King Fahd Specialist Hospital - Buraidah",
+    "مستشفى الملك فهد التخصصي - تبوك":              "King Fahd Specialist Hospital - Tabuk",
+    "مستشفى الملك فهد التعليمي - أبها":              "King Fahd Teaching Hospital - Abha",
+    "مستشفى الملك فهد الجامعي - الخبر":              "King Fahad University Hospital - Al-Khobar",
+    "مستشفى الملك فهد المركزي - جازان":              "King Fahad Central Hospital - Jazan",
+    "مستشفى الملك فهد للقوات المسلحة - جدة":        "King Fahad Armed Forces Hospital - Jeddah",
+    "مستشفى الملك فهد - الأحساء":                   "King Fahd Hospital - Al-Ahsa",
+    "مستشفى الملك فهد - الباحة":                    "King Fahd Hospital - Al-Baha",
+    "مستشفى الملك فهد - المدينة":                   "King Fahd Hospital - Madinah",
+    "مستشفى الملك فهد - جدة":                       "King Fahd Hospital - Jeddah",
+    "مستشفى الملك فهد - ينبع":                      "King Fahd Hospital - Yanbu",
+
+    # ── مستشفيات الملك سعود ──────────────────────────────────
+    "مستشفى الملك سعود - بريدة":                    "King Saud Hospital - Buraidah",
+    "مستشفى الملك سعود - جدة":                      "King Saud Hospital - Jeddah",
+    "مستشفى الملك سعود للأمراض الصدرية":            "King Saud Chest Diseases Hospital",
+
+    # ── مستشفيات الملك عبد العزيز ────────────────────────────
+    "مستشفى الملك عبد العزيز الجامعي":              "King Abdulaziz University Hospital",
+    "مستشفى الملك عبد العزيز للحرس الوطني":          "King Abdulaziz Hospital (National Guard)",
+    "مستشفى الملك عبد العزيز ومركز الأورام":         "King Abdulaziz Hospital and Oncology Center",
+    "مستشفى الملك عبد العزيز - المدينة":             "King Abdulaziz Hospital - Madinah",
+    "مستشفى الملك عبد العزيز - مكة":                "King Abdulaziz Hospital - Makkah",
+    "مستشفى الملك عبد العزيز التخصصي - الطائف":     "King Abdulaziz Specialist Hospital - Taif",
+    "مستشفى جامعة الملك عبد العزيز":                "King Abdulaziz University Hospital",
+
+    # ── مستشفيات الملك عبد الله ──────────────────────────────
+    "مستشفى الملك عبد الله الجامعي (جامعة الأميرة نورة)": "King Abdullah University Hospital (Princess Nourah University)",
+
+    # ── مستشفيات الملك خالد ──────────────────────────────────
+    "مستشفى الملك خالد التخصصي للعيون":             "King Khalid Eye Specialist Hospital",
+    "مستشفى الملك خالد الجامعي":                    "King Khalid University Hospital",
+    "مستشفى الملك خالد - حائل":                     "King Khalid Hospital - Hail",
+    "مستشفى الملك خالد - حفر الباطن":               "King Khalid Hospital - Hafar Al-Batin",
+    "مستشفى الملك خالد - نجران":                    "King Khalid Hospital - Najran",
+
+    # ── مستشفى الملك سلمان ───────────────────────────────────
+    "مستشفى الملك سلمان":                           "King Salman Hospital",
+
+    # ── مستشفيات الأمراء ─────────────────────────────────────
+    "مستشفى الأمير سلطان للقلب":                    "Prince Sultan Cardiac Center",
+    "مستشفى الأمير سلطان في خميس مشيط":             "Prince Sultan Hospital - Khamis Mushait",
+    "مستشفى الأمير سلمان بن عبد العزيز - الخرج":    "Prince Salman Bin Abdulaziz Hospital - Al-Kharj",
+    "مستشفى الأمير محمد بن عبد العزيز":             "Prince Mohammed Bin Abdulaziz Hospital",
+    "مستشفى الأمير متعب بن عبد العزيز - سكاكا":     "Prince Mutaib Bin Abdulaziz Hospital - Sakaka",
+    "مستشفى الأمير عبد العزيز بن مساعد - عرعر":     "Prince Abdulaziz Bin Musa'ed Hospital - Arar",
+    "مستشفى الأمير فهد بن سلطان":                   "Prince Fahd Bin Sultan Hospital",
+    "مستشفى الأمير منصور للقوات المسلحة":           "Prince Mansour Armed Forces Hospital",
+
+    # ── مستشفيات الإمام عبد الرحمن الفيصل ───────────────────
+    "مستشفى الإمام عبد الرحمن الفيصل":             "Imam Abdulrahman Al-Faisal Hospital",
+    "مستشفى الإمام عبد الرحمن الفيصل - الدمام":    "Imam Abdulrahman Al-Faisal Hospital - Dammam",
+
+    # ── مستشفيات عسكرية وأمنية ───────────────────────────────
+    "مستشفى الدمام العسكري":                        "Dammam Military Hospital",
+    "مستشفى الظهران العسكري":                       "Dhahran Military Hospital",
+    "مستشفى هدى الشام العسكري":                     "Huda Al-Sham Military Hospital",
+    "مستشفى قوى الأمن":                             "Security Forces Hospital",
+    "مستشفى قوى الأمن - مكة":                       "Security Forces Hospital - Makkah",
+    "مستشفى الأمن العام - الدمام":                  "General Security Hospital - Dammam",
+
+    # ── مستشفى أرامكو ────────────────────────────────────────
+    "مستشفى أرامكو الظهران":                        "Aramco Hospital Dhahran",
+
+    # ── مستشفيات مركزية وعامة حكومية ─────────────────────────
+    "مستشفى الرياض المركزي":                        "Riyadh Central Hospital",
+    "مستشفى الدمام المركزي":                        "Dammam Central Hospital",
+    "مستشفى بريدة المركزي":                         "Buraidah Central Hospital",
+    "مستشفى تبوك المركزي":                          "Tabuk Central Hospital",
+    "مستشفى عرعر المركزي":                          "Arar Central Hospital",
+    "مستشفى صبيا المركزي - جازان":                  "Sabya Central Hospital - Jazan",
+    "مستشفى الإيمان العام":                         "Al-Iman General Hospital",
+    "مستشفى الثغر":                                 "Al-Thaghr Hospital",
+    "مستشفى الرياض":                                "Riyadh Hospital",
+    "مستشفى أبها العام":                             "Abha General Hospital",
+    "مستشفى أبو عريش العام":                         "Abu Arish General Hospital",
+    "مستشفى الأحساء العام":                          "Al-Ahsa General Hospital",
+    "مستشفى الباحة العام":                           "Al-Baha General Hospital",
+    "مستشفى الجبيل العام":                           "Jubail General Hospital",
+    "مستشفى الجعرانة العام":                         "Al-Ji'ranah General Hospital",
+    "مستشفى الخرج العام":                            "Al-Kharj General Hospital",
+    "مستشفى الدوادمي العام":                         "Al-Dawadmi General Hospital",
+    "مستشفى الرس العام":                             "Ar-Rass General Hospital",
+    "مستشفى الزلفي العام":                           "Zulfi General Hospital",
+    "مستشفى الطائف العام":                           "Taif General Hospital",
+    "مستشفى العارضة العام":                          "Al-Ardah General Hospital",
+    "مستشفى العُلا العام":                           "Al-Ula General Hospital",
+    "مستشفى القريات العام":                          "Al-Qurayyat General Hospital",
+    "مستشفى القنفذة العام":                          "Al-Qunfudhah General Hospital",
+    "مستشفى المجمعة العام":                          "Al-Majmaah General Hospital",
+    "مستشفى المذنب العام":                           "Al-Mithnab General Hospital",
+    "مستشفى المندق العام":                           "Al-Mandq General Hospital",
+    "مستشفى النماص العام":                           "Al-Namas General Hospital",
+    "مستشفى بقعاء العام":                            "Buqayah General Hospital",
+    "مستشفى بلجرشي العام":                           "Baljurashi General Hospital",
+    "مستشفى بيشة العام":                             "Bishah General Hospital",
+    "مستشفى تيماء العام":                            "Tayma General Hospital",
+    "مستشفى جازان العام":                            "Jazan General Hospital",
+    "مستشفى حائل العام":                             "Hail General Hospital",
+    "مستشفى حبونا العام":                            "Habona General Hospital",
+    "مستشفى حراء العام":                             "Hira General Hospital",
+    "مستشفى حفر الباطن العام":                       "Hafar Al-Batin General Hospital",
+    "مستشفى خميس مشيط العام":                        "Khamis Mushait General Hospital",
+    "مستشفى دومة الجندل العام":                      "Dawmat Al-Jandal General Hospital",
+    "مستشفى رابغ العام":                             "Rabigh General Hospital",
+    "مستشفى رفحاء العام":                            "Rafha General Hospital",
+    "مستشفى سكاكا العام":                            "Sakaka General Hospital",
+    "مستشفى شرق جدة العام":                          "East Jeddah General Hospital",
+    "مستشفى شرورة العام":                            "Sharurah General Hospital",
+    "مستشفى صامطة العام":                            "Samtah General Hospital",
+    "مستشفى صبيا العام":                             "Sabya General Hospital",
+    "مستشفى طريف العام":                             "Turaif General Hospital",
+    "مستشفى عنيزة العام":                            "Unaizah General Hospital",
+    "مستشفى نجران العام":                            "Najran General Hospital",
+    "مستشفى نجران الجامعي":                          "Najran University Hospital",
+    "مستشفى وادي الدواسر العام":                     "Wadi Al-Dawasir General Hospital",
+    "مستشفى ينبع العام":                             "Yanbu General Hospital",
+    "مستشفى أجياد للطوارئ":                         "Ajyad Emergency Hospital",
+
+    # ── الولادة والأطفال ──────────────────────────────────────
+    "مستشفى الأطفال بمدينة الملك سعود الطبية":      "Children's Hospital at King Saud Medical City",
+    "مستشفى العزيزية للولادة والأطفال":              "Al-Aziziyah Maternity and Children's Hospital",
+    "مستشفى النساء والولادة والأطفال":               "Women, Maternity and Children's Hospital",
+    "مستشفى الولادة والأطفال (المساعدية)":           "Maternity and Children's Hospital (Al-Musaidiyah)",
+    "مستشفى الولادة والأطفال - أبها":                "Maternity and Children's Hospital - Abha",
+    "مستشفى الولادة والأطفال - الأحساء":             "Maternity and Children's Hospital - Al-Ahsa",
+    "مستشفى الولادة والأطفال - الباحة":              "Maternity and Children's Hospital - Al-Baha",
+    "مستشفى الولادة والأطفال - الخرج":               "Maternity and Children's Hospital - Al-Kharj",
+    "مستشفى الولادة والأطفال - الدمام":              "Maternity and Children's Hospital - Dammam",
+    "مستشفى الولادة والأطفال - الدوادمي":            "Maternity and Children's Hospital - Al-Dawadmi",
+    "مستشفى الولادة والأطفال - الطائف":              "Maternity and Children's Hospital - Taif",
+    "مستشفى الولادة والأطفال - القطيف":              "Maternity and Children's Hospital - Qatif",
+    "مستشفى الولادة والأطفال - المجمعة":             "Maternity and Children's Hospital - Al-Majmaah",
+    "مستشفى الولادة والأطفال - بريدة":               "Maternity and Children's Hospital - Buraidah",
+    "مستشفى الولادة والأطفال - بيشة":                "Maternity and Children's Hospital - Bishah",
+    "مستشفى الولادة والأطفال - تبوك":                "Maternity and Children's Hospital - Tabuk",
+    "مستشفى الولادة والأطفال - جازان":               "Maternity and Children's Hospital - Jazan",
+    "مستشفى الولادة والأطفال - حائل":                "Maternity and Children's Hospital - Hail",
+    "مستشفى الولادة والأطفال - حفر الباطن":          "Maternity and Children's Hospital - Hafar Al-Batin",
+    "مستشفى الولادة والأطفال - خميس مشيط":           "Maternity and Children's Hospital - Khamis Mushait",
+    "مستشفى الولادة والأطفال - سكاكا":               "Maternity and Children's Hospital - Sakaka",
+    "مستشفى الولادة والأطفال - عرعر":                "Maternity and Children's Hospital - Arar",
+    "مستشفى الولادة والأطفال - عنيزة":               "Maternity and Children's Hospital - Unaizah",
+    "مستشفى الولادة والأطفال - مكة":                 "Maternity and Children's Hospital - Makkah",
+    "مستشفى الولادة والأطفال - نجران":               "Maternity and Children's Hospital - Najran",
+    "مستشفى الولادة والأطفال - ينبع":                "Maternity and Children's Hospital - Yanbu",
+
+    # ── الصحة النفسية ─────────────────────────────────────────
+    "مجمع الأمل والصحة النفسية":                    "Al-Amal Psychiatric and Mental Health Complex",
+    "مستشفى الأمراض النفسية - الطائف":              "Psychiatric Hospital - Taif",
+    "مستشفى الطب النفسي - المدينة":                 "Psychiatric Hospital - Madinah",
+    "مستشفى الطب النفسي - جدة":                     "Psychiatric Hospital - Jeddah",
+    "مستشفى الصحة النفسية - أبها":                  "Mental Health Hospital - Abha",
+    "مستشفى الصحة النفسية - الأحساء":               "Mental Health Hospital - Al-Ahsa",
+    "مستشفى الصحة النفسية - بريدة":                 "Mental Health Hospital - Buraidah",
+    "مستشفى الصحة النفسية - تبوك":                  "Mental Health Hospital - Tabuk",
+    "مستشفى الصحة النفسية - جازان":                 "Mental Health Hospital - Jazan",
+    "مستشفى الصحة النفسية - جدة":                   "Mental Health Hospital - Jeddah",
+    "مستشفى الصحة النفسية - حائل":                  "Mental Health Hospital - Hail",
+    "مستشفى الصحة النفسية - نجران":                 "Mental Health Hospital - Najran",
+
+    # ── مراكز متخصصة حكومية ──────────────────────────────────
+    "مركز الأورام الوطني":                          "National Oncology Center",
+    "مركز البابطين لأمراض القلب":                   "Al-Babtain Cardiac Center",
+    "مركز القلب - المدينة":                         "Cardiac Center - Madinah",
+    "مركز الملك سلمان لأمراض الكلى":                "King Salman Kidney Disease Center",
+    "مركز الملك فيصل للأبحاث والدراسات الإسلامية الطبية": "King Faisal Research Center",
+    "مركز جدة الطبي التخصصي":                       "Jeddah Medical Specialist Center",
+    "مركز كانو لأمراض الكلى":                       "Kanoo Kidney Disease Center",
+    "مركز مكة الطبي":                               "Makkah Medical Center",
+
+    # ── مجمعات طبية ──────────────────────────────────────────
+    "مجمع أبها الطبي":                              "Abha Medical Complex",
+    "مجمع الأحساء الطبي":                           "Al-Ahsa Medical Complex",
+    "مجمع الدمام الطبي":                            "Dammam Medical Complex",
+    "مجمع المدينة الطبي":                           "Madinah Medical Complex",
+    "مجمع الملك عبد الله الطبي":                    "King Abdullah Medical Complex",
+    "مجمع عيادات طب الأسنان (غرب وجنوب الرياض)":   "Dental Clinics Complex (West & South Riyadh)",
+    "مجموعة العبير (مستشفى مجمع الهبة الطبية الجديد)": "Al-Abeer Group (New Hibah Medical Complex Hospital)",
+    "المركز الطبي الدولي":                          "International Medical Center",
+
+    # ── المستشفى السعودي الألماني ────────────────────────────
+    "المستشفى السعودي الألماني (الزهراء، الروابي، الرحاب)": "Saudi German Hospital (Al-Zahra, Al-Rawabi, Al-Rehab)",
+    "المستشفى السعودي الألماني - أبها":              "Saudi German Hospital - Abha",
+    "المستشفى السعودي الألماني - الأحساء":           "Saudi German Hospital - Al-Ahsa",
+    "المستشفى السعودي الألماني - الدمام":            "Saudi German Hospital - Dammam",
+    "المستشفى السعودي الألماني - الرياض":            "Saudi German Hospital - Riyadh",
+    "المستشفى السعودي الألماني - الطائف":            "Saudi German Hospital - Taif",
+    "المستشفى السعودي الألماني - المدينة":           "Saudi German Hospital - Madinah",
+    "المستشفى السعودي الألماني - بريدة":             "Saudi German Hospital - Buraidah",
+    "المستشفى السعودي الألماني - تبوك":              "Saudi German Hospital - Tabuk",
+    "المستشفى السعودي الألماني - جازان":             "Saudi German Hospital - Jazan",
+    "المستشفى السعودي الألماني - مكة":               "Saudi German Hospital - Makkah",
+    "المستشفى السعودي الأهلي (مجموعة العبير)":       "Saudi National Hospital (Al-Abeer Group)",
+
+    # ── دكتور سليمان الحبيب ──────────────────────────────────
+    "مستشفى الدكتور سليمان الحبيب - الرياض":         "Dr. Sulaiman Al-Habib Medical Group - Riyadh",
+    "مستشفى الدكتور سليمان الحبيب - الخبر":          "Dr. Sulaiman Al-Habib Medical Group - Al-Khobar",
+    "مستشفى الدكتور سليمان الحبيب - الدمام":         "Dr. Sulaiman Al-Habib Medical Group - Dammam",
+    "مستشفى الدكتور سليمان الحبيب - الأحساء":        "Dr. Sulaiman Al-Habib Medical Group - Al-Ahsa",
+    "مستشفى الدكتور سليمان الحبيب - المدينة":        "Dr. Sulaiman Al-Habib Medical Group - Madinah",
+    "مستشفى الدكتور سليمان الحبيب - بريدة":          "Dr. Sulaiman Al-Habib Medical Group - Buraidah",
+    "مستشفى الدكتور سليمان الحبيب - جدة":            "Dr. Sulaiman Al-Habib Medical Group - Jeddah",
+    "مستشفى الدكتور سليمان الحبيب - مكة":            "Dr. Sulaiman Al-Habib Medical Group - Makkah",
+    "مستشفى الدكتور سليمان الحبيب - أبها":           "Dr. Sulaiman Al-Habib Medical Group - Abha",
+
+    # ── دكتور سليمان فقيه ────────────────────────────────────
+    "مستشفى الدكتور سليمان فقيه":                   "Dr. Soliman Fakeeh Hospital",
+    "مستشفى الدكتور سليمان فقيه - جدة":             "Dr. Soliman Fakeeh Hospital - Jeddah",
+    "مستشفى الدكتور سليمان فقيه - المدينة":         "Dr. Soliman Fakeeh Hospital - Madinah",
+
+    # ── سلسلة الحياة الوطني ──────────────────────────────────
+    "مستشفى الحياة الوطني - الرياض":                "Al-Hayat National Hospital - Riyadh",
+    "مستشفى الحياة الوطني - أبها":                  "Al-Hayat National Hospital - Abha",
+    "مستشفى الحياة الوطني - الأحساء":               "Al-Hayat National Hospital - Al-Ahsa",
+    "مستشفى الحياة الوطني - الباحة":                "Al-Hayat National Hospital - Al-Baha",
+    "مستشفى الحياة الوطني - الدمام":                "Al-Hayat National Hospital - Dammam",
+    "مستشفى الحياة الوطني - الطائف":                "Al-Hayat National Hospital - Taif",
+    "مستشفى الحياة الوطني - المدينة":               "Al-Hayat National Hospital - Madinah",
+    "مستشفى الحياة الوطني - بريدة":                 "Al-Hayat National Hospital - Buraidah",
+    "مستشفى الحياة الوطني - تبوك":                  "Al-Hayat National Hospital - Tabuk",
+    "مستشفى الحياة الوطني - جازان":                 "Al-Hayat National Hospital - Jazan",
+    "مستشفى الحياة الوطني - جدة":                   "Al-Hayat National Hospital - Jeddah",
+    "مستشفى الحياة الوطني - حائل":                  "Al-Hayat National Hospital - Hail",
+    "مستشفى الحياة الوطني - حفر الباطن":            "Al-Hayat National Hospital - Hafar Al-Batin",
+    "مستشفى الحياة الوطني - سكاكا":                 "Al-Hayat National Hospital - Sakaka",
+    "مستشفى الحياة الوطني - عرعر":                  "Al-Hayat National Hospital - Arar",
+    "مستشفى الحياة الوطني - نجران":                 "Al-Hayat National Hospital - Najran",
+    "مستشفى الحياة الوطني - ينبع":                  "Al-Hayat National Hospital - Yanbu",
+
+    # ── سلسلة المواساة ───────────────────────────────────────
+    "مستشفى المواساة":                              "Al-Mouwasat Hospital",
+    "مستشفى المواساة - الخبر":                      "Al-Mouwasat Hospital - Al-Khobar",
+    "مستشفى المواساة - الدمام":                     "Al-Mouwasat Hospital - Dammam",
+    "مستشفى المواساة - القطيف":                     "Al-Mouwasat Hospital - Qatif",
+    "مستشفى المواساة - المدينة":                    "Al-Mouwasat Hospital - Madinah",
+    "مستشفى المواساة - جدة":                        "Al-Mouwasat Hospital - Jeddah",
+
+    # ── سلسلة الأندلسية ──────────────────────────────────────
+    "مستشفى الأندلسية - الرياض":                    "Andalusia Hospital - Riyadh",
+    "مستشفى الأندلسية - الدمام":                    "Andalusia Hospital - Dammam",
+    "مستشفى الأندلسية - المدينة":                   "Andalusia Hospital - Madinah",
+    "مستشفى الأندلسية - بريدة":                     "Andalusia Hospital - Buraidah",
+    "مستشفى الأندلسية - تبوك":                      "Andalusia Hospital - Tabuk",
+    "مستشفى الأندلسية - مكة":                       "Andalusia Hospital - Makkah",
+    "مستشفى أندلسية - جدة":                         "Andalusia Hospital - Jeddah",
+
+    # ── سلسلة الحمادي ────────────────────────────────────────
+    "مستشفى الحمادي (العليا، النزهة، السويدي)":     "Al-Hammadi Hospital (Al-Olaya, Al-Nuzha, Al-Suwaidi)",
+
+    # ── سلسلة دله ────────────────────────────────────────────
+    "مستشفى دله (النخيل، نمار)":                    "Dallah Hospital (Al-Nakheel, Namar)",
+    "مستشفى دله - الخبر":                           "Dallah Hospital - Al-Khobar",
+
+    # ── سلسلة المانع ─────────────────────────────────────────
+    "مستشفى المانع - الخبر":                        "Al-Mana Hospital - Al-Khobar",
+    "مستشفى المانع - الدمام":                       "Al-Mana Hospital - Dammam",
+    "مستشفى المانع - الرياض":                       "Al-Mana Hospital - Riyadh",
+
+    # ── سلسلة الموسى ─────────────────────────────────────────
+    "مستشفى الموسى - الخبر":                        "Al-Moussa Hospital - Al-Khobar",
+    "مستشفى الموسى - الطائف":                       "Al-Moussa Hospital - Taif",
+
+    # ── الحبيب الطبية ─────────────────────────────────────────
+    "مستشفى الحبيب الطبية (العليا، الريان، السويدي)": "Al-Habib Medical Hospital (Al-Olaya, Al-Rayyan, Al-Suwaidi)",
+
+    # ── رعاية وغيرها ─────────────────────────────────────────
+    "مستشفى رعاية الطبية (الروابي، الملز)":         "Rawaieh Medical Hospital (Al-Rawabi, Al-Malaz)",
+    "مستشفى اس ام سي (طريق الملك فهد، طريق الملك عبد الله)": "SMC Hospital (King Fahd Road, King Abdullah Road)",
+    "مستشفى استر سند":                              "Aster Sanad Hospital",
+    "مستشفى عبد اللطيف جميل":                       "Abdul Latif Jameel Hospital",
+    "مستشفى د.هالة عيسى بن لادن":                  "Dr. Hala Issa Bin Laden Hospital",
+    "مستشفى انتر هلت":                              "Inter Health Hospital",
+
+    # ── مستشفيات أهلية ووطنية ────────────────────────────────
+    "مستشفى الجبيل الأهلي":                         "Jubail National Hospital",
+    "مستشفى القطيف الأهلي":                         "Qatif National Hospital",
+    "مستشفى القطيف المركزي":                        "Qatif Central Hospital",
+    "مستشفى الأحساء الوطني":                        "Al-Ahsa National Hospital",
+    "مستشفى الظهران الوطني":                        "Dhahran National Hospital",
+    "مستشفى الخرج الأهلي":                          "Al-Kharj National Hospital",
+    "مستشفى الخرج الوطني":                          "Al-Kharj National Hospital (Watani)",
+    "مستشفى الجبيل الصناعي":                        "Jubail Industrial Hospital",
+    "مستشفى الباحة الأهلي":                         "Al-Baha National Hospital",
+    "مستشفى الدوادمي الأهلي":                       "Al-Dawadmi National Hospital",
+    "مستشفى المجمعة الأهلي":                        "Al-Majmaah National Hospital",
+    "مستشفى النور الأهلي - عرعر":                   "Al-Noor National Hospital - Arar",
+    "مستشفى جدة الأهلي":                            "Jeddah National Hospital",
+    "مستشفى جدة الوطني":                            "Jeddah Watani Hospital",
+    "مستشفى حفر الباطن الأهلي":                     "Hafar Al-Batin National Hospital",
+    "مستشفى خميس مشيط الأهلي":                      "Khamis Mushait National Hospital",
+    "مستشفى بيشة الأهلي":                           "Bishah National Hospital",
+    "مستشفى عنيزة الأهلي":                          "Unaizah National Hospital",
+
+    # ── مستشفيات متنوعة ──────────────────────────────────────
+    "مستشفى النور التخصصي":                         "Al-Nour Specialist Hospital",
+    "مستشفى الزهراء الطبي":                         "Al-Zahraa Medical Hospital",
+    "مستشفى السلامة":                               "Al-Salamah Hospital",
+    "مستشفى السلامة - أبها":                        "Al-Salamah Hospital - Abha",
+    "مستشفى السلامة - الطائف":                      "Al-Salamah Hospital - Taif",
+    "مستشفى السلام - الطائف":                       "Al-Salam Hospital - Taif",
+    "مستشفى الشبكة الشاملة":                        "Al-Shebaka Al-Shamelah Hospital",
+    "مستشفى التأهيل الطبي":                         "Medical Rehabilitation Hospital",
+    "مستشفى النقاهة":                               "Al-Naqaha Convalescent Hospital",
+    "مستشفى الميقات":                               "Al-Miqat Hospital",
+    "مستشفى مدينة الحجاج":                          "Hujjaj City Hospital",
+    "مستشفى الجزيرة":                               "Al-Jazeerah Hospital",
+    "مستشفى اليمامة":                               "Al-Yamamah Hospital",
+    "مستشفى اليوسف":                                "Al-Yousef Hospital",
+    "مستشفى المملكة":                               "Al-Mamlakah Hospital",
+    "مستشفى الخبر":                                 "Al-Khobar Hospital",
+    "مستشفى الأنصار":                               "Al-Ansar Hospital",
+    "مستشفى الدار":                                 "Al-Dar Hospital",
+    "مستشفى العرب":                                 "Al-Arab Hospital",
+    "مستشفى الجافل":                                "Al-Jafl Hospital",
+    "مستشفى الحمراء":                               "Al-Hamra Hospital",
+    "مستشفى الدوسري":                               "Al-Dossari Hospital",
+    "مستشفى المشاري":                               "Al-Mishari Hospital",
+    "مستشفى الروضة - الدمام":                       "Al-Rawdah Hospital - Dammam",
+    "مستشفى رأس تنورة":                             "Ras Tanura Hospital",
+    "مستشفى أحد":                                   "Uhud Hospital",
+    "مستشفى بدر":                                   "Badr Hospital",
+    "مستشفى النخيل - حائل":                         "Al-Nakheel Hospital - Hail",
+    "مستشفى لندن":                                  "London Hospital",
+    "مستشفى الأمل - جدة":                           "Al-Amal Hospital - Jeddah",
+    "مستشفى العيون - جدة":                          "Eye Hospital - Jeddah",
+    "مستشفى الهلال الأخضر":                         "Al-Hilal Al-Akhdar Hospital",
+    "مستشفى الرعاية - بروكير":                      "Al-Riayah Hospital - Brooker",
+    "مستشفى الرعاية الطبية - خميس مشيط":            "Al-Riayah Medical Hospital - Khamis Mushait",
+    "مستشفى الجدعاني":                              "Al-Jadaani Hospital",
+    "مستشفى نبع الصحة":                             "Nab' Al-Sihha Hospital",
+    "مستشفى بقشان":                                 "Bugshan Hospital",
+    "مستشفى الأطباء المتحدون":                      "United Doctors Hospital",
+    "مستشفى عبيد التخصصي":                          "Ubaid Specialist Hospital",
+    "مستشفى علي بن علي":                            "Ali Bin Ali Hospital",
+    "مستشفى عناية العائلة":                         "Family Care Hospital",
+    "مستشفى عيادتي":                                "My Clinic Hospital",
+    "مستشفى مغربي":                                 "Maghribi Hospital",
+    "مستشفى حسان غزاوي":                            "Hassan Ghazzawi Hospital",
+    "مستشفى دار السلامة":                           "Dar Al-Salam Hospital",
+    "مستشفى آماد":                                  "Amad Hospital",
+    "مستشفى آية":                                   "Ayah Hospital",
+    "مستشفى أبو زنادة":                             "Abu Zinadah Hospital",
+    "مستشفى الدكتور بخش":                           "Dr. Bakhsh Hospital",
+    "مستشفى الدكتور حامد الأحمدي":                  "Dr. Hamed Al-Ahmadi Hospital",
+    "مستشفى الدكتور حسن العدواني":                  "Dr. Hassan Al-Adwani Hospital",
+    "مستشفى الدكتور سمير عباس":                     "Dr. Samir Abbas Hospital",
+    "مستشفى الدكتور عواض البشري":                   "Dr. Awad Al-Bishri Hospital",
+    "مستشفى الدكتور محمد الفقيه":                   "Dr. Mohammed Al-Faqih Hospital",
+    "مستشفى الدكتور محمد عرفان":                    "Dr. Mohammed Irfan Hospital",
+    "مستشفى الأمن العام - الدمام":                  "General Security Hospital - Dammam",
+    "مستشفيات مديدة":                               "Mudaydah Hospitals",
+    "مستشفى الجوف الأهلي":                          "Al-Jouf National Hospital",
+    "مستشفى ينبع الوطني":                           "Yanbu National Hospital",
+}
+
+
+def _lookup_hospital(text):
+    """
+    البحث عن اسم المستشفى في قاموس الأسماء الرسمية المعتمدة.
+    يُعيد الاسم الإنجليزي الرسمي أو None إذا لم يُوجد.
+    """
+    t = str(text).strip()
+    # مطابقة تامة أولاً
+    if t in _HOSPITAL_MAP:
+        return _HOSPITAL_MAP[t]
+    # مطابقة جزئية (لتغطية الأسماء المضافة إليها ملاحظات)
+    for ar, en in _HOSPITAL_MAP.items():
+        if ar == t or (len(ar) >= 8 and ar in t):
+            return en
+    return None
+
+
 def nat_en(t):
     """تحويل الجنسية إلى إنجليزي باستخدام القاموس الثابت فقط — لا ترجمة آلية"""
     t = str(t).strip()
@@ -1823,7 +2219,8 @@ def generate_excuse_pdf(order_data, hospital, doctor, specialty, issue_time,
     doc_en_upper  = (doc_en  or (doctor or "")).upper()
 
     # اسم المستشفى إنجليزي
-    hosp_en   = _to_en(hospital  or "")
+    # اسم المستشفى: يبحث أولاً في قاموس الأسماء الرسمية قبل اللجوء للترجمة الآلية
+    hosp_en   = _lookup_hospital(hospital or "") or _to_en(hospital or "")
 
     # رقم الترخيص (16 رقم)
     # الأولوية: force_license (من اختيار المستخدم) > hospital_type > فحص is_private_hospital
