@@ -515,19 +515,26 @@ def to_hijri(date_str):
 
 def to_hijri_duration(days, start_str, end_str):
     """
-    يُنتج نص مدة الإجازة بالهجري للرسم في PDF.
+    يُنتج نص مدة الإجازة بالهجري داخل الشريط الداكن.
+    ✅ الترتيب المنطقي: {days} {يوم/أيام} ({h_start} الى {h_end})
 
-    الناتج البصري المطلوب:
-        2 أيام ( 1447-10-27 الى 1447-10-28 )
-        1 يوم  ( 1447-10-27 الى 1447-10-27 )
+    العرض البصري بعد BiDi(base_dir='R') للقارئ العربي (RTL):
+        1 يوم (1447-10-21 الى 1447-10-21)
+        3 أيام (1447-11-14 الى 1447-11-16)
 
-    يُرسل هذا النص لـ reshape فقط (بدون get_display)،
-    فيرسمه PDF بالترتيب الطبيعي والأرقام كما هي.
+    - بدون عكس الحروف العربية بـ [::-1].
+    - مسار الرسم لاحقاً في reshape_only يطبّق:
+        1) arabic_reshaper.reshape() لتوصيل الحروف العربية (الى / يوم / أيام).
+        2) get_display(..., base_dir='R') لتحويل الترتيب المنطقي إلى البصري
+           RTL فتنعكس الأقواس المحايدة (mirror pairs) حول التواريخ بشكل سليم.
+    - يُستخدم خط Times New Roman لكل النصوص في هذا السلوت.
+
     """
-    h_start = to_hijri(start_str)
-    h_end   = to_hijri(end_str)
-    _dwe_ar = "يوم" if days == 1 else "أيام"
-    return f"{days} {_dwe_ar} ( {h_start} الى {h_end} )"
+    h_start  = to_hijri(start_str)
+    h_end    = to_hijri(end_str)
+    _dwe_ar  = "يوم" if days == 1 else "أيام"
+    _ela_ar  = "الى"
+    return f"{days} {_dwe_ar} ({h_start} {_ela_ar} {h_end})"
 
 
 def _jdn_to_gregorian(jdn: int) -> datetime:
@@ -1490,22 +1497,24 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
         #    في أماكنها الصحيحة حول التواريخ الهجرية.
         if slot.get('reshape_only'):
             # نص يحتوي عربي + أرقام + أقواس
-            # نستخدم Noto للعربي و Times للأقواس/الأرقام
+            # نستخدم Noto للعربي و Times للأقواس/الأرقام (الأقواس غير موجودة في Noto)
             ar_font = FONT_AR_BOLD if is_bold else FONT_AR_REG
             en_font = FONT_EN_BOLD if is_bold else FONT_EN_REG
             if _BIDI_OK:
                 try:
-                    # reshape فقط لتوصيل الحروف — بدون get_display
-                    # لأن النص في to_hijri_duration مبني بصرياً مسبقاً
-                    # بالترتيب الصحيح للرسم LTR في PDF
-                    shaped = arabic_reshaper.reshape(text_str)
+                    reshaped = arabic_reshaper.reshape(text_str)
+                    # base_dir='R' يفرض السياق RTL فتنعكس الأقواس المحايدة
+                    # (mirror pairs) لتُحيط التواريخ بشكل صحيح في العرض.
+                    shaped = get_display(reshaped, base_dir='R')
                 except Exception:
                     shaped = text_str
             else:
                 shaped = text_str
             max_w = MAX_WIDTHS.get(slot_id, 0) * x_scale
             if max_w > 0:
+                # نقيس بخط العربي للتقدير (الأرقام عرضها متقارب)
                 font_size = _fit_font_size(shaped, ar_font, font_size, max_w)
+            # رسم متعدد الخطوط: العربي بـ Noto، والأقواس/الأرقام بـ Times
             _draw_string_runs(c, x, rl_y, shaped, ar_font, en_font, font_size, align)
             continue
 
