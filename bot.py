@@ -4234,11 +4234,38 @@ import threading
 def _run_web():
     import web as _web_module
     port = int(os.environ.get("PORT", 8080))
-    _web_module.app.run(host="0.0.0.0", port=port, debug=False)
+    # استخدام gunicorn إن وُجد، وإلا Flask dev server
+    try:
+        from gunicorn.app.base import BaseApplication
+        class _StandaloneApp(BaseApplication):
+            def __init__(self, app, options=None):
+                self.options = options or {}
+                self.application = app
+                super().__init__()
+            def load_config(self):
+                for k, v in self.options.items():
+                    self.cfg.set(k.lower(), v)
+            def load(self):
+                return self.application
+        _StandaloneApp(_web_module.app, {
+            "bind": f"0.0.0.0:{port}",
+            "workers": 1,
+            "timeout": 120,
+        }).run()
+    except Exception:
+        _web_module.app.run(host="0.0.0.0", port=port, debug=False)
 
 if __name__ == "__main__":
-    t = threading.Thread(target=_run_web, daemon=True)
-    t.start()
+    # شغّل خادم الويب فقط إذا كان RUN_WEB=true (الخدمة الرئيسية)
+    # أو إذا كان SERVICE_TYPE ليس "bot_only"
+    _service_type = os.environ.get("SERVICE_TYPE", "full").lower()
+    _run_web_flag = os.environ.get("RUN_WEB", "true").lower()
+
+    if _service_type != "bot_only" and _run_web_flag != "false":
+        t = threading.Thread(target=_run_web, daemon=True)
+        t.start()
+        logger.info("🌐 خادم الويب يعمل في الخلفية...")
+
     main()
 
 
