@@ -2081,7 +2081,7 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
 
     # ─── رسم نص الرابط + خط أزرق أسفله بعرض النص بالضبط ────────
     try:
-        _url_text  = _qr_url
+        _url_text  = "www.seha.sa/#/inquiries/slenquiry"
         _url_font  = FONT_REG
         _url_size  = 9.5 * min(x_scale, y_scale)
         _url_cx    = 226.45 * x_scale
