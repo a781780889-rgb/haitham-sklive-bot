@@ -152,9 +152,8 @@ def api_verify():
             "workplace":   order.get("workplace",""),
             "issued_at":   _iss_iso
         }})
-    except Exception:
-        app.logger.exception("فشل التحقق من الإجازة المرضية")
-        return jsonify({"success":False,"message":"حدث خطأ مؤقت أثناء الاستعلام. حاول مرة أخرى لاحقًا."}), 500
+    except Exception as ex:
+        return jsonify({"success":False,"message":f"خطأ: {str(ex)}"}), 500
 
 
 @app.route("/health")
