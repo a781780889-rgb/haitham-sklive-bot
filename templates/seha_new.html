@@ -512,6 +512,39 @@ body { margin: 0; overflow-x: hidden; }
   .ft-policy span { opacity: 0.40; }
 
 
+  /* DESIGN FIDELITY: values aligned with the supplied Seha reference HTML */
+  #root, #root main, #root > nav, #root > .page-content-breadcrumb-row, #root > .footer-container { width: 100% !important; max-width: none !important; margin-left: 0 !important; margin-right: 0 !important; }
+  #root .inner-page { width: 100% !important; max-width: none !important; }
+  body { width: 100%; min-height: 100%; direction: rtl; background: #fff; }
+  .app-header { position: fixed; top: 0; width: 100%; z-index: 999; }
+  .header { flex-direction: row; z-index: 999; padding: 0 4% !important; width: 100%; background-color: #f8f9fb !important; height: auto; border-bottom: 0; }
+  .header-inner { width: 100%; flex: 1 1 100%; min-width: 0; display: flex; flex-direction: column; }
+  .nav-container { display: flex; flex-direction: row; flex-wrap: inherit; align-items: center; justify-content: space-between; width: 100%; padding: 0 0 2%; margin-bottom: 0; }
+  .page-content-breadcrumb-row { display: block !important; width: 100%; align-self: stretch; box-sizing: border-box; padding: 160px 4% 0; }
+  .warp-breadcrumb { padding: 0; margin: 0; align-self: stretch; text-align: right; }
+  .breadcrumb { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 8px; align-self: stretch; width: 100%; margin: 0 0 1rem; padding: 0; list-style: none; }
+  .inner-page { width: 100% !important; max-width: none !important; padding: 7% 4% 0; }
+  .inquiries-container { display: flex; min-height: 65vh; flex-direction: column; text-align: center; margin-top: -4%; padding: 0 0 24px; }
+  .heading { width: auto; font-size: 40px; line-height: 1.35; margin: 20px 0 40px; font-weight: 700; position: relative; display: inline-block; color: rgb(48,109,181); background-position: center; background-repeat: no-repeat; background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' width='204' height='21' viewBox='0 0 204 21'%3e%3crect width='204' height='21' fill='%237eb7db' opacity='.25'/%3e%3c/svg%3e"); }
+  .sub-heading { color: rgb(121,140,161); font-size: 1rem; line-height: 1.8; text-align: center; margin: 0 auto 16px; max-width: 720px; }
+  .row { margin-left: calc(-.5 * var(--bs-gutter-x)); margin-right: calc(-.5 * var(--bs-gutter-x)); }
+  .col-md-5 { flex: 0 0 auto; width: 41.66666667%; }
+  #form_input { width: 100% !important; max-width: none !important; margin: 0 auto; }
+  .form-control { display: block; width: 100%; min-height: 0; height: auto; padding: .375rem .75rem; font-size: 1rem; font-weight: 400; line-height: 1.5; color: var(--bs-body-color); background-color: var(--bs-body-bg); border: var(--bs-border-width) solid var(--bs-border-color) !important; border-radius: var(--bs-border-radius); box-shadow: none !important; }
+  #submit_btn { display: inline-block; min-width: 110px; min-height: 0; max-height: 40px; margin: 18px auto 0; border-radius: .375rem; background-color: var(--primary-color) !important; border: 0; }
+  .footer-container { color: #f0f3f8; padding-top: 44px; padding-bottom: 10px; background-color: #306db5; width: 100% !important; max-width: none !important; margin-top: 60px; text-align: center; }
+  .footer { display: flex; flex-direction: row; padding-right: 100px; padding-left: 100px; max-width: none; background: transparent; color: inherit; }
+  .about { width: 100%; line-height: 30px; font-size: 16px; margin-top: 40px; text-align: center; padding-left: 1%; padding-right: 1%; }
+  .section { display: flex; flex-direction: column; justify-content: flex-start; align-items: flex-start; margin-top: 0; margin-bottom: 1%; padding-left: 20px; }
+  @media (max-width: 991.98px) {
+    .header { padding-inline: 2% !important; }
+    .page-content-breadcrumb-row { padding-top: 128px; padding-inline: 2%; }
+    .inner-page { padding-inline: 2%; }
+    .heading { font-size: clamp(28px, 8vw, 40px); }
+    .col-md-5 { width: 100%; padding-left: 24px !important; padding-right: 24px !important; }
+    .footer { padding-left: 24px; padding-right: 24px; flex-direction: column; }
+    .section { align-items: center; padding-left: 0; }
+  }
 </style>
 </head>
 <body>
