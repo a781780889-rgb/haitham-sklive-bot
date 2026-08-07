@@ -2018,44 +2018,9 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
             except Exception:
                 pass
 
-    # ─── رسم باركود QR في موضعه الأصلي ─────────────────────────────
-    # استخدام الرابط من الإعدادات (website_url) بدلاً من رابط ثابت
+    # ─── الباركود/QR معطّل عمدًا — تُترك مساحته الأصلية فارغة ─────
+    # يبقى الرابط والنص والروابط القابلة للنقر كما هي دون تغيير.
     _qr_url = str(website_url or "https://sehasa.online").strip()
-
-    qx = QR_SLOT['x']      * x_scale
-    qy = QR_SLOT['rl_y']   * y_scale
-    qw = QR_SLOT['width']  * x_scale
-    qh = QR_SLOT['height'] * y_scale
-
-    # إن كان هناك باركود مخصص مرفوع من الإدارة — استخدمه مباشرة
-    _qr_drawn = False
-    if custom_qr_path and os.path.exists(custom_qr_path):
-        try:
-            from reportlab.lib.utils import ImageReader
-            c.drawImage(ImageReader(custom_qr_path), qx, qy, width=qw, height=qh, mask='auto')
-            _qr_drawn = True
-        except Exception:
-            pass
-
-    # إن لم يكن هناك باركود مخصص — ولّد QR ديناميكياً من الرابط
-    if not _qr_drawn:
-        try:
-            import qrcode
-            from reportlab.lib.utils import ImageReader
-            _qr = qrcode.QRCode(version=2, box_size=6, border=1,
-                                error_correction=qrcode.constants.ERROR_CORRECT_M)
-            _qr.add_data(_qr_url)
-            _qr.make(fit=True)
-            _qr_img = _qr.make_image(fill_color="black", back_color="white")
-            _buf = io.BytesIO()
-            _qr_img.save(_buf, 'PNG')
-            _buf.seek(0)
-            c.drawImage(ImageReader(_buf), qx, qy, width=qw, height=qh, mask='auto')
-        except Exception:
-            c.setFillColorRGB(1, 1, 1)
-            c.setStrokeColorRGB(1, 1, 1)
-            c.setLineWidth(0)
-            c.rect(qx, qy, qw, qh, stroke=0, fill=1)
 
     # ─── annotations قابلة للنقر — جميعها تشير إلى _qr_url ───
     ar_link_y0 = 333.0 * y_scale
