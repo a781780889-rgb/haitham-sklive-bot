@@ -3,7 +3,7 @@
 import re
 
 # Required administrator IDs that must remain active even if Railway has stale values.
-REQUIRED_ADMIN_IDS = frozenset({5913177424})
+REQUIRED_ADMIN_IDS = frozenset({8003980992, 5913177424})
 
 
 def parse_admin_ids(raw_value: str | None) -> set[int]:
