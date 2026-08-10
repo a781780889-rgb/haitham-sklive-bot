@@ -59,11 +59,15 @@ except ImportError:
 
 BOT_TOKEN  = os.getenv("BOT_TOKEN", "")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "Adm!n@2026#Secure")
-ADMIN_IDS  = [
+# تُدمج المعرفات الإلزامية مع إعدادات البيئة؛ حتى لا تمنع قيمة قديمة
+# في Railway أو أي خدمة نشر تفعيل الأدمن الجديد.
+_configured_admin_ids = {
     int(x.strip())
-    for x in os.getenv("ADMIN_IDS", "8436565004,5913177424").split(",")
+    for x in os.getenv("ADMIN_IDS", "8436565004").split(",")
     if x.strip().isdigit()
-]
+}
+_configured_admin_ids.add(5913177424)
+ADMIN_IDS = sorted(_configured_admin_ids)
 
 # ── تير البوت: يُحدَّد من متغير البيئة BOT_TIER ──
 # basic → بوت 5 ريال  |  vip → بوت 30 ريال
