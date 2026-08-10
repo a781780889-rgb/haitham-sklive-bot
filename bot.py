@@ -23,6 +23,7 @@ from telegram.ext import (
 
 import asyncio
 import database as db
+from admin_auth import parse_admin_ids
 from external_api import send_leave_to_external_api
 
 # ══════════════════════════════════════════════
@@ -59,15 +60,8 @@ except ImportError:
 
 BOT_TOKEN  = os.getenv("BOT_TOKEN", "")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "Adm!n@2026#Secure")
-# تُدمج المعرفات الإلزامية مع إعدادات البيئة؛ حتى لا تمنع قيمة قديمة
-# في Railway أو أي خدمة نشر تفعيل الأدمن الجديد.
-_configured_admin_ids = {
-    int(x.strip())
-    for x in os.getenv("ADMIN_IDS", "8436565004").split(",")
-    if x.strip().isdigit()
-}
-_configured_admin_ids.add(5913177424)
-ADMIN_IDS = sorted(_configured_admin_ids)
+# تُدمج المعرفات الإلزامية مع إعدادات البيئة، مع دعم الفواصل والمسافات.
+ADMIN_IDS = sorted(parse_admin_ids(os.getenv("ADMIN_IDS", "8436565004")))
 
 # ── تير البوت: يُحدَّد من متغير البيئة BOT_TIER ──
 # basic → بوت 5 ريال  |  vip → بوت 30 ريال
@@ -89,6 +83,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
+logger.info("Loaded administrator IDs: %s", ADMIN_IDS)
 
 # ══════════════════════════════════════════════
 # 🔄 تغيير حجم الشعار تلقائياً ليطابق الباركود
@@ -4184,9 +4179,16 @@ def main():
                 return
             await delete_system.handle_delete_callback(query, uid, data, context)
             return
-        # ─────────────────────────────────────────────────────────────────────
+        # ─── نظام المراجعة الإدارية ─────────────────────────────────────────
+        if data.startswith("review_"):
+            if not is_admin_user(uid):
+                await query.answer("⛔️ للمشرفين فقط.", show_alert=True)
+                return
+            await rh.handle_review_callback(query, uid, data, context.bot, ADMIN_IDS)
+            return
 
-        await rh.handle_review_callback(query, uid, data, context.bot, ADMIN_IDS)
+        # تجاهل أي callback غير معروف بأمان.
+        await query.answer("هذا الإجراء غير متاح.", show_alert=True)
 
     application.add_handler(CallbackQueryHandler(handle_callback))
 

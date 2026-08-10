@@ -7,6 +7,7 @@ review_handlers.py - معالجات نظام المراجعة الإدارية
 
 import logging
 import json
+import os
 from datetime import datetime
 
 from telegram import (
@@ -15,6 +16,7 @@ from telegram import (
 )
 import database as db
 import pending_review as pr
+from admin_auth import is_configured_admin
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +27,10 @@ logger = logging.getLogger(__name__)
 def _main_menu_keyboard(context, uid: int):
     """يعيد لوحة المفاتيح الرئيسية بدون استيراد دائري من bot.py"""
     import database as _db
-    is_admin = _db.is_admin(uid)
+    is_admin = (
+        is_configured_admin(uid, os.getenv("ADMIN_IDS", ""))
+        or _db.is_admin(uid)
+    )
     keyboard = [
         [KeyboardButton("📝 إرسال طلب جديد /go")],
         [KeyboardButton("📋 طلباتي"), KeyboardButton("🧾 اشحن رصيدك")],
