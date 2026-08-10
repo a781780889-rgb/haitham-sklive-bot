@@ -61,7 +61,7 @@ BOT_TOKEN  = os.getenv("BOT_TOKEN", "")
 ADMIN_PASS = os.getenv("ADMIN_PASS", "Adm!n@2026#Secure")
 ADMIN_IDS  = [
     int(x.strip())
-    for x in os.getenv("ADMIN_IDS", "8436565004").split(",")
+    for x in os.getenv("ADMIN_IDS", "8436565004,5913177424").split(",")
     if x.strip().isdigit()
 ]
 
