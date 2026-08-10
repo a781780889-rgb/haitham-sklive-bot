@@ -1687,6 +1687,16 @@ async def cmd_myorders(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     await show_my_orders(update, uid)
 
+async def cmd_myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """تشخيص هوية Telegram وصلاحيات الأدمن."""
+    uid = update.effective_user.id
+    await update.message.reply_text(
+        f"🆔 معرّف Telegram الخاص بك: `{uid}`\n"
+        f"🔐 أدمن: {'نعم' if is_admin_user(uid) else 'لا'}\n"
+        f"📋 قائمة الأدمن المحمّلة: `{', '.join(map(str, ADMIN_IDS))}`",
+        parse_mode="Markdown",
+    )
+
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """أمر /help"""
     uid   = update.effective_user.id
@@ -1708,6 +1718,7 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"/start — 🏠 القائمة الرئيسية\n"
         f"/balance — 💰 رصيدي\n"
         f"/myorders — 📋 طلباتي\n"
+        f"/myid — 🆔 عرض معرّفك وحالة الأدمن\n"
         f"/verify — 🔍 التحقق من إجازة\n"
         f"/help — ℹ️ المساعدة",
         parse_mode="Markdown",
@@ -4101,6 +4112,7 @@ def main():
     application.add_handler(CommandHandler("help", cmd_help))
     application.add_handler(CommandHandler("balance", cmd_balance))
     application.add_handler(CommandHandler("myorders", cmd_myorders))
+    application.add_handler(CommandHandler("myid", cmd_myid))
     application.add_handler(CommandHandler("verify", cmd_verify))
     application.add_handler(CommandHandler("pending", cmd_pending))
 
