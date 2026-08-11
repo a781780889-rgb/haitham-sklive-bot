@@ -32,8 +32,7 @@ def _main_menu_keyboard(context, uid: int):
         or _db.is_admin(uid)
     )
     keyboard = [
-        [KeyboardButton("📩 إرسال طلب جديد /go")],
-        [KeyboardButton("🏥 مرافق مريض")],
+        [KeyboardButton("📩 إرسال طلب جديد /go"), KeyboardButton("🏥 مرافق مريض")],
         [KeyboardButton("📋 طلباتي"), KeyboardButton("🧾 اشحن رصيدك")],
         [KeyboardButton("🌐 نظام المواقع"), KeyboardButton("🏥 نظام المستشفيات")],
         [KeyboardButton("➕ إضافة مستشفى"), KeyboardButton("➕ إضافة طبيب")],

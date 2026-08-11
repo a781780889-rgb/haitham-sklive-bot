@@ -570,8 +570,7 @@ def build_main_menu_text(user_id: int, telegram_name: str) -> str:
 
 def main_menu_keyboard(is_admin: bool = False):
     keyboard = [
-        [KeyboardButton("📩 إرسال طلب جديد /go")],
-        [KeyboardButton("🏥 مرافق مريض")],
+        [KeyboardButton("📩 إرسال طلب جديد /go"), KeyboardButton("🏥 مرافق مريض")],
         [KeyboardButton("📋 طلباتي"),         KeyboardButton("🧾 اشحن رصيدك")],
         [KeyboardButton("🌐 نظام المواقع"),   KeyboardButton("🏥 نظام المستشفيات")],
         [KeyboardButton("➕ إضافة مستشفى"),   KeyboardButton("➕ إضافة طبيب")],
