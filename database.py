@@ -151,24 +151,6 @@ def init_db():
         action TEXT NOT NULL, details TEXT,
         created_at TEXT DEFAULT (datetime('now')))""")
 
-    c.execute("""CREATE TABLE IF NOT EXISTS patient_companions (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT NOT NULL,
-        city TEXT NOT NULL,
-        hospital TEXT NOT NULL,
-        phone TEXT DEFAULT '',
-        status TEXT DEFAULT 'active',
-        created_at TEXT DEFAULT (datetime('now')))""")
-
-    c.execute("""CREATE TABLE IF NOT EXISTS patient_companion_requests (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id INTEGER NOT NULL,
-        city TEXT NOT NULL,
-        hospital TEXT NOT NULL,
-        details TEXT NOT NULL,
-        status TEXT DEFAULT 'pending',
-        created_at TEXT DEFAULT (datetime('now')))""")
-
     c.execute("""CREATE TABLE IF NOT EXISTS transactions (
         id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
         amount REAL NOT NULL, type TEXT NOT NULL, status TEXT DEFAULT 'pending',
@@ -196,8 +178,6 @@ def init_db():
         "CREATE INDEX IF NOT EXISTS idx_orders_gsl    ON orders(gsl_code)",
         "CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)",
         "CREATE INDEX IF NOT EXISTS idx_orders_date   ON orders(created_at)",
-        "CREATE INDEX IF NOT EXISTS idx_pc_requests_user ON patient_companion_requests(user_id, created_at)",
-        "CREATE INDEX IF NOT EXISTS idx_pc_companions_lookup ON patient_companions(city, hospital, status)",
         "CREATE INDEX IF NOT EXISTS idx_doctors_hosp  ON doctors(hospital_id)",
         "CREATE INDEX IF NOT EXISTS idx_activity_user ON activity_log(user_id)",
         "CREATE INDEX IF NOT EXISTS idx_tx_user       ON transactions(user_id)",

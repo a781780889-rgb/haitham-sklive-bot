@@ -25,8 +25,6 @@ import asyncio
 import database as db
 from admin_auth import parse_admin_ids
 from external_api import send_leave_to_external_api
-from cities_hospitals_ui import CitiesHospitalsFlow, CB_ADD_HOSPITAL
-from patient_companion import PatientCompanionFlow
 
 # ══════════════════════════════════════════════
 # نظام المراجعة الإدارية (مدمج)
@@ -570,8 +568,7 @@ def build_main_menu_text(user_id: int, telegram_name: str) -> str:
 
 def main_menu_keyboard(is_admin: bool = False):
     keyboard = [
-        [KeyboardButton("📩 إرسال طلب جديد /go")],
-        [KeyboardButton("🏥 مرافق مريض")],
+        [KeyboardButton("📝 إرسال طلب جديد /go")],
         [KeyboardButton("📋 طلباتي"),         KeyboardButton("🧾 اشحن رصيدك")],
         [KeyboardButton("🌐 نظام المواقع"),   KeyboardButton("🏥 نظام المستشفيات")],
         [KeyboardButton("➕ إضافة مستشفى"),   KeyboardButton("➕ إضافة طبيب")],
@@ -585,8 +582,7 @@ def main_menu_keyboard(is_admin: bool = False):
 def dashboard_keyboard():
     return ReplyKeyboardMarkup([
         [KeyboardButton("👥 إدارة المستخدمين"),   KeyboardButton("📊 الإحصائيات")],
-        [KeyboardButton("🏥 إدارة المستشفيات"),   KeyboardButton("🏥 إدارة مرافق المريض")],
-        [KeyboardButton("👨‍⚕️ إدارة الأطباء")],
+        [KeyboardButton("🏥 إدارة المستشفيات"),   KeyboardButton("👨‍⚕️ إدارة الأطباء")],
         [KeyboardButton("🏢 إدارة الشعارات"),      KeyboardButton("💰 إدارة الأسعار")],
         [KeyboardButton("📢 رسالة جماعية"),        KeyboardButton("⚙️ إعدادات النظام")],
         [KeyboardButton("🔙 الرجوع")],
@@ -946,64 +942,6 @@ def orders_admin_keyboard():
     ], resize_keyboard=True)
 
 # ══════════════════════════════════════════════
-# تدفق المدن والمستشفيات لطلبات المرافقة
-# ══════════════════════════════════════════════
-
-async def _on_hospital_selected(query, context, city: str, hospital_name: str):
-    """ينقل المستخدم إلى اختيار الطبيب بعد اختيار المستشفى من واجهة الإنلاين."""
-    context.user_data['selected_hospital'] = hospital_name
-    context.user_data['browse_selected_city'] = city
-    context.user_data['state'] = 'choose_doctor'
-    context.user_data['prev_state'] = 'hospital_results'
-
-    doctors = db.get_doctors_by_hospital_name(hospital_name)
-    hospital_info = db.get_hospital_by_name(hospital_name)
-    type_label = f"({hospital_info.get('hospital_type', '')})" if hospital_info else ""
-    await query.message.reply_text(
-        f"👨‍⚕️ *اختر الطبيب:*\n📍 {hospital_name} {type_label}",
-        parse_mode="Markdown",
-        reply_markup=doctors_keyboard(doctors)
-    )
-
-
-async def _on_cities_flow_cancel(query, context):
-    """يعيد المستخدم إلى القائمة الرئيسية عند إلغاء اختيار المستشفى."""
-    uid = query.from_user.id
-    name = query.from_user.full_name or "مستخدم"
-    context.user_data.clear()
-    await query.message.reply_text(
-        "❌ تم الإلغاء.\n\n" + build_main_menu_text(uid, name),
-        parse_mode="Markdown",
-        reply_markup=main_menu_keyboard(is_admin_user(uid))
-    )
-
-
-_cities_flow = CitiesHospitalsFlow(
-    db_module=db,
-    on_hospital_selected=_on_hospital_selected,
-    on_cancel=_on_cities_flow_cancel,
-)
-
-
-async def _on_patient_companion_back_main(query, context):
-    """يعيد خدمة مرافق مريض المستخدم إلى القائمة الرئيسية الحالية."""
-    uid = query.from_user.id
-    name = query.from_user.full_name or "مستخدم"
-    context.user_data.clear()
-    await query.message.reply_text(
-        build_main_menu_text(uid, name),
-        parse_mode="Markdown",
-        reply_markup=main_menu_keyboard(is_admin_user(uid)),
-    )
-
-
-_patient_flow = PatientCompanionFlow(
-    db_module=db,
-    on_back_main=_on_patient_companion_back_main,
-)
-
-
-# ══════════════════════════════════════════════
 # START
 # ══════════════════════════════════════════════
 
@@ -1085,27 +1023,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_back(update, context, uid, name, state)
         return
 
-    # ── إدخال تفاصيل طلب مرافق مريض ────────────────────────────────────
-    if context.user_data.get("pc_state") == "request_details":
-        handled = await _patient_flow.handle_text(text, update.message, context, uid)
-        if handled:
-            return
-
-    # ── بحث واجهة المدن والمستشفيات ────────────────────────────────────
-    chf_state = context.user_data.get('chf_state', '')
-    if chf_state in ('city_search', 'global_hospital_search', 'hospital_search'):
-        handled = await _cities_flow.handle_text_search(text, update.message, context)
-        if handled:
-            return
-
     # ── القائمة الرئيسية ──
 
-    if text == "🏥 مرافق مريض":
-        context.user_data.clear()
-        await _patient_flow.start(update.message, context)
-        return
-
-    if text in ("📩 إرسال طلب جديد /go", "📝 إرسال طلب جديد /go"):
+    if text == "📝 إرسال طلب جديد /go":
         context.user_data.clear()
         user_check = db.get_user(uid)
         price_check = get_scaffold_price(uid)
@@ -1113,7 +1033,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # رصيد غير كافٍ → عرض قائمة الشحن مباشرة
             await show_charge_menu(update, context, uid)
             return
-        await _cities_flow.start(update.message, context)
+        context.user_data["state"] = "choose_city"
+        await update.message.reply_text(
+            "🏥 *اختر المدينة أو ابحث عن المستشفى:*",
+            parse_mode="Markdown", reply_markup=new_order_keyboard()
+        )
         return
 
     if text == "📋 طلباتي":
@@ -2584,7 +2508,7 @@ async def handle_admin_router(update, context, text, uid, name):
         )
         return
 
-    if text in ("🏥 إدارة المستشفيات", "🏥 إدارة مرافق المريض"):
+    if text == "🏥 إدارة المستشفيات":
         context.user_data["state"] = "admin_hospitals"
         await update.message.reply_text(
             "🏥 *إدارة المستشفيات*\n\nاختر العملية:",
@@ -3755,7 +3679,7 @@ async def handle_dashboard_router(update, context, text, uid, name):
         return
 
     # ── إدارة المستشفيات ──
-    if text in ("🏥 إدارة المستشفيات", "🏥 إدارة مرافق المريض"):
+    if text == "🏥 إدارة المستشفيات":
         context.user_data["state"] = "admin_hospitals"
         await update.message.reply_text(
             "🏥 *إدارة المستشفيات*\n\nاختر العملية:",
@@ -4195,39 +4119,9 @@ def main():
     # معالج الأزرار الإنلاين
     async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
+        await query.answer()
         uid = query.from_user.id
         data = query.data or ""
-
-        # ── تدفق خدمة مرافق مريض ──
-        handled = await _patient_flow.handle_callback(query, context)
-        if handled:
-            return
-
-        # ── تدفق اختيار مدينة/مستشفى تقرير المرافقة ──
-        chf_state = context.user_data.get('chf_state', '')
-        if chf_state or data.startswith(("cp|", "cs|", "csr", "hqs", "hsel", "hp|", "hs|", "hsr", "ht|", "bc", "cx")):
-            handled = await _cities_flow.handle_callback(query, context)
-            if handled:
-                return
-
-        # ── إضافة مستشفى يدوياً من شاشة تقرير المرافقة ──
-        if data == CB_ADD_HOSPITAL:
-            await query.answer()
-            context.user_data.clear()
-            context.user_data["state"] = "user_add_hospital_name"
-            await query.message.reply_text(
-                "🏥 *إضافة مستشفى جديد*\n\n"
-                "سيُضاف المستشفى بشكل خاص ومؤقت حتى تراجعه الإدارة.\n\n"
-                "✏️ أرسل *اسم المستشفى*:",
-                parse_mode="Markdown",
-                reply_markup=ReplyKeyboardMarkup(
-                    [[KeyboardButton("⬅️ رجوع"), KeyboardButton("🏠 القائمة الرئيسية")]],
-                    resize_keyboard=True,
-                ),
-            )
-            return
-
-        await query.answer()
 
         # معالجة أزرار قبول/رفض طلبات الشحن
         if data.startswith("charge_approve:") or data.startswith("charge_reject:"):
