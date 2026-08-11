@@ -513,8 +513,93 @@ body { margin: 0; overflow-x: hidden; }
 
 
 </style>
+<style id="floating-chat-button-styles">
+  /* زر المحادثة العائم: مستقل عن المحتوى والـ Footer وثابت بالنسبة إلى نافذة العرض */
+  .floating-chat-button {
+    position: fixed;
+    right: max(16px, calc(env(safe-area-inset-right, 0px) + 12px));
+    bottom: max(20px, calc(env(safe-area-inset-bottom, 0px) + 20px));
+    z-index: 2147483000;
+    width: 184px;
+    min-height: 64px;
+    padding: 5px;
+    border: 0;
+    border-radius: 999px;
+    background: #fff;
+    color: #1f5fa8;
+    box-shadow: 0 8px 24px rgba(22, 52, 86, .22), 0 2px 6px rgba(22, 52, 86, .12);
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-start;
+    direction: rtl;
+    cursor: pointer;
+    text-decoration: none;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform .2s ease, box-shadow .2s ease;
+  }
+  .floating-chat-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px rgba(22, 52, 86, .28), 0 3px 8px rgba(22, 52, 86, .14);
+  }
+  .floating-chat-button:active { transform: translateY(0) scale(.98); }
+  .floating-chat-button:focus-visible {
+    outline: 3px solid rgba(48, 109, 181, .45);
+    outline-offset: 4px;
+  }
+  .floating-chat-button__icon {
+    width: 54px;
+    height: 54px;
+    flex: 0 0 54px;
+    border-radius: 50%;
+    background: #2f70b8;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+  }
+  .floating-chat-button__icon svg { width: 26px; height: 26px; display: block; }
+  .floating-chat-button__text {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  @media (max-width: 600px) {
+    .floating-chat-button {
+      right: max(12px, calc(env(safe-area-inset-right, 0px) + 10px));
+      bottom: max(22px, calc(env(safe-area-inset-bottom, 0px) + 22px));
+      width: 166px;
+      min-height: 60px;
+    }
+    .floating-chat-button__icon { width: 50px; height: 50px; flex-basis: 50px; }
+    .floating-chat-button__icon svg { width: 24px; height: 24px; }
+  }
+  @media (max-width: 360px) {
+    .floating-chat-button { width: 148px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .floating-chat-button { transition: none; }
+  }
+</style>
 </head>
 <body>
+<!-- زر عائم مستقل عن المحتوى والـ Footer؛ يظل ثابتًا أثناء التمرير -->
+<a id="floating-chat-button" class="floating-chat-button" href="/chat" target="_blank" rel="noopener noreferrer" aria-label="فتح محادثة البوت">
+  <span class="floating-chat-button__icon" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" focusable="false">
+      <path d="M6.5 6.5h11A3.5 3.5 0 0 1 21 10v4a3.5 3.5 0 0 1-3.5 3.5H12l-3.8 2.8.7-2.8H6.5A3.5 3.5 0 0 1 3 14v-4a3.5 3.5 0 0 1 3.5-3.5Z" fill="currentColor"/>
+      <circle cx="9" cy="12" r="1" fill="#2f70b8"/>
+      <circle cx="12" cy="12" r="1" fill="#2f70b8"/>
+      <circle cx="15" cy="12" r="1" fill="#2f70b8"/>
+    </svg>
+  </span>
+  <span class="floating-chat-button__text">محادثة البوت</span>
+</a>
 <div id="root"><div class="App"><main><div><div class="app-header"><div style="z-index:99;opacity:1;transform:none"><nav class="header navbar navbar-expand-lg navbar-light"><div class="header-inner"><div class="nav-container"><a class="d-lg-none sm-logo navbar-brand sf-hidden" data-uw-original-href="#/" data-uw-rm-brl="PR" href="#/"></a><div class="d-lg-none d-xl-none justify-content-end menu sf-hidden"></div><style class="sf-hidden">#responsive-navbar-nav{display:none}#responsive-navbar-nav .navbar{flex-direction:column;align-items:center}#responsive-navbar-nav .navbar-nav .link,#responsive-navbar-nav .navbar-nav .nav-link{display:flex;flex-direction:column;align-items:center;align-self:center;width:auto;padding-block:10px;font-size:1rem;font-weight:600;color:#306db5;text-decoration:none;border-bottom:1px solid #eee}#responsive-navbar-nav .navbar-nav .nav-link:hover,#responsive-navbar-nav .navbar-nav .link:hover{color:#2c3e77}#responsive-navbar-nav .navbar-nav .link.active{color:#306db5;text-decoration-line:underline;text-underline-offset:6px;text-decoration-thickness:3px;text-decoration-color:#7eb7db}#responsive-navbar-nav .login.btn{background:#306db5;color:#fff!important;border-radius:10px;padding:10px;font-weight:600;text-decoration:none;border:none}#responsive-navbar-nav .login.btn:hover{background:#2c3e77}@media (min-width:992px){#responsive-navbar-nav{display:flex;flex-direction:row;position:static;box-shadow:none;background:transparent;padding:0}#responsive-navbar-nav .navbar{flex-direction:row}}</style>
 <div class="white justify-content-around navbar-collapse collapse" id="responsive-navbar-nav"><div class="navbar justify-content-around navbar-nav"><a class="link nav-link" href="https://www.seha.sa/#/">الرئيسية</a><a class="link nav-link" href="https://www.seha.sa/#/services">الخدمات</a><a class="link nav-link" href="https://www.seha.sa/#/seha-plus">صحة بلس</a><a class="link nav-link active" href="https://www.seha.sa/#/inquiries">الاستعلامات</a><a class="link nav-link" href="https://seha.sa/#/faq">الأسئلة الشائعة</a><a class="link nav-link" href="https://www.seha.sa/#/ContactUs">تواصل معنا</a><a class="link nav-link" href="https://www.seha.sa/#/iamredirection/1">إنشاء حساب</a></div><a class="login nav-link btn btn-primary" href="https://www.seha.sa/#/account/login" style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin-top:10px">تسجيل الدخول</a></div></div></div><button aria-label="button" data-uw-rm-empty-ctrl="" id="top-button" style="display:none"><svg height="18.503" viewbox="0 0 14.4 18.503" width="14.4" xmlns="http://www.w3.org/2000/svg"><path d="M8.862,11.37,14.381,6.1a1.7,1.7,0,0,1,2.355,0l5.54,5.272a1.555,1.555,0,0,1,0,2.271,1.738,1.738,0,0,1-2.376,0l-2.649-2.528V22.519a1.684,1.684,0,0,1-3.364,0V11.113l-2.649,2.534a1.738,1.738,0,0,1-2.376,0,1.561,1.561,0,0,1,0-2.276Z" fill="#306DB5" id="arrow-up-c" transform="translate(-8.369 -5.625)"></path></svg></button></nav></div></div><div class="page-content-breadcrumb-row"><div class="warp-breadcrumb" data-testid="breadcrumb"><nav aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a data-uw-original-href="/" data-uw-rm-brl="PR" href="#">الرئيسية</a><li class="breadcrumb-item"><a data-uw-original-href="/inquiries" data-uw-rm-brl="PR" href="#inquiries">الاستعلامات</a><li aria-current="page" class="breadcrumb-item active">الإجازات المرضية</li></li></li></ol></nav></div></div><div class="inner-page inquiries-container"><h1 class="heading" data-uw-rm-heading="prs">الإجازات المرضية</h1><p class="sub-heading">خدمة الاستعلام عن الإجازات المرضية تتيح لك الاستعلام عن حالة طلبك للإجازة ويمكنك طباعتها عن طريق تطبيق صحتي<div class="row justify-content-center mt-1"><div class="col-md-5 p-4"><form id="form_input">
 <div id="empty-alert" style="display:none;background:#fadadd;border-radius:8px;padding:12px;text-align:center;color:#8b1a2a;font-weight:600;margin-bottom:12px"></div>
