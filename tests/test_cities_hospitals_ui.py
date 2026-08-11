@@ -1,18 +1,18 @@
-# -*- coding: utf-8 -*-
-"""اختبارات واجهة اختيار مدينة المستشفى لتقرير المرافقة."""
+"""اختبارات واجهة اختيار المدينة والمستشفى لتدفق المرافقة."""
 
 import unittest
 
 from cities_hospitals_ui import (
+    CB_CITY_SEARCH,
+    CB_CITY_SELECT,
     CitiesHospitalsFlow,
-    MAX_SEARCH_RESULTS,
     build_cities_keyboard,
-    build_global_hospital_search_results,
+    build_hospitals_keyboard,
 )
 
 
 class FakeDatabase:
-    """بديل بسيط لقاعدة البيانات؛ تعتمد الاختبارات على البيانات الثابتة فقط."""
+    """بديل بسيط لقاعدة البيانات؛ تعتمد الاختبارات على البيانات الثابتة."""
 
     def get_all_cities(self):
         return []
@@ -34,9 +34,13 @@ class FakeQuery:
         self.data = data
         self.message = FakeMessage()
         self.answers = []
+        self.edits = []
 
     async def answer(self, text=None, **kwargs):
         self.answers.append((text, kwargs))
+
+    async def edit_message_text(self, text, **kwargs):
+        self.edits.append((text, kwargs))
 
 
 class FakeContext:
@@ -48,72 +52,97 @@ class CitiesHospitalsUiTests(unittest.TestCase):
     def setUp(self):
         self.db = FakeDatabase()
 
-    def test_cities_screen_matches_report_flow(self):
+    def test_cities_screen_provides_city_search_and_cancel(self):
         keyboard, header = build_cities_keyboard(self.db)
         rows = keyboard.inline_keyboard
         button_texts = [button.text for row in rows for button in row]
 
-        self.assertEqual(header, "🏥 *تقرير مرافقة مريض*\n\nاختر مدينة المستشفى:")
-        self.assertEqual(rows[0][0].text, "🔍 بحث عن مستشفى")
-        self.assertEqual(rows[1][0].text, "✏️ إضافة مستشفى يدوياً")
-        self.assertIn("🏙️ الرياض", button_texts)
-        self.assertIn("🏙️ جدة", button_texts)
-        self.assertFalse(any(text.startswith("❌") for text in button_texts))
-
-        city_rows = rows[2:]
-        self.assertTrue(all(1 <= len(row) <= 3 for row in city_rows))
+        self.assertIn("اختر المدينة", header)
+        self.assertEqual(rows[0][0].text, "🔍 ابحث عن مدينة...")
+        self.assertEqual(rows[0][0].callback_data, CB_CITY_SEARCH)
+        self.assertIn("🏙 الرياض", button_texts)
+        self.assertIn("التالي ▶️", button_texts)
+        self.assertEqual(rows[-1][0].text, "❌ إلغاء")
         self.assertTrue(
             all(len(button.callback_data.encode("utf-8")) <= 64 for row in rows for button in row)
         )
 
-    def test_global_hospital_search_returns_selectable_results(self):
-        keyboard, header, results = build_global_hospital_search_results(self.db, "الملك")
+    def test_city_search_filters_the_city_list(self):
+        keyboard, header = build_cities_keyboard(self.db, search_query="الرياض")
+        button_texts = [button.text for row in keyboard.inline_keyboard for button in row]
 
         self.assertIn("نتائج البحث", header)
-        self.assertGreater(len(results), 0)
-        self.assertLessEqual(len(results), MAX_SEARCH_RESULTS)
-        self.assertEqual(keyboard.inline_keyboard[0][0].callback_data, "hsel|0")
-        self.assertEqual(keyboard.inline_keyboard[-1][0].text, "🏙️ اختيار مدينة")
+        self.assertIn("🏙 الرياض", button_texts)
+        self.assertNotIn("🏙 جدة", button_texts)
 
-    def test_global_hospital_search_handles_no_results(self):
-        keyboard, header, results = build_global_hospital_search_results(self.db, "مستشفى_غير_موجود_قطعاً")
+    def test_hospital_screen_offers_search_and_back_navigation(self):
+        keyboard, header = build_hospitals_keyboard("الرياض", self.db)
+        button_texts = [button.text for row in keyboard.inline_keyboard for button in row]
 
-        self.assertEqual(results, [])
-        self.assertIn("وُجد 0 مستشفى", header)
-        self.assertEqual(len(keyboard.inline_keyboard), 1)
-        self.assertEqual(keyboard.inline_keyboard[0][0].text, "🏙️ اختيار مدينة")
+        self.assertIn("مستشفيات الرياض", header)
+        self.assertIn("🔍 ابحث عن مستشفى...", button_texts)
+        self.assertIn("🏙️ تغيير المدينة", button_texts)
+        self.assertIn("❌ إلغاء", button_texts)
 
 
 class CitiesHospitalsFlowTests(unittest.IsolatedAsyncioTestCase):
-    async def test_global_search_selection_moves_to_doctor_step(self):
-        selected = []
+    def setUp(self):
+        self.db = FakeDatabase()
 
-        async def on_selected(query, context, city, hospital_name):
-            selected.append((city, hospital_name))
-
-        async def on_cancel(query, context):
-            raise AssertionError("لا يجب استدعاء الإلغاء أثناء الاختيار")
-
-        flow = CitiesHospitalsFlow(FakeDatabase(), on_selected, on_cancel)
+    async def test_city_search_text_returns_filtered_city_screen(self):
+        flow = CitiesHospitalsFlow(self.db, self._on_selected, self._on_cancel)
         context = FakeContext()
-        context.user_data["chf_state"] = "global_hospital_search"
-        search_message = FakeMessage()
+        context.user_data["chf_state"] = "city_search"
+        message = FakeMessage()
 
-        handled = await flow.handle_text_search("الملك", search_message, context)
+        handled = await flow.handle_text_search("الرياض", message, context)
 
         self.assertTrue(handled)
-        self.assertEqual(context.user_data["chf_state"], "global_hospital_results")
-        self.assertGreater(len(context.user_data["chf_global_results"]), 0)
-        self.assertEqual(len(search_message.replies), 1)
+        self.assertEqual(context.user_data["chf_state"], "city")
+        self.assertEqual(len(message.replies), 1)
+        self.assertIn("نتائج البحث", message.replies[0][0])
 
-        query = FakeQuery("hsel|0")
+    async def test_city_selection_moves_to_hospital_step(self):
+        flow = CitiesHospitalsFlow(self.db, self._on_selected, self._on_cancel)
+        context = FakeContext()
+        query = FakeQuery(f"{CB_CITY_SELECT}|الرياض")
+
         handled = await flow.handle_callback(query, context)
 
         self.assertTrue(handled)
-        self.assertEqual(context.user_data["chf_state"], "done")
-        self.assertEqual(len(selected), 1)
-        self.assertEqual(context.user_data["selected_hospital"], selected[0][1])
-        self.assertEqual(context.user_data["chf_city"], selected[0][0])
+        self.assertEqual(context.user_data["chf_state"], "hospital")
+        self.assertEqual(context.user_data["chf_city"], "الرياض")
+
+    async def test_city_search_callback_requests_a_city_name(self):
+        flow = CitiesHospitalsFlow(self.db, self._on_selected, self._on_cancel)
+        context = FakeContext()
+        query = FakeQuery(CB_CITY_SEARCH)
+
+        handled = await flow.handle_callback(query, context)
+
+        self.assertTrue(handled)
+        self.assertEqual(context.user_data["chf_state"], "city_search")
+        self.assertEqual(len(query.message.replies), 1)
+        self.assertIn("ابحث عن المدينة", query.message.replies[0][0])
+
+    async def test_hospital_search_text_returns_hospital_screen(self):
+        flow = CitiesHospitalsFlow(self.db, self._on_selected, self._on_cancel)
+        context = FakeContext()
+        context.user_data.update({"chf_state": "hospital_search", "chf_city": "الرياض"})
+        message = FakeMessage()
+
+        handled = await flow.handle_text_search("الملك", message, context)
+
+        self.assertTrue(handled)
+        self.assertEqual(context.user_data["chf_state"], "hospital")
+        self.assertEqual(len(message.replies), 1)
+        self.assertIn("نتائج البحث", message.replies[0][0])
+
+    async def _on_selected(self, query, context, city, hospital_name):
+        return None
+
+    async def _on_cancel(self, query, context):
+        return None
 
 
 if __name__ == "__main__":

@@ -7,9 +7,7 @@ web.py — الإجازات المرضية
 
 import os, sys, base64
 from datetime import datetime, timedelta
-from flask import Flask, request, jsonify, redirect
-import json
-from urllib.request import urlopen
+from flask import Flask, request, jsonify
 
 # ══════════════════════════════════════════════
 # [Cloudflare Fix] ProxyFix — مطلوب خلف Cloudflare
@@ -29,53 +27,6 @@ app = Flask(__name__)
 # x_host=1  → يقرأ X-Forwarded-Host
 # ══════════════════════════════════════════════
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
-
-
-# رابط المحادثة العائم: يُفضّل ضبط TELEGRAM_BOT_URL أو BOT_USERNAME،
-# مع استخدام BOT_TOKEN كحل احتياطي لاستخراج اسم البوت من Telegram API.
-_BOT_CHAT_URL = None
-
-
-def resolve_bot_chat_url():
-    global _BOT_CHAT_URL
-    if _BOT_CHAT_URL:
-        return _BOT_CHAT_URL
-
-    configured_url = os.environ.get("TELEGRAM_BOT_URL", "").strip()
-    if configured_url.startswith(("https://t.me/", "http://t.me/", "tg://")):
-        _BOT_CHAT_URL = configured_url
-        return _BOT_CHAT_URL
-
-    username = os.environ.get("BOT_USERNAME", "").strip().lstrip("@")
-    if username:
-        _BOT_CHAT_URL = f"https://t.me/{username}"
-        return _BOT_CHAT_URL
-
-    token = os.environ.get("BOT_TOKEN", "").strip()
-    if not token:
-        return ""
-
-    try:
-        with urlopen(f"https://api.telegram.org/bot{token}/getMe", timeout=5) as response:
-            payload = json.load(response)
-        username = str(payload.get("result", {}).get("username", "")).strip()
-        if username:
-            _BOT_CHAT_URL = f"https://t.me/{username}"
-    except Exception:
-        return ""
-    return _BOT_CHAT_URL or ""
-
-
-@app.route("/chat")
-def open_chat():
-    """فتح محادثة البوت دون كشف BOT_TOKEN للمتصفح."""
-    chat_url = resolve_bot_chat_url()
-    if chat_url:
-        return redirect(chat_url, code=302)
-    return jsonify({
-        "success": False,
-        "message": "رابط محادثة البوت غير مهيّأ بعد. اضبط TELEGRAM_BOT_URL أو BOT_USERNAME."
-    }), 503
 
 
 # ══════════════════════════════════════════════
