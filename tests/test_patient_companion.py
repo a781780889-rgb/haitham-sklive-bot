@@ -162,6 +162,10 @@ class PatientCompanionFlowTests(unittest.IsolatedAsyncioTestCase):
             request_query = FakeQuery(request_button.callback_data)
             self.assertTrue(await flow.handle_callback(request_query, context))
             self.assertEqual(context.user_data["pc_state"], "request_details")
+            prompt = request_query.message.replies[-1][0]
+            self.assertIn("📝 *بيانات تقرير مرافقة مريض*", prompt)
+            self.assertIn("اسم المرافق:", prompt)
+            self.assertIn("💡 يمكنك الكتابة بجملة حرة أيضاً", prompt)
 
             details_message = FakeMessage()
             self.assertTrue(await flow.handle_text(

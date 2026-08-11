@@ -427,8 +427,16 @@ class PatientCompanionFlow:
                     context.user_data["pc_state"] = "request_details"
                     await query.answer()
                     await query.message.reply_text(
-                        f"📝 *طلب مرافق مريض*\n\n📍 {city}\n🏥 {hospital.get('name')}\n\n"
-                        "أرسل تفاصيل الطلب، مثل التاريخ والمدة وأي ملاحظات مهمة:",
+                        f"📝 *بيانات تقرير مرافقة مريض*\n\n"
+                        "أرسل البيانات بأي أسلوب — الذكاء الاصطناعي سيفهمها:\n\n"
+                        "اسم المرافق: \n"
+                        "رقم الهوية: \n"
+                        "الجنسية: \n"
+                        "صلة القرابة: \n"
+                        "جهة العمل: \n"
+                        "تاريخ الدخول: \n"
+                        "عدد الأيام: \n\n"
+                        "💡 يمكنك الكتابة بجملة حرة أيضاً",
                         parse_mode="Markdown",
                     )
                     return True
