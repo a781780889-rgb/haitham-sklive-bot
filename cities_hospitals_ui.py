@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 # ثوابت واجهة المستخدم
 # ═══════════════════════════════════════════════════════════════════
 
-CITIES_PAGE_SIZE   = 15   # مدن في كل صفحة
+CITIES_PAGE_SIZE   = 60   # يطابق عرض شبكة المدن المرجعية مع إبقاء الترقيم للمدن المضافة لاحقاً
 HOSPITALS_PAGE_SIZE = 12  # مستشفيات في كل صفحة
 SEARCH_MIN_CHARS   = 2    # أقل عدد أحرف للبحث
 MAX_SEARCH_RESULTS = 25   # أقصى نتائج بحث
@@ -55,6 +55,9 @@ TYPE_ICONS = {'حكومي': '🏛', 'خاص': '🏢', 'مجمعات': '🏗'}
 CB_CITY_PAGE     = "cp"    # city page
 CB_CITY_SELECT   = "cs"    # city select
 CB_CITY_SEARCH   = "csr"   # city search request
+CB_GLOBAL_HOSP_SEARCH = "hqs"   # global hospital search request
+CB_GLOBAL_HOSP_SELECT = "hsel"  # global hospital result selection
+CB_ADD_HOSPITAL  = "hadd"  # manual hospital-add request
 CB_HOSP_PAGE     = "hp"    # hospital page
 CB_HOSP_SELECT   = "hs"    # hospital select
 CB_HOSP_SEARCH   = "hsr"   # hospital search request
@@ -135,7 +138,8 @@ def _get_hospitals_for_city(city: str, h_type: Optional[str], db_module) -> List
     try:
         from hospitals_data import KSA_HOSPITALS
         city_data = KSA_HOSPITALS.get(city, {})
-        types_to_check = [h_type] if h_type else list(city_data.keys())
+        # لا تتعامل مع حقل region الوصفي كأنه قائمة مستشفيات.
+        types_to_check = [h_type] if h_type else ['حكومي', 'خاص', 'مجمعات']
         for t in types_to_check:
             for h in city_data.get(t, []):
                 name = h.get('name', h) if isinstance(h, dict) else h
@@ -172,6 +176,53 @@ def _get_hospitals_for_city(city: str, h_type: Optional[str], db_module) -> List
     return hospitals
 
 
+def _search_hospitals_globally(query: str, db_module) -> List[Dict]:
+    """يبحث في جميع المدن ويعيد نتائج موحّدة دون تكرار."""
+    normalized_query = normalize_for_comparison(query)
+    if len(normalized_query) < SEARCH_MIN_CHARS:
+        return []
+
+    results: List[Dict] = []
+    seen = set()
+    for city in _get_all_cities(db_module):
+        for hospital in _get_hospitals_for_city(city, None, db_module):
+            name = hospital.get('name', '')
+            if normalized_query not in normalize_for_comparison(name):
+                continue
+            key = (normalize_for_comparison(city), normalize_for_comparison(name))
+            if key in seen:
+                continue
+            seen.add(key)
+            results.append(hospital)
+            if len(results) >= MAX_SEARCH_RESULTS:
+                return results
+    return results
+
+
+def build_global_hospital_search_results(
+    db_module,
+    search_query: str
+) -> Tuple[InlineKeyboardMarkup, str, List[Dict]]:
+    """يبني نتائج البحث عن مستشفى في جميع المدن."""
+    results = _search_hospitals_globally(search_query, db_module)
+    header = f"🔍 *نتائج البحث عن:* {search_query}\n📊 وُجد {len(results)} مستشفى"
+    buttons: List[List[InlineKeyboardButton]] = []
+
+    for index, hospital in enumerate(results):
+        icon = TYPE_ICONS.get(hospital.get('type', ''), '🏥')
+        name = hospital.get('name', '')
+        city = hospital.get('city', '')
+        label = f"{icon} {name[:22]}{'…' if len(name) > 22 else ''} — {city[:14]}"
+        buttons.append([
+            InlineKeyboardButton(label, callback_data=_cb(CB_GLOBAL_HOSP_SELECT, index))
+        ])
+
+    buttons.append([
+        InlineKeyboardButton("🏙️ اختيار مدينة", callback_data=_cb(CB_BACK_CITIES))
+    ])
+    return InlineKeyboardMarkup(buttons), header, results
+
+
 def _get_city_types(city: str) -> List[str]:
     """يجلب أنواع المستشفيات المتاحة في المدينة."""
     try:
@@ -199,48 +250,39 @@ def build_cities_keyboard(
     page: int = 0,
     search_query: str = ""
 ) -> Tuple[InlineKeyboardMarkup, str]:
-    """
-    يبني InlineKeyboard لاختيار المدينة.
-    يعيد (keyboard, header_text).
-    """
+    """يبني شاشة اختيار مدينة المستشفى لتقرير مرافقة المريض."""
     all_cities = _get_all_cities(db_module)
 
-    # فلترة نتائج البحث
     if search_query and len(search_query) >= SEARCH_MIN_CHARS:
         q = normalize_for_comparison(search_query)
-        filtered = [c for c in all_cities if q in normalize_for_comparison(c)]
-        header = f"🔍 نتائج البحث عن: *{search_query}*\n📊 وُجد {len(filtered)} مدينة"
+        filtered = [city for city in all_cities if q in normalize_for_comparison(city)]
+        header = f"🔍 *نتائج البحث عن مدينة:* {search_query}\n📊 وُجد {len(filtered)} مدينة"
     else:
         filtered = all_cities
-        header = f"🏙️ *اختر المدينة*\n📊 إجمالي المدن: *{len(filtered)}*"
+        header = "🏥 *تقرير مرافقة مريض*\n\nاختر مدينة المستشفى:"
 
     total = len(filtered)
     total_pages = max(1, (total + CITIES_PAGE_SIZE - 1) // CITIES_PAGE_SIZE)
     page = max(0, min(page, total_pages - 1))
-
     start = page * CITIES_PAGE_SIZE
-    page_cities = filtered[start: start + CITIES_PAGE_SIZE]
+    page_cities = filtered[start:start + CITIES_PAGE_SIZE]
 
-    buttons: List[List[InlineKeyboardButton]] = []
+    buttons: List[List[InlineKeyboardButton]] = [
+        [InlineKeyboardButton("🔍 بحث عن مستشفى", callback_data=_cb(CB_GLOBAL_HOSP_SEARCH))],
+        [InlineKeyboardButton("✏️ إضافة مستشفى يدوياً", callback_data=_cb(CB_ADD_HOSPITAL))],
+    ]
 
-    # ── صف البحث ──
-    buttons.append([
-        InlineKeyboardButton("🔍 ابحث عن مدينة...", callback_data=_cb(CB_CITY_SEARCH))
-    ])
-
-    # ── أزرار المدن (3 في كل صف) ──
+    # ثلاثة خيارات في السطر، كما في الواجهة المرجعية.
     row: List[InlineKeyboardButton] = []
-    for i, city in enumerate(page_cities):
+    for index, city in enumerate(page_cities):
         row.append(InlineKeyboardButton(
-            f"🏙 {city}",
-            callback_data=_cb(CB_CITY_SELECT, city[:20])
+            f"🏙️ {city}", callback_data=_cb(CB_CITY_SELECT, city[:20])
         ))
-        if len(row) == 3 or i == len(page_cities) - 1:
+        if len(row) == 3 or index == len(page_cities) - 1:
             buttons.append(row)
             row = []
 
-    # ── التنقل بين الصفحات ──
-    nav_row = []
+    nav_row: List[InlineKeyboardButton] = []
     if page > 0:
         nav_row.append(InlineKeyboardButton(
             "◀️ السابق", callback_data=_cb(CB_CITY_PAGE, page - 1)
@@ -255,16 +297,6 @@ def build_cities_keyboard(
         ))
     if nav_row:
         buttons.append(nav_row)
-
-    # ── زر الإلغاء ──
-    buttons.append([
-        InlineKeyboardButton("❌ إلغاء", callback_data=_cb(CB_CANCEL))
-    ])
-
-    if search_query:
-        header += f"\n\n💡 اضغط 🔍 للبحث مجدداً أو اختر مدينة."
-    else:
-        header += f"\n\n💡 اضغط على المدينة للاختيار، أو 🔍 للبحث."
 
     return InlineKeyboardMarkup(buttons), header
 
@@ -432,7 +464,7 @@ class CitiesHospitalsFlow:
             await _safe_edit(query, header, keyboard)
             return True
 
-        # ── طلب بحث في المدن ──
+        # ── طلب بحث في المدن (موجود للتوافق مع التدفقات الإدارية) ──
         if prefix == CB_CITY_SEARCH:
             await query.answer("اكتب اسم المدينة في الرسالة التالية 👇")
             context.user_data['chf_state'] = 'city_search'
@@ -440,6 +472,33 @@ class CitiesHospitalsFlow:
                 "🔍 *ابحث عن المدينة:*\nاكتب اسم المدينة:",
                 parse_mode="Markdown"
             )
+            return True
+
+        # ── طلب بحث شامل عن مستشفى ──
+        if prefix == CB_GLOBAL_HOSP_SEARCH:
+            await query.answer("اكتب اسم المستشفى في الرسالة التالية 👇")
+            context.user_data['chf_state'] = 'global_hospital_search'
+            await query.message.reply_text(
+                "🔍 *بحث عن مستشفى*\n\nاكتب جزءاً من اسم المستشفى:",
+                parse_mode="Markdown"
+            )
+            return True
+
+        # ── اختيار نتيجة بحث شامل ──
+        if prefix == CB_GLOBAL_HOSP_SELECT:
+            try:
+                result_index = int(args[0])
+                result = context.user_data.get('chf_global_results', [])[result_index]
+            except (IndexError, TypeError, ValueError):
+                await query.answer("انتهت صلاحية نتائج البحث. أعد المحاولة.", show_alert=True)
+                return True
+            city = result.get('city', '')
+            hospital_name = result.get('name', '')
+            context.user_data['chf_city'] = city
+            context.user_data['selected_hospital'] = hospital_name
+            context.user_data['chf_state'] = 'done'
+            await query.answer(f"✅ تم اختيار: {hospital_name}")
+            await self._on_selected(query, context, city, hospital_name)
             return True
 
         # ── اختيار مدينة ──
@@ -484,6 +543,10 @@ class CitiesHospitalsFlow:
                 parse_mode="Markdown"
             )
             return True
+
+        # ── زر إضافة مستشفى يدوياً: يعالجه البوت الرئيسي ليستخدم تدفق المراجعة القائم. ──
+        if prefix == CB_ADD_HOSPITAL:
+            return False
 
         # ── اختيار مستشفى ──
         if prefix == CB_HOSP_SELECT:
@@ -534,7 +597,15 @@ class CitiesHospitalsFlow:
             await message.reply_text(header, parse_mode="Markdown", reply_markup=keyboard)
             return True
 
-        # ── بحث في المستشفيات ──
+        # ── بحث شامل عن المستشفيات ──
+        if state == 'global_hospital_search':
+            keyboard, header, results = build_global_hospital_search_results(self.db, text)
+            context.user_data['chf_global_results'] = results
+            context.user_data['chf_state'] = 'global_hospital_results'
+            await message.reply_text(header, parse_mode="Markdown", reply_markup=keyboard)
+            return True
+
+        # ── بحث في مستشفيات مدينة محددة ──
         if state == 'hospital_search':
             city = context.user_data.get('chf_city', '')
             keyboard, header = build_hospitals_keyboard(
