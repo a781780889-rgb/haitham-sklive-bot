@@ -30,48 +30,58 @@ DRAW_SLOTS_MRN = {
                     'color': (0.17255, 0.24314, 0.46667)},          # #2c3e77
     'issue_date':  {'x': 437.5, 'rl_y': 761.3, 'size': 13.5,
                     'color': (0.17255, 0.24314, 0.46667)},
-    'national_id': {'x': 437.5, 'rl_y': 674.3, 'size': 13.5,
-                    'color': (0.17255, 0.24314, 0.46667)},
+    # ملاحظة: حُذف 'national_id' الواسع — رقم الهوية يظهر فقط في العمود
+    # العربي (national_id_ar) تجنباً للازدواج داخل الخلية الواحدة.
 
     # ── صف مدة الإقامة — أبيض على شريط أزرق ─────────
-    'leave_duration_en': {'x': 318.3, 'rl_y': 887.3, 'size': 13.5,
-                          'color': (1.0, 1.0, 1.0)},
-    'leave_duration_ar': {'x': 556.8, 'rl_y': 887.3, 'size': 13.5,
+    'leave_duration_en': {'x': 318.3, 'rl_y': 891.0, 'size': 13.5,
+                          'color': (1.0, 1.0, 1.0), 'max_width': 215},
+    'leave_duration_ar': {'x': 556.8, 'rl_y': 891.0, 'size': 13.5,
                           'color': (1.0, 1.0, 1.0),
-                          'reshape_only': True},
+                          'reshape_only': True, 'max_width': 245},
 
     # ── صفوف عادية: عمود إنجليزي (يسار) ────────────
-    'admission_date_en':    {'x': 318.3, 'rl_y': 845.3, 'size': 13.5,
-                             'color': (0.17255, 0.24314, 0.46667)},
-    'discharge_date_en':    {'x': 318.3, 'rl_y': 803.3, 'size': 13.5,
-                             'color': (0.17255, 0.24314, 0.46667)},
-    'name_en':              {'x': 318.3, 'rl_y': 718.3, 'size': 13.5,
-                             'color': (0.17255, 0.24314, 0.46667)},
-    'nationality_en':       {'x': 318.3, 'rl_y': 631.3, 'size': 13.5,
-                             'color': (0.17255, 0.24314, 0.46667)},
-    'practitioner_name_en': {'x': 318.3, 'rl_y': 504.8, 'size': 13.5,
-                             'color': (0.17255, 0.24314, 0.46667)},
-    'position_en':          {'x': 318.3, 'rl_y': 461.8, 'size': 13.5,
-                             'color': (0.17255, 0.24314, 0.46667)},
+    # ملاحظة: المواضع ضبطت وفق قالب الإجازة الافتراضي (templates NEE.pdf):
+    # Duration 879-908 مركز 894 / Admission 837-866 مركز 852 / Discharge 795-824
+    # مركز 810 / Name 710-738 مركز 724.5 / Nationality 625-653 مركز 639.5 /
+    # Practitioner EN 541-556 مركز 548.5 / Position EN 498-513 مركز 505.5
+    'admission_date_en':    {'x': 318.3, 'rl_y': 852.0, 'size': 13.5,
+                             'color': (0.17255, 0.24314, 0.46667), 'max_width': 215},
+    'discharge_date_en':    {'x': 318.3, 'rl_y': 810.0, 'size': 13.5,
+                             'color': (0.17255, 0.24314, 0.46667), 'max_width': 215},
+    'name_en':              {'x': 318.3, 'rl_y': 724.5, 'size': 13.5,
+                             'color': (0.17255, 0.24314, 0.46667), 'max_width': 215},
+    'nationality_en':       {'x': 318.3, 'rl_y': 639.5, 'size': 13.5,
+                             'color': (0.17255, 0.24314, 0.46667), 'max_width': 215},
+    'practitioner_name_en': {'x': 318.3, 'rl_y': 548.5, 'size': 13.5,
+                             'color': (0.17255, 0.24314, 0.46667), 'max_width': 215},
+    'position_en':          {'x': 318.3, 'rl_y': 505.5, 'size': 13.5,
+                             'color': (0.17255, 0.24314, 0.46667), 'max_width': 215},
 
     # ── صفوف عادية: عمود عربي (وسط) ───────────────
-    'admission_date_ar':    {'x': 556.8, 'rl_y': 845.3, 'size': 13.5,
-                             'color': (0.17255, 0.24314, 0.46667)},
-    'discharge_date_ar':    {'x': 556.8, 'rl_y': 803.3, 'size': 13.5,
-                             'color': (0.17255, 0.24314, 0.46667)},
-    'name_ar':              {'x': 556.8, 'rl_y': 718.3, 'size': 13.5,
-                             'color': (0.17255, 0.24314, 0.46667)},
-    'nationality_ar':       {'x': 556.8, 'rl_y': 631.3, 'size': 13.5,
-                             'color': (0.17255, 0.24314, 0.46667)},
-    # Relation و Employer ليس لهما عمود إنجليزي في قالب المرافق
-    'relation_ar':          {'x': 556.8, 'rl_y': 589.3, 'size': 13.5,
-                             'color': (0.17255, 0.24314, 0.46667)},
-    'employer_ar':          {'x': 556.8, 'rl_y': 547.3, 'size': 13.5,
-                             'color': (0.17255, 0.24314, 0.46667)},
-    'practitioner_name_ar': {'x': 556.8, 'rl_y': 504.8, 'size': 13.5,
-                             'color': (0.17255, 0.24314, 0.46667)},
-    'position_ar':          {'x': 556.8, 'rl_y': 461.8, 'size': 13.5,
-                             'color': (0.17255, 0.24314, 0.46667)},
+    # Relation و Employer ليس لهما عمود إنجليزي؛ وصف "صلة القرابة" غير موجود
+    # في قالب الإجازة الافتراضي فوضعنا relation بخط أصغر أسفل خلية جهة العمل
+    # (خلية AR: y≈583-611) بعد employer مباشرة.
+    'admission_date_ar':    {'x': 556.8, 'rl_y': 852.0, 'size': 13.5,
+                             'color': (0.17255, 0.24314, 0.46667), 'max_width': 245},
+    'discharge_date_ar':    {'x': 556.8, 'rl_y': 810.0, 'size': 13.5,
+                             'color': (0.17255, 0.24314, 0.46667), 'max_width': 245},
+    'name_ar':              {'x': 556.8, 'rl_y': 724.5, 'size': 13.5,
+                             'color': (0.17255, 0.24314, 0.46667), 'max_width': 245},
+    'issue_date_ar':        {'x': 556.8, 'rl_y': 768.0, 'size': 13.5,
+                             'color': (0.17255, 0.24314, 0.46667), 'max_width': 245},
+    'national_id_ar':       {'x': 556.8, 'rl_y': 681.5, 'size': 13.5,
+                             'color': (0.17255, 0.24314, 0.46667), 'max_width': 245},
+    'nationality_ar':       {'x': 556.8, 'rl_y': 639.5, 'size': 13.5,
+                             'color': (0.17255, 0.24314, 0.46667), 'max_width': 245},
+    'relation_ar':          {'x': 556.8, 'rl_y': 608.0, 'size': 10.0,
+                             'color': (0.17255, 0.24314, 0.46667), 'align': 'right'},
+    'employer_ar':          {'x': 556.8, 'rl_y': 589.0, 'size': 13.5,
+                             'color': (0.17255, 0.24314, 0.46667), 'max_width': 245},
+    'practitioner_name_ar': {'x': 556.8, 'rl_y': 554.5, 'size': 13.5,
+                             'color': (0.17255, 0.24314, 0.46667), 'max_width': 245},
+    'position_ar':          {'x': 556.8, 'rl_y': 510.5, 'size': 13.5,
+                             'color': (0.17255, 0.24314, 0.46667), 'max_width': 245},
 
     # ── اسم المستشفى (أسفل يمين تحت شعار الزهرة — cx=634) ──
     'hospital_name_ar':     {'x': 634.0, 'rl_y': 304.6, 'size': 13.5,
@@ -95,7 +105,8 @@ DRAW_SLOTS_MRN = {
 
 def generate_companion_pdf(companion_data, hospital, doctor, specialty,
                            output_path=None, template_path=None,
-                           gsl_code=None, website_url="https://sehasa.online"):
+                           gsl_code=None, website_url="https://sehasa.online",
+                           logo_path=None):
     """
     ينشئ PDF تقرير مرافقة مريض بإحداثيات مطابقة لقالب المستخدم.
 
@@ -106,7 +117,8 @@ def generate_companion_pdf(companion_data, hospital, doctor, specialty,
         doctor          — اسم الطبيب   (عربي)
         specialty       — المسمى الوظيفي (عربي)
         output_path     — مسار الإخراج (اختياري)
-        template_path   — مسار قالب مرافق مريض (اختياري — الافتراضي templates/companion_template.pdf)
+        template_path   — مسار قالب مرافق مريض (اختياري — الافتراضي templates/companion_template.pdf
+                          ثم قالب الإجازة الافتراضي templates/templates NEE.pdf)
         gsl_code        — رمز التحقق (اختياري — يُولَّد تلقائياً إن لم يُمرَّر)
         website_url     — رابط التحقق للنقر على الروابط
     """
@@ -126,9 +138,19 @@ def generate_companion_pdf(companion_data, hospital, doctor, specialty,
         if os.path.exists(COMPANION_TEMPLATE_PATH) and os.path.getsize(COMPANION_TEMPLATE_PATH) > 1000:
             template_path = COMPANION_TEMPLATE_PATH
         else:
+            # القالب المخصص لمرافق مريض غير موجود — نستخدم قالب الإجازة الافتراضي
+            # المرفوع في templates/templates NEE.pdf (نفس الإحداثيات تقريباً)
+            _base_dir = os.path.dirname(os.path.abspath(__file__))
+            for _cand in [os.path.join(_base_dir, "templates", "templates NEE.pdf"),
+                          os.path.join(_base_dir, "templates", "default_template.pdf")]:
+                if os.path.exists(_cand) and os.path.getsize(_cand) > 1000:
+                    template_path = _cand
+                    break
+        if not template_path or not os.path.exists(template_path):
             raise FileNotFoundError(
                 "❌ لا يوجد قالب تقرير مرافقة مريض!\n"
-                f"تأكد من وجود ملف companion_template.pdf في مجلد templates/ بجانب الكود."
+                "تأكد من وجود ملف companion_template.pdf أو templates NEE.pdf\n"
+                "في مجلد templates/ بجانب الكود."
             )
 
     if not output_path:
@@ -186,8 +208,10 @@ def generate_companion_pdf(companion_data, hospital, doctor, specialty,
 
         'admission_date_ar':    to_hijri(start),
         'discharge_date_ar':    to_hijri(end),
+        'issue_date_ar':        to_hijri(today_str),
         'name_ar':              full_name,
         'nationality_ar':       normalize_nat_ar(nationality),
+        'national_id_ar':       id_number,
         'relation_ar':          relation,
         'employer_ar':          workplace,
         'practitioner_name_ar': doctor or "",
@@ -239,7 +263,7 @@ def generate_companion_pdf(companion_data, hospital, doctor, specialty,
 
     try:
         _create_overlay(
-            page_w, page_h, field_values, None, None, overlay_tmp,
+            page_w, page_h, field_values, None, logo_path, overlay_tmp,
             website_url=website_url,
             draw_slots=DRAW_SLOTS_MRN,
         )
@@ -280,7 +304,11 @@ def _hosp_en_split(hospital):
     except Exception:
         pass
     if not en or any('\u0600' <= c <= '\u06FF' for c in en):
-        en = hospital
+        # الترجمة غير متوفرة — لا نكرر الاسم العربي في خانتَي الإنجليزية
+        return "", ""
+    # الترجمة مجرد اختصار قصير (مثل "KAH") — لا نعرضها لأنها ستلتصق بالاسم العربي
+    if len(en.split()) <= 1 and len(en.replace('-', '').strip()) < 4:
+        return "", ""
     words = en.split()
     if len(words) <= 3:
         return en, ""

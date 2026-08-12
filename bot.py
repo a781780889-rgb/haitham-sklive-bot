@@ -2530,6 +2530,7 @@ async def generate_and_send_companion_pdf(update, context, uid, pc_data):
             logo_path    = logo_path,
             website_url  = website_url or "https://sehasa.online",
             gsl_code     = pre_gsl_code,
+            template_path = template_path,
         )
 
         logger.info(f"generate_companion_pdf user={uid}: تم إنشاء PDF بنجاح → {pdf_path} ({os.path.getsize(pdf_path):,} bytes)")

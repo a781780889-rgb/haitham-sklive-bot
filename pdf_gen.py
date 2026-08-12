@@ -1907,7 +1907,7 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
                     shaped = text_str
             else:
                 shaped = text_str
-            max_w = MAX_WIDTHS.get(slot_id, 0) * x_scale
+            max_w = (slot.get('max_width') or MAX_WIDTHS.get(slot_id, 0)) * x_scale
             if max_w > 0:
                 # نقيس بخط العربي للتقدير (الأرقام عرضها متقارب)
                 font_size = _fit_font_size(shaped, ar_font, font_size, max_w)
@@ -1920,7 +1920,7 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
             font = FONT_AR_BOLD if is_bold else FONT_AR_REG
             shaped = shape_arabic(text_str)
             # تقليص تلقائي إن كان النص طويلاً
-            max_w = MAX_WIDTHS.get(slot_id, 0) * x_scale
+            max_w = (slot.get('max_width') or MAX_WIDTHS.get(slot_id, 0)) * x_scale
             if max_w > 0:
                 font_size = _fit_font_size(shaped, font, font_size, max_w)
             c.setFont(font, font_size)
@@ -1934,7 +1934,7 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
             # ── نص إنجليزي → Times-Roman/Bold ───────────────
             font = FONT_EN_BOLD if is_bold else FONT_EN_REG
             # تقليص تلقائي إن كان النص طويلاً
-            max_w = MAX_WIDTHS.get(slot_id, 0) * x_scale
+            max_w = (slot.get('max_width') or MAX_WIDTHS.get(slot_id, 0)) * x_scale
             if max_w > 0:
                 font_size = _fit_font_size(text_str, font, font_size, max_w)
             c.setFont(font, font_size)
