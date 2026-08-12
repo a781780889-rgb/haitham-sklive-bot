@@ -125,6 +125,26 @@ _FIELD_PATTERNS: Dict[str, List[str]] = {
         'phone', 'mobile', 'tel', 'تليفونك', 'موبايلك',
         'رقم التواصل', 'رقم جوال',
     ],
+    # ── حقول تقرير مرافق مريض ──────────────────────────
+    'companion_name': [
+        'اسم المرافق', 'اسم مرافق المريض', 'المرافق', 'المرافقه',
+        'مرافق المريض', 'المُرافق', 'companion name', 'companion',
+        'المرافق له', 'اسم المرافق كامل',
+    ],
+    'relation': [
+        'صلة القرابة', 'صلة القرابه', 'صلة القربى', 'صلة القرابة بالمريض',
+        'صلة القرابة', 'صلة القربى بالمريض', 'العلاقة', 'القرابة',
+        'relation', 'relationship', 'العلاقة بالمريض',
+    ],
+}
+
+# قائمة علاقات القرابة المعروفة — تستخدم للتعرف على صلة القرابة في النص الحر
+_RELATION_VALUES = {
+    'زوج', 'زوجة', 'ابن', 'ابنة', 'أب', 'أبوه', 'ابو', 'والد', 'والدة',
+    'أم', 'أمه', 'ام', 'أخ', 'أخت', 'أخته', 'جدة', 'جد', 'جده',
+    'الحفيد', 'حفيدة', 'العم', 'العمة', 'خال', 'خالة', 'ابن عم', 'ابن خال',
+    'husband', 'wife', 'son', 'daughter', 'father', 'mother', 'brother',
+    'sister', 'grandfather', 'grandmother',
 }
 
 # بناء فهرس سريع للمقارنة
@@ -261,13 +281,26 @@ class SmartDataExtractor:
 
         # عدد الأيام (رقم وحيد قريب من كلمة "يوم/أيام")
         if 'days_count' not in existing:
-            days_m = re.search(r'(\d+)\s*(?:يوم|أيام|days?)', text)
+            # استبعاد الأرقام المدمجة داخل تواريخ (مثل 13 من 13/07/2026)
+            date_digits = set()
+            for dm in re.finditer(r'\b\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}\b', text):
+                date_digits.update(re.findall(r'\d+', dm.group(0)))
+            # دعم الكتابة بدون همزة (ايام) وأشكال الجمع الشائعة
+            day_words = r'(?:يوم|يومًا|أيام|ايام|يوما|days?|day)'
+            days_m = re.search(r'(\d+)\s*' + day_words, text)
             if not days_m:
-                days_m = re.search(r'(?:يوم|أيام|days?)\s*:?\s*(\d+)', text)
+                days_m = re.search(day_words + r'\s*:?\s*(\d+)', text)
             if days_m:
                 n = int(days_m.group(1))
-                if 1 <= n <= 60:
+                if 1 <= n <= 60 and days_m.group(1) not in date_digits:
                     result['days_count'] = str(n)
+
+        # عدد الأيام من الأعداد المكتوبة بالحروف (لثلاثة أيام / لمدة خمسة ايام)
+        if 'days_count' not in result:
+            for word, num in sorted(self._ARABIC_NUMBER_WORDS.items(), key=lambda x: -len(x[0])):
+                if re.search(r'(?:ل?لمدة\s+)?' + re.escape(word) + r'\s+(?:يوم|أيام|ايام|يوما|days?)', text):
+                    result['days_count'] = str(num)
+                    break
 
         return result
 
@@ -276,24 +309,178 @@ class SmartDataExtractor:
         result = {}
         lines = [l.strip() for l in text.splitlines() if l.strip()]
 
-        # إذا كان النص سطراً واحداً من كلمتين إلى 5 كلمات → قد يكون اسم
-        if 'full_name' not in existing and len(lines) == 1:
+        # إذا كان النص سطراً واحداً من 2 إلى 6 كلمات عربية بدون أرقام → قد يكون اسم
+        if 'full_name' not in existing and 'companion_name' not in existing and len(lines) == 1:
             words = text.split()
             if 2 <= len(words) <= 6:
                 all_arabic = all(
                     re.search(r'[\u0600-\u06FF]', w) for w in words
                 )
                 no_digits = not any(c.isdigit() for c in text)
-                if all_arabic and no_digits:
+                # استبعاد الجمل الوظيفية التي تتضمن أفعالًا أو كيانات (عمل/مستشفى/شركة)
+                functional_words = [
+                    'يعمل', 'يشتغل', 'اشتغل', 'أشتغل', 'تعمل', 'تشتغل', 'دخل', 'دخلت',
+                    'ادخل', 'أدخل', 'المستشفى', 'المستشفي', 'شركة', 'مؤسسة', 'جهة',
+                    'مريض', 'مريضة', 'المرضي', 'مدرسة', 'جامعة', 'وزارة', 'هيئة',
+                    'موظف', 'موظفة', 'اشتغلت', 'تشتغل',
+                ]
+                has_functional = any(w in text for w in functional_words)
+                if all_arabic and no_digits and not has_functional:
                     result['full_name'] = normalize_name(text)
 
-        # الجنسية من قاموس التطبيع
+        # نفس المنطق لاسم المرافق (حقل تقرير المرافق)
+        if 'companion_name' not in existing and 'full_name' in result:
+            result['companion_name'] = result['full_name']
+            del result['full_name']
+
+        # الجنسية من قاموس التطبيع (تُطابق أي جنسية مذكورة في النص الحر)
         if 'nationality' not in existing:
-            nat = normalize_nationality(text)
-            if nat and nat != text.strip():
+            nat = self._extract_nationality(text)
+            if nat:
                 result['nationality'] = nat
 
+        # ── صلة القرابة من النص الحر (حقل خاص بتقرير المرافق) ──
+        if 'relation' not in existing:
+            rel = self._extract_relation(text)
+            if rel:
+                result['relation'] = rel
+
+        # ── جهة العمل من عبارات حرة (حقل خاص بتقرير المرافق) ──
+        if 'workplace' not in existing:
+            wp = self._extract_workplace(text) or self._extract_workplace_simple(text)
+            if wp:
+                result['workplace'] = wp
+
         return result
+
+    # ═══════════════════════════════════════════════════════════════════
+    # مستخرجات خاصة بتقرير مرافق مريض (نصوص حرة)
+    # ═══════════════════════════════════════════════════════════════════
+
+    def _extract_nationality(self, text: str) -> Optional[str]:
+        """يكتشف أي جنسية مذكورة في النص الحر (سعودي/سعودية/يمني/مصري ...)."""
+        nat = normalize_nationality(text)
+        if nat and nat != text.strip():
+            return nat
+        # البحث المباشر عن كلمات الجنسيات الأكثر شيوعًا
+        common = {
+            'سعودي': 'سعودي', 'سعودية': 'سعودية', 'يمني': 'يمني', 'يمنية': 'يمنية',
+            'مصري': 'مصري', 'مصرية': 'مصرية', 'سوري': 'سوري', 'سورية': 'سورية',
+            'اردني': 'أردني', 'أردني': 'أردني', 'اردنية': 'أردنية', 'أردنية': 'أردنية',
+            'هندي': 'هندي', 'هندية': 'هندية', 'باكستاني': 'باكستاني', 'باكستانية': 'باكستانية',
+            'فلبيني': 'فلبيني', 'فلبينية': 'فلبينية', 'بنغلاديشي': 'بنغلاديشي',
+            'سوداني': 'سوداني', 'سودانية': 'سودانية', 'عراقي': 'عراقي', 'عراقية': 'عراقية',
+            'مغربي': 'مغربي', 'تونسي': 'تونسي', 'لبناني': 'لبناني', 'لبنانية': 'لبنانية',
+            'عماني': 'عُماني', 'بحريني': 'بحريني', 'قطري': 'قطري', 'اماراتي': 'إماراتي',
+            'إماراتي': 'إماراتي', 'اماراتية': 'إماراتية', 'مصريين': 'مصري',
+            'هنديين': 'هندي', 'فلبينيين': 'فلبيني',
+        }
+        for word, normalized in common.items():
+            if re.search(r'\b' + re.escape(word) + r'\b', text):
+                return normalized
+        return None
+
+    def _extract_relation(self, text: str) -> Optional[str]:
+        """يكتشف صلة القرابة من عبارات حرة مثل (زوجي/زوجها/والدي/والدة المريض/ابني/أخي/أختي...)."""
+        # أولاً: قيمة صريحة بعد تسمية الحقل (صلة القرابة: زوج)
+        m = self._RELATION_PATTERN.search(text)
+        if m:
+            candidate = m.group(1).strip().rstrip('.,،؛:').lower()
+            for rel in _RELATION_VALUES:
+                if rel.lower() == candidate or rel.lower() in candidate:
+                    return rel
+        # ثانياً: أشكال ملكية (ضمائر) في النص الحر
+        possessive = {
+            'زوجي': 'زوج', 'زوجها': 'زوج', 'زوجته': 'زوج', 'زوجه': 'زوج',
+            'زوجتي': 'زوجة', 'زوجة المريض': 'زوجة', 'الزوجة': 'زوجة',
+            'والدي': 'أب', 'والدة المريض': 'أم', 'والدتها': 'أم', 'والدته': 'أم',
+            'والدتها': 'أم', 'أبي': 'أب', 'ابو المريض': 'أب', 'أبو المريض': 'أب',
+            'ام المريض': 'أم', 'أم المريض': 'أم', 'امها': 'أم', 'أبيها': 'أب',
+            'والده': 'أب', 'والدتها': 'أم', 'الوالدة': 'أم', 'الوالد': 'أب',
+            'ابني': 'ابن', 'ابنها': 'ابن', 'ابنه': 'ابن', 'بنتي': 'ابنة',
+            'ابنتي': 'ابنة', 'بنتها': 'ابنة', 'ابنتها': 'ابنة', 'ابنته': 'ابنة',
+            'أخي': 'أخ', 'اخوي': 'أخ', 'أخوها': 'أخ', 'اخوه': 'أخ', 'أخوها': 'أخ',
+            'أختي': 'أخت', 'اختها': 'أخت', 'أختها': 'أخت', 'اخته': 'أخت', 'أخته': 'أخت',
+            'اختها': 'أخت', 'اخوها': 'أخ',
+            'جدي': 'جد', 'جدتي': 'جدة', 'جدتها': 'جدة', 'جده': 'جد', 'جدتها': 'جدة',
+            'جدة المريض': 'جدة', 'عمي': 'العم', 'خالتي': 'خالة', 'خالها': 'خال', 'عمها': 'العم',
+            'الحفيد': 'الحفيد', 'حفيدتها': 'الحفيد',
+            'husband': 'husband', 'wife': 'wife', 'mother': 'mother', 'father': 'father',
+            'son': 'son', 'daughter': 'daughter', 'brother': 'brother', 'sister': 'sister',
+        }
+        # ترتيب حسب الطول تنازليًا لمطابقة الأطول أولًا (زوجة المريض قبل الزوجة)
+        for phrase in sorted(possessive, key=len, reverse=True):
+            if re.search(re.escape(phrase), text):
+                return possessive[phrase]
+        # ثالثًا: المطابقة البسيطة السابقة (قيم مباشرة)
+        for rel in _RELATION_VALUES:
+            if re.search(r'\b' + re.escape(rel) + r'\b', text):
+                return rel
+        return None
+
+    def _extract_workplace(self, text: str) -> Optional[str]:
+        """يكتشف جهة العمل من عبارات حرة مثل (أشتغل في أرامكو / يعمل في شركة الاتصالات)."""
+        patterns = [
+            # يعمل في / يشتغل في / أشتغل في + اسم الجهة (قصّ القيمة عند كلمات الربط اللاحقة)
+            r'(?:يعمل|يشتغل|أشتغل|تشتغل|تعمل|نشتغل|موظف|أعمل|اخدم|خدمة|اشتغل|اشتغلت)\s+(?:في|عند|ب)?\s*[:\u060C،\s]?\s*(.+?)(?:\s+(?:وهو|وهي|وهم|وإن|وأن|وكان|وكانت|وهمه|وإنها|وقد|أو|مع|اللي|وال|والم|بس|علشان|لأن|عشان|حيث|دخل|دخلت|ادخل|أدخل|ومن|ومنذ|من يوم|وهي|وهو)|\s*$)',
+            # اسم جهة يبدأ بكلمة مؤسسية ثم اسم (شركة أرامكو السعودية)
+            r'\b((?:شركة|مؤسسة|مستشفي|مستشفى|جامعة|وزارة|هيئة|جمعية|بنك|مدرسة|كلية|إدارة|دائرة|مركز)[\s\u0600-\u06FF0-9\w\.\,،-]{2,40}?)(?=\s+(?:و|أو|هي|هو|في|من|ل|عند|اللي|بس|حيث|،|\.|$)|\s*$)',
+            r'\b((?:الشركة|المؤسسة|الجهة)\s+[\u0600-\u06FF0-9\s\w\.\,،-]{2,40}?)(?=\s+(?:و|أو|هي|هو|في|من|ل|عند|اللي|بس|حيث|،|\.|$)|\s*$)',
+        ]
+        for pat in patterns:
+            m = re.search(pat, text)
+            if m:
+                candidate = clean_spaces(m.group(1)).strip()
+                # تنظيف الجهة من تواريخ وأرقام مدمجة التقطها النمط الخجول
+                candidate = re.sub(r'\s*\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}\b', '', candidate)
+                candidate = re.sub(r'\s+(?:\d+\s+(?:يوم|أيام|ايام))\b', '', candidate)
+                # إزالة فواصل وعلامات ترقيم زائدة في نهاية الجهة
+                candidate = candidate.rstrip('،,؛؛.。!؟?:؛ ')
+                if candidate.endswith('و') and len(candidate) > 4:
+                    candidate = candidate[:-1].strip()
+                # استبعاد المصطلحات العامة التي ليست جهة عمل فعلية
+                noise = {'شركة', 'المؤسسة', 'الجهة', 'العمل', 'العمله', 'مكان', 'مكان العمل'}
+                if candidate and candidate not in noise:
+                    return candidate
+        return None
+
+    def _extract_workplace_simple(self, text: str) -> Optional[str]:
+        """استخراج جهة عمل بسيطة: كلمة بعدها 'شركة/مؤسسة/مستشفى/وزارة/مدرسة/جامعة' أو أسماء كيانات معروفة."""
+        # أسماء الكيانات المؤسسية المعروفة في السعودية والخليج (أمثلة موسعة)
+        org_keywords = [
+            'أرامكو', 'ارامكو', 'سابك', 'الاتصالات', 'الكهرباء', 'الصحة', 'المياه',
+            'المواصلات', 'الدفاع', 'الداخلية', 'التعليم', 'الجامعة', 'الشؤون الاجتماعية',
+            'الحرس الوطني', 'الجوازات', 'الأحوال', 'البنك', 'الراجحي', 'الأهلي',
+            'ساما', 'التأمينات', 'الموارد', 'التجارة', 'الطيران', 'الموانئ',
+            'السكك', 'الخطوط', 'نيوم', 'قدية', 'روزن', 'بحر', 'الغذاء',
+            'التموين', 'البتروكيماويات', 'المعادن', 'الصناعات', 'الأسمنت',
+            'hospital', 'مستشفي', 'مركز صحي', 'صيدلية', 'ejar', 'stc',
+        ]
+        best = None
+        for kw in org_keywords:
+            m = re.search(r'([\u0600-\u06FF][\u0600-\u06FF\s\w\-\.،,]{0,30}?)\s*(?:' + re.escape(kw) + r')', text)
+            if m:
+                candidate = clean_spaces(m.group(1) + ' ' + kw).strip()
+                noise = {'شركة', 'المؤسسة', 'الجهة', 'العمل', 'مكان العمل'}
+                if candidate not in noise:
+                    # تفضيل أقصر مطابقة صالحة (شركة أرامكو أفضل من جملة كاملة قبلها)
+                    if best is None or len(candidate) < len(best):
+                        best = candidate
+        return best
+
+    # ── الأعداد العربية المكتوبة بالحروف ──
+    _ARABIC_NUMBER_WORDS = {
+        'واحد': 1, 'اثنتين': 2, 'اثنين': 2, 'اثنان': 2, 'ثلاث': 3, 'ثلاثة': 3,
+        'أربع': 4, 'أربعة': 4, 'اربع': 4, 'خمسة': 5, 'خمس': 5, 'ستة': 6, 'ست': 6,
+        'سبعة': 7, 'سبع': 7, 'ثمانية': 8, 'ثمان': 8, 'تسعة': 9, 'تسع': 9,
+        'عشرة': 10, 'عشر': 10, 'يوم': 1,
+    }
+
+    # أنماط صلة القرابة (تُطابق كقيمة حقل مباشر: "صلة القرابة: زوج")
+    _RELATION_PATTERN = re.compile(
+        r'(?:صلة\s*(?:القرابة|القربى)|العلاقة|relation)\s*[:=]?\s*(\S+(?:\s+\S+)?)',
+        re.IGNORECASE,
+    )
 
     def _extract_dates(self, text: str) -> Dict[str, str]:
         """يستخرج التواريخ من النص."""

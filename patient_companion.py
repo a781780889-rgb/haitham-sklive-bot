@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""خدمة «مرافق مريض» المدمجة مع نظام المدن والمستشفيات الحالي."""
+"""خدمة «مرافق مريض» المدمجة مع نظام المدن والمستشفيات الحالي.
+
+التدفق الجديد:
+  المدينة ← المستشفى ← الطبيب ← المسمى الوظيفي ← جمع بيانات المرافق ← إصدار PDF
+"""
 
 import hashlib
 import logging
+import re
 from typing import Dict, List, Optional, Tuple
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message, CallbackQuery
@@ -19,12 +24,25 @@ CB_PC_CITY = "pcc"
 CB_PC_HOSP_PAGE = "pchp"
 CB_PC_HOSPITAL = "pch"
 CB_PC_ACTION = "pca"
+CB_PC_DOCTOR = "pcd"
+CB_PC_DOCTOR_PAGE = "pcdp"
+CB_PC_SPECIALTY = "pcs"
 CB_PC_BACK_CITIES = "pcbc"
 CB_PC_BACK_HOSPITALS = "pcbh"
 CB_PC_BACK_MAIN = "pcbm"
+CB_PC_BACK_DOCTORS = "pcbd"
+CB_PC_BACK_SPECIALTY = "pcbs"
+CB_PC_CANCEL = "pcx"
 
 PC_HOSPITALS_PAGE_SIZE = 12
+PC_DOCTORS_PAGE_SIZE = 10
 PC_MAX_DETAILS_LENGTH = 4000
+
+# قائمة المسميات الوظيفية الشائعة للأطباء
+PREDEFINED_SPECIALTIES = [
+    "استشاري", "أخصائي", "ممارس عام", "طبيب عام", "مقيم",
+    "استشاري تخدير", "أخصائي تخدير", "كبير ممرضين",
+]
 
 # ترتيب العرض مستوحى من الصورة؛ لا يظهر الاسم إلا إذا كان موجوداً في مصدر المشروع.
 REFERENCE_CITY_ORDER = [
@@ -59,8 +77,6 @@ def _ordered_cities(db_module) -> List[str]:
     seen = set()
 
     for reference_name in REFERENCE_CITY_ORDER:
-        # أسماء الصورة جزء من فهرس العرض، لكن المستشفيات لا تُنشأ تلقائياً.
-        # إذا لم يوجد الاسم في المصدر الحالي فستظهر المدينة بحالة «لا توجد مستشفيات».
         city = by_normalized.get(normalize_for_comparison(reference_name), reference_name)
         if city not in seen:
             ordered.append(city)
@@ -178,8 +194,7 @@ def build_patient_actions_keyboard(city: str, hospital: Dict) -> Tuple[InlineKey
     hospital_token = _token("hospital", city, name)
     target = (city_token, hospital_token)
     rows = [
-        [InlineKeyboardButton("📝 طلب مرافق مريض", callback_data=_callback(CB_PC_ACTION, "request", *target))],
-        [InlineKeyboardButton("👥 المرافقون المتاحون", callback_data=_callback(CB_PC_ACTION, "companions", *target))],
+        [InlineKeyboardButton("📝 إصدار تقرير مرافقة مريض", callback_data=_callback(CB_PC_ACTION, "report", *target))],
         [InlineKeyboardButton("📋 طلباتي", callback_data=_callback(CB_PC_ACTION, "requests", *target))],
         [
             InlineKeyboardButton("🏥 المستشفيات", callback_data=_callback(CB_PC_BACK_HOSPITALS, city_token)),
@@ -194,48 +209,191 @@ def build_patient_actions_keyboard(city: str, hospital: Dict) -> Tuple[InlineKey
     )
 
 
+def _get_doctors_for_hospital(db_module, hospital_name: str) -> List[Dict]:
+    """يجلب أطباء المستشفى من قاعدة البيانات."""
+    try:
+        if hasattr(db_module, "get_doctors_by_hospital_name"):
+            return db_module.get_doctors_by_hospital_name(hospital_name, active_only=True) or []
+    except Exception:
+        logger.exception("تعذر جلب أطباء المستشفى %s", hospital_name)
+    return []
+
+
+def build_doctors_keyboard(
+    db_module, city: str, hospital: Dict, page: int = 0
+) -> Tuple[InlineKeyboardMarkup, str]:
+    hospital_name = hospital.get("name", "")
+    doctors = _get_doctors_for_hospital(db_module, hospital_name)
+    total_pages = max(1, (len(doctors) + PC_DOCTORS_PAGE_SIZE - 1) // PC_DOCTORS_PAGE_SIZE)
+    page = max(0, min(page, total_pages - 1))
+    page_doctors = doctors[page * PC_DOCTORS_PAGE_SIZE:(page + 1) * PC_DOCTORS_PAGE_SIZE]
+
+    city_token = _token("city", city)
+    hospital_token = _token("hospital", city, hospital_name)
+
+    rows: List[List[InlineKeyboardButton]] = []
+    for doctor in page_doctors:
+        name = str(doctor.get("name", "")).strip()
+        specialty = str(doctor.get("specialty", "")).strip()
+        label = f"👨‍⚕️ {name[:40]}{'…' if len(name) > 40 else ''}"
+        if specialty:
+            label += f" — {specialty}"
+        rows.append([InlineKeyboardButton(
+            label,
+            callback_data=_callback(
+                CB_PC_DOCTOR, city_token, hospital_token, _token("doctor", name)
+            ),
+        )])
+
+    rows.append([InlineKeyboardButton(
+        "✏️ إدخال اسم الطبيب يدويًا",
+        callback_data=_callback(CB_PC_DOCTOR, city_token, hospital_token, "manual"),
+    )])
+
+    if total_pages > 1:
+        navigation = []
+        if page > 0:
+            navigation.append(InlineKeyboardButton(
+                "◀️ السابق", callback_data=_callback(CB_PC_DOCTOR_PAGE, city_token, hospital_token, page - 1)
+            ))
+        navigation.append(InlineKeyboardButton(
+            f"📄 {page + 1}/{total_pages}", callback_data="noop"
+        ))
+        if page < total_pages - 1:
+            navigation.append(InlineKeyboardButton(
+                "التالي ▶️", callback_data=_callback(CB_PC_DOCTOR_PAGE, city_token, hospital_token, page + 1)
+            ))
+        rows.append(navigation)
+
+    rows.append([
+        InlineKeyboardButton("🏥 المستشفيات", callback_data=_callback(CB_PC_BACK_HOSPITALS, city_token)),
+        InlineKeyboardButton("🏠 الرئيسية", callback_data=CB_PC_BACK_MAIN),
+    ])
+
+    if not doctors:
+        text = (
+            f"🏥 *مرافق مريض*\n\n"
+            f"📍 المدينة: *{city}*\n🏥 المستشفى: *{hospital_name}*\n\n"
+            "لا يوجد أطباء مسجلون لهذا المستشفى حالياً.\n"
+            "يمكنك إدخال اسم الطبيب يدويًا:"
+        )
+    else:
+        text = (
+            f"🏥 *مرافق مريض*\n\n"
+            f"📍 المدينة: *{city}*\n🏥 المستشفى: *{hospital_name}*\n\n"
+            "اختر الطبيب:"
+        )
+    return InlineKeyboardMarkup(rows), text
+
+
+def build_specialty_keyboard(city: str, hospital: str, doctor: str) -> Tuple[InlineKeyboardMarkup, str]:
+    city_token = _token("city", city)
+    hospital_token = _token("hospital", city, hospital)
+    doctor_token = _token("doctor", doctor)
+
+    rows = []
+    for spec in PREDEFINED_SPECIALTIES:
+        rows.append([InlineKeyboardButton(
+            f"🩺 {spec}",
+            callback_data=_callback(CB_PC_SPECIALTY, city_token, hospital_token, doctor_token, _token("spec", spec)),
+        )])
+
+    rows.append([InlineKeyboardButton(
+        "✏️ إدخال المسمى الوظيفي يدويًا",
+        callback_data=_callback(CB_PC_SPECIALTY, city_token, hospital_token, doctor_token, "manual"),
+    )])
+
+    rows.append([
+        InlineKeyboardButton("👨‍⚕️ الأطباء", callback_data=_callback(CB_PC_BACK_DOCTORS, city_token, hospital_token)),
+        InlineKeyboardButton("🏠 الرئيسية", callback_data=CB_PC_BACK_MAIN),
+    ])
+
+    text = (
+        "🏥 *مرافق مريض*\n\n"
+        f"👨‍⚕️ الطبيب: *{doctor}*\n\n"
+        "اختر المسمى الوظيفي:"
+    )
+    return InlineKeyboardMarkup(rows), text
+
+
+def _resolve_doctor(db_module, hospital_name: str, doctor_token: str) -> Optional[Dict]:
+    """يحلّ رمز الطبيب إلى بياناته (أو يدوي)."""
+    if doctor_token == "manual":
+        return {"name": "MANUAL", "specialty": ""}
+    for doctor in _get_doctors_for_hospital(db_module, hospital_name):
+        if _token("doctor", str(doctor.get("name", ""))) == doctor_token:
+            return doctor
+    return None
+
+
+def _resolve_specialty(spec_token: str) -> Optional[str]:
+    if spec_token == "manual":
+        return "MANUAL"
+    for spec in PREDEFINED_SPECIALTIES:
+        if _token("spec", spec) == spec_token:
+            return spec
+    return None
+
+
 def _ensure_storage(db_module) -> None:
     conn = db_module.get_conn()
     try:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS patient_companions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                city TEXT NOT NULL,
-                hospital TEXT NOT NULL,
-                phone TEXT DEFAULT '',
-                status TEXT DEFAULT 'active',
-                created_at TEXT DEFAULT (datetime('now'))
-            )
-        """)
         conn.execute("""
             CREATE TABLE IF NOT EXISTS patient_companion_requests (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
                 city TEXT NOT NULL,
                 hospital TEXT NOT NULL,
-                details TEXT NOT NULL,
+                doctor TEXT NOT NULL DEFAULT '',
+                specialty TEXT NOT NULL DEFAULT '',
+                companion_name TEXT DEFAULT '',
+                id_number TEXT DEFAULT '',
+                nationality TEXT DEFAULT '',
+                relation TEXT DEFAULT '',
+                workplace TEXT DEFAULT '',
+                admission_date TEXT DEFAULT '',
+                days_count INTEGER DEFAULT 1,
+                gsl_code TEXT DEFAULT '',
+                pdf_path TEXT DEFAULT '',
                 status TEXT DEFAULT 'pending',
                 created_at TEXT DEFAULT (datetime('now'))
             )
         """)
+        # إضافة أعمدة جديدة للإصدارات القديمة من الجدول
+        for column in [
+            ("doctor", "TEXT NOT NULL DEFAULT ''"),
+            ("specialty", "TEXT NOT NULL DEFAULT ''"),
+            ("companion_name", "TEXT DEFAULT ''"),
+            ("id_number", "TEXT DEFAULT ''"),
+            ("nationality", "TEXT DEFAULT ''"),
+            ("relation", "TEXT DEFAULT ''"),
+            ("workplace", "TEXT DEFAULT ''"),
+            ("admission_date", "TEXT DEFAULT ''"),
+            ("days_count", "INTEGER DEFAULT 1"),
+            ("gsl_code", "TEXT DEFAULT ''"),
+            ("pdf_path", "TEXT DEFAULT ''"),
+        ]:
+            try:
+                conn.execute(
+                    f"ALTER TABLE patient_companion_requests ADD COLUMN {column[0]} {column[1]}"
+                )
+            except Exception:
+                pass
         conn.commit()
     finally:
         conn.close()
 
 
-def create_companion_request(db_module, user_id: int, city: str, hospital: str, details: str) -> Optional[int]:
-    details = " ".join((details or "").split()).strip()
-    if not details or len(details) > PC_MAX_DETAILS_LENGTH:
-        return None
+def create_companion_request(db_module, user_id: int, city: str, hospital: str,
+                             doctor: str = "", specialty: str = "") -> Optional[int]:
     try:
         _ensure_storage(db_module)
         conn = db_module.get_conn()
         try:
             cursor = conn.execute(
                 "INSERT INTO patient_companion_requests "
-                "(user_id, city, hospital, details) VALUES (?,?,?,?)",
-                (user_id, city, hospital, details),
+                "(user_id, city, hospital, doctor, specialty) VALUES (?,?,?,?,?)",
+                (user_id, city, hospital, doctor or "", specialty or ""),
             )
             request_id = cursor.lastrowid
             conn.commit()
@@ -243,7 +401,52 @@ def create_companion_request(db_module, user_id: int, city: str, hospital: str, 
         finally:
             conn.close()
     except Exception:
-        logger.exception("تعذر حفظ طلب مرافق مريض للمستخدم %s", user_id)
+        logger.exception("تعذر إنشاء طلب مرافق مريض للمستخدم %s", user_id)
+        return None
+
+
+def update_companion_request_fields(db_module, request_id: int, fields: Dict) -> bool:
+    """يحدّث حقول بيانات المرافق في الطلب."""
+    if not fields:
+        return False
+    allowed = {
+        "companion_name", "id_number", "nationality", "relation",
+        "workplace", "admission_date", "days_count", "gsl_code", "pdf_path",
+    }
+    keys = [k for k in fields if k in allowed]
+    if not keys:
+        return False
+    try:
+        _ensure_storage(db_module)
+        conn = db_module.get_conn()
+        try:
+            set_clause = ", ".join(f"{k}=?" for k in keys)
+            conn.execute(
+                f"UPDATE patient_companion_requests SET {set_clause} WHERE id=?",
+                ([fields[k] for k in keys] + [request_id]),
+            )
+            conn.commit()
+            return True
+        finally:
+            conn.close()
+    except Exception:
+        logger.exception("تعذر تحديث حقول طلب المرافق #%s", request_id)
+        return False
+
+
+def get_companion_request(db_module, request_id: int) -> Optional[Dict]:
+    try:
+        _ensure_storage(db_module)
+        conn = db_module.get_conn()
+        try:
+            row = conn.execute(
+                "SELECT * FROM patient_companion_requests WHERE id=?", (request_id,)
+            ).fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
+    except Exception:
+        logger.exception("تعذر قراءة طلب المرافق #%s", request_id)
         return None
 
 
@@ -265,24 +468,6 @@ def get_user_companion_requests(db_module, user_id: int, limit: int = 10) -> Lis
         return []
 
 
-def get_available_companions(db_module, city: str, hospital: str) -> List[Dict]:
-    try:
-        _ensure_storage(db_module)
-        conn = db_module.get_conn()
-        try:
-            rows = conn.execute(
-                "SELECT * FROM patient_companions WHERE city=? AND hospital=? "
-                "AND status='active' ORDER BY name LIMIT 50",
-                (city, hospital),
-            ).fetchall()
-            return [dict(row) for row in rows]
-        finally:
-            conn.close()
-    except Exception:
-        logger.exception("تعذر قراءة المرافقين لمدينة %s ومستشفى %s", city, hospital)
-        return []
-
-
 def _format_requests(requests: List[Dict]) -> str:
     if not requests:
         return "📋 لا توجد طلبات مرافق مريض مسجلة لك حتى الآن."
@@ -296,35 +481,26 @@ def _format_requests(requests: List[Dict]) -> str:
         lines.append(
             f"#{request.get('id', '—')} — {status}\n"
             f"📍 {request.get('city', '—')} | 🏥 {request.get('hospital', '—')}\n"
-            f"📝 {request.get('details', '—')}"
+            f"👨‍⚕️ الطبيب: {request.get('doctor', '—')} — {request.get('specialty', '—')}\n"
+            f"👤 المرافق: {request.get('companion_name', '—')}"
         )
     return "\n\n".join(lines)
 
 
-def _format_companions(companions: List[Dict], city: str, hospital: str) -> str:
-    if not companions:
-        return (
-            "👥 *المرافقون المتاحون*\n\n"
-            f"📍 {city} — 🏥 {hospital}\n\n"
-            "لا توجد قائمة مرافقين منشورة لهذا المستشفى حالياً."
-        )
-    lines = ["👥 *المرافقون المتاحون*", f"📍 {city} — 🏥 {hospital}", ""]
-    for companion in companions:
-        phone = f" — {companion.get('phone')}" if companion.get('phone') else ""
-        lines.append(f"• {companion.get('name', 'مرافق')}{phone}")
-    return "\n".join(lines)
-
-
 class PatientCompanionFlow:
-    """يدير التنقل والتحقق والتخزين لخدمة مرافق مريض."""
+    """يدير تدفق «مرافق مريض»: مدينة ← مستشفى ← طبيب ← مسمى وظيفي ← بيانات ← PDF."""
 
-    def __init__(self, db_module, on_back_main):
+    def __init__(self, db_module, on_back_main, on_generate_pdf=None):
         self.db = db_module
         self._on_back_main = on_back_main
+        self._on_generate_pdf = on_generate_pdf
 
     async def start(self, message: Message, context: ContextTypes.DEFAULT_TYPE):
         keyboard, header = build_patient_cities_keyboard(self.db)
-        context.user_data.update({"pc_state": "cities", "pc_city": None, "pc_hospital": None})
+        context.user_data.update({
+            "pc_state": "cities", "pc_city": None, "pc_hospital": None,
+            "pc_doctor": None, "pc_specialty": None,
+        })
         await message.reply_text(header, parse_mode="Markdown", reply_markup=keyboard)
 
     async def _edit(self, query: CallbackQuery, text: str, keyboard: InlineKeyboardMarkup):
@@ -346,7 +522,9 @@ class PatientCompanionFlow:
             return True
         if prefix not in {
             CB_PC_CITY, CB_PC_HOSP_PAGE, CB_PC_HOSPITAL, CB_PC_ACTION,
+            CB_PC_DOCTOR, CB_PC_DOCTOR_PAGE, CB_PC_SPECIALTY,
             CB_PC_BACK_CITIES, CB_PC_BACK_HOSPITALS, CB_PC_BACK_MAIN,
+            CB_PC_BACK_DOCTORS, CB_PC_CANCEL,
         }:
             return False
 
@@ -399,7 +577,13 @@ class PatientCompanionFlow:
                     await query.answer("المستشفى غير متاح حالياً. أعد فتح القائمة.", show_alert=True)
                     return True
                 keyboard, header = build_patient_actions_keyboard(city, hospital)
-                context.user_data.update({"pc_state": "actions", "pc_city": city, "pc_hospital": hospital.get("name")})
+                context.user_data.update({
+                    "pc_state": "actions",
+                    "pc_city": city,
+                    "pc_hospital": hospital.get("name"),
+                    "pc_doctor": None,
+                    "pc_specialty": None,
+                })
                 await self._edit(query, header, keyboard)
                 await query.answer()
                 return True
@@ -415,6 +599,18 @@ class PatientCompanionFlow:
                 await query.answer()
                 return True
 
+            if prefix == CB_PC_BACK_DOCTORS:
+                city = _resolve_city(self.db, parts[1] if len(parts) > 1 else "")
+                hospital = _resolve_hospital(self.db, city, parts[2] if len(parts) > 2 else "") if city else None
+                if not city or not hospital:
+                    await query.answer("انتهت صلاحية المستشفى. أعد فتح القائمة.", show_alert=True)
+                    return True
+                keyboard, header = build_doctors_keyboard(self.db, city, hospital)
+                context.user_data.update({"pc_state": "doctors", "pc_doctor": None})
+                await self._edit(query, header, keyboard)
+                await query.answer()
+                return True
+
             if prefix == CB_PC_ACTION:
                 action = parts[1] if len(parts) > 1 else ""
                 city = _resolve_city(self.db, parts[2] if len(parts) > 2 else "")
@@ -423,27 +619,10 @@ class PatientCompanionFlow:
                     await query.answer("المستشفى غير متاح حالياً. أعد فتح القائمة.", show_alert=True)
                     return True
                 context.user_data.update({"pc_city": city, "pc_hospital": hospital.get("name")})
-                if action == "request":
-                    context.user_data["pc_state"] = "request_details"
-                    await query.answer()
-                    await query.message.reply_text(
-                        f"📝 *بيانات تقرير مرافقة مريض*\n\n"
-                        "أرسل البيانات بأي أسلوب — الذكاء الاصطناعي سيفهمها:\n\n"
-                        "اسم المرافق: \n"
-                        "رقم الهوية: \n"
-                        "الجنسية: \n"
-                        "صلة القرابة: \n"
-                        "جهة العمل: \n"
-                        "تاريخ الدخول: \n"
-                        "عدد الأيام: \n\n"
-                        "💡 يمكنك الكتابة بجملة حرة أيضاً",
-                        parse_mode="Markdown",
-                    )
-                    return True
-                if action == "companions":
-                    companions = get_available_companions(self.db, city, hospital.get("name", ""))
-                    keyboard, _ = build_patient_actions_keyboard(city, hospital)
-                    await self._edit(query, _format_companions(companions, city, hospital.get("name", "")), keyboard)
+                if action == "report":
+                    keyboard, header = build_doctors_keyboard(self.db, city, hospital)
+                    context.user_data["pc_state"] = "doctors"
+                    await self._edit(query, header, keyboard)
                     await query.answer()
                     return True
                 if action == "requests":
@@ -453,6 +632,135 @@ class PatientCompanionFlow:
                     await query.answer()
                     return True
                 await query.answer("الإجراء غير متاح.", show_alert=True)
+                return True
+
+            if prefix == CB_PC_DOCTOR_PAGE:
+                city = _resolve_city(self.db, parts[1] if len(parts) > 1 else "")
+                hospital = _resolve_hospital(self.db, city, parts[2] if len(parts) > 2 else "") if city else None
+                if not city or not hospital:
+                    await query.answer("انتهت صلاحية المستشفى. أعد فتح القائمة.", show_alert=True)
+                    return True
+                page = int(parts[3]) if len(parts) > 3 else 0
+                keyboard, header = build_doctors_keyboard(self.db, city, hospital, page)
+                context.user_data.update({"pc_state": "doctors", "pc_city": city, "pc_hospital": hospital.get("name")})
+                await self._edit(query, header, keyboard)
+                await query.answer()
+                return True
+
+            if prefix == CB_PC_DOCTOR:
+                city = _resolve_city(self.db, parts[1] if len(parts) > 1 else "")
+                hospital = _resolve_hospital(self.db, city, parts[2] if len(parts) > 2 else "") if city else None
+                if not city or not hospital:
+                    await query.answer("انتهت صلاحية المستشفى. أعد فتح القائمة.", show_alert=True)
+                    return True
+                doctor_token = parts[3] if len(parts) > 3 else ""
+                doctor = _resolve_doctor(self.db, hospital.get("name", ""), doctor_token)
+                if doctor is None:
+                    await query.answer("الطبيب غير متاح حالياً. أعد فتح القائمة.", show_alert=True)
+                    return True
+                if doctor.get("name") == "MANUAL":
+                    context.user_data.update({
+                        "pc_state": "manual_doctor",
+                        "pc_doctor": None,
+                        "pc_specialty": None,
+                    })
+                    await query.answer()
+                    await query.message.reply_text(
+                        "✏️ أرسل اسم الطبيب:\n\n"
+                        "أو اضغط «إلغاء» للعودة لاختيار طبيب من القائمة.",
+                        reply_markup=InlineKeyboardMarkup([[
+                            InlineKeyboardButton("❌ إلغاء", callback_data=CB_PC_BACK_DOCTORS + "|"
+                                                 + _token("city", city) + "|"
+                                                 + _token("hospital", city, hospital.get("name", "")))
+                        ]]),
+                    )
+                    return True
+                keyboard, header = build_specialty_keyboard(city, hospital.get("name", ""), doctor.get("name", ""))
+                context.user_data.update({
+                    "pc_state": "specialty",
+                    "pc_doctor": doctor.get("name", ""),
+                    "pc_doctor_specialty": doctor.get("specialty", ""),
+                    "pc_specialty": None,
+                })
+                await self._edit(query, header, keyboard)
+                await query.answer()
+                return True
+
+            if prefix == CB_PC_SPECIALTY:
+                city = _resolve_city(self.db, parts[1] if len(parts) > 1 else "")
+                hospital = _resolve_hospital(self.db, city, parts[2] if len(parts) > 2 else "") if city else None
+                if not city or not hospital:
+                    await query.answer("انتهت صلاحية المستشفى. أعد فتح القائمة.", show_alert=True)
+                    return True
+                doctor = _resolve_doctor(self.db, hospital.get("name", ""), parts[3] if len(parts) > 3 else "")
+                if not doctor:
+                    await query.answer("انتهت صلاحية الطبيب. أعد فتح القائمة.", show_alert=True)
+                    return True
+                spec_token = parts[4] if len(parts) > 4 else ""
+                specialty = _resolve_specialty(spec_token)
+                if specialty is None:
+                    await query.answer("المسمى الوظيفي غير متاح. أعد فتح القائمة.", show_alert=True)
+                    return True
+                if specialty == "MANUAL":
+                    context.user_data.update({
+                        "pc_state": "manual_specialty",
+                        "pc_doctor": doctor.get("name", ""),
+                        "pc_specialty": None,
+                    })
+                    await query.answer()
+                    await query.message.reply_text(
+                        "✏️ أرسل المسمى الوظيفي (مثل: استشاري، أخصائي، طبيب عام...):\n\n"
+                        "أو اضغط «إلغاء» للعودة لاختيار مسمى من القائمة.",
+                        reply_markup=InlineKeyboardMarkup([[
+                            InlineKeyboardButton("❌ إلغاء", callback_data=CB_PC_BACK_SPECIALTY + "|"
+                                                 + _token("city", city) + "|"
+                                                 + _token("hospital", city, hospital.get("name", "")) + "|"
+                                                 + _token("doctor", doctor.get("name", "")))
+                        ]]),
+                    )
+                    return True
+                keyboard, header = self._build_collecting_intro(city, hospital.get("name", ""), doctor.get("name", ""), specialty)
+                context.user_data.update({"pc_state": "collecting", "pc_specialty": specialty})
+                # إنشاء سجل الطلب بالاختيارات المكتملة
+                request_id = create_companion_request(
+                    self.db, query.from_user.id, city,
+                    hospital.get("name", ""), doctor.get("name", ""), specialty,
+                )
+                context.user_data["pc_request_id"] = request_id
+                await self._edit(query, header, keyboard)
+                await query.answer()
+                return True
+
+            if prefix == CB_PC_BACK_SPECIALTY:
+                city = _resolve_city(self.db, parts[1] if len(parts) > 1 else "")
+                hospital = _resolve_hospital(self.db, city, parts[2] if len(parts) > 2 else "") if city else None
+                if not city or not hospital:
+                    await query.answer("انتهت صلاحية المستشفى. أعد فتح القائمة.", show_alert=True)
+                    return True
+                doctor = _resolve_doctor(self.db, hospital.get("name", ""), parts[3] if len(parts) > 3 else "")
+                if not doctor:
+                    await query.answer("انتهت صلاحية الطبيب. أعد فتح القائمة.", show_alert=True)
+                    return True
+                keyboard, header = build_specialty_keyboard(city, hospital.get("name", ""), doctor.get("name", ""))
+                context.user_data.update({"pc_state": "specialty", "pc_specialty": None})
+                await self._edit(query, header, keyboard)
+                await query.answer()
+                return True
+
+            if prefix == CB_PC_CANCEL:
+                await query.answer()
+                context.user_data.update({
+                    "pc_state": "doctors", "pc_doctor": None,
+                    "pc_specialty": None, "pc_request_id": None,
+                })
+                city = context.user_data.get("pc_city")
+                hospital_name = context.user_data.get("pc_hospital")
+                hospital = _resolve_hospital(self.db, city, _token("hospital", city, hospital_name)) if city and hospital_name else None
+                if city and hospital:
+                    keyboard, header = build_doctors_keyboard(self.db, city, hospital)
+                    await self._edit(query, header, keyboard)
+                else:
+                    await query.message.reply_text("تم إلغاء الاختيار. اضغط «🏥 مرافق مريض» للبدء من جديد.")
                 return True
         except (IndexError, TypeError, ValueError):
             await query.answer("بيانات الزر غير صالحة. أعد فتح القائمة.", show_alert=True)
@@ -464,29 +772,229 @@ class PatientCompanionFlow:
 
         return False
 
+    # ─────────────────────────────────────────────────────────────
+    # جمع بيانات المرافق وإصدار الـ PDF
+    # ─────────────────────────────────────────────────────────────
+
+    def _build_collecting_intro(self, city: str, hospital: str, doctor: str, specialty: str):
+        """رسالة التمهيد لجمع بيانات المرافق."""
+        keyboard = InlineKeyboardMarkup([[
+            InlineKeyboardButton("❌ إلغاء", callback_data=CB_PC_CANCEL)
+        ]])
+        text = (
+            "🏥 *مرافق مريض*\n\n"
+            f"📍 المدينة: *{city}*\n"
+            f"🏥 المستشفى: *{hospital}*\n"
+            f"👨‍⚕️ الطبيب: *{doctor}*\n"
+            f"🩺 المسمى الوظيفي: *{specialty}*\n\n"
+            "📝 *بيانات تقرير مرافقة مريض*\n\n"
+            "أرسل البيانات بأي أسلوب — الذكاء الاصطناعي سيفهمها:\n\n"
+            "اسم المرافق: \n"
+            "رقم الهوية: \n"
+            "الجنسية: \n"
+            "صلة القرابة: \n"
+            "جهة العمل: \n"
+            "تاريخ الدخول: \n"
+            "عدد الأيام: \n\n"
+            "💡 يمكنك الكتابة بجملة حرة أيضاً"
+        )
+        return keyboard, text
+
     async def handle_text(self, text: str, message: Message, context: ContextTypes.DEFAULT_TYPE, user_id: int) -> bool:
-        if context.user_data.get("pc_state") != "request_details":
+        # ── إدخال اسم الطبيب يدويًا ─────────────────────────────
+        if context.user_data.get("pc_state") == "manual_doctor":
+            name = " ".join((text or "").split()).strip()
+            if len(name) < 3:
+                await message.reply_text("⚠️ اسم الطبيب قصير جدًا. أرسل الاسم كاملًا:")
+                return True
+            context.user_data.update({
+                "pc_state": "specialty",
+                "pc_doctor": name,
+                "pc_doctor_specialty": "",
+                "pc_specialty": None,
+            })
+            city = context.user_data.get("pc_city")
+            hospital = context.user_data.get("pc_hospital")
+            if not city or not hospital:
+                context.user_data["pc_state"] = "cities"
+                await message.reply_text("انتهت جلسة الاختيار. اضغط «🏥 مرافق مريض» للبدء من جديد.")
+                return True
+            keyboard, header = build_specialty_keyboard(city, hospital, name)
+            await message.reply_text(header, parse_mode="Markdown", reply_markup=keyboard)
+            return True
+
+        # ── إدخال المسمى الوظيفي يدويًا ─────────────────────────
+        if context.user_data.get("pc_state") == "manual_specialty":
+            spec = " ".join((text or "").split()).strip()
+            if len(spec) < 2:
+                await message.reply_text("⚠️ المسمى الوظيفي قصير جدًا. أرسله مرة أخرى:")
+                return True
+            city = context.user_data.get("pc_city")
+            hospital = context.user_data.get("pc_hospital")
+            doctor = context.user_data.get("pc_doctor")
+            if not all([city, hospital, doctor]):
+                context.user_data["pc_state"] = "cities"
+                await message.reply_text("انتهت جلسة الاختيار. اضغط «🏥 مرافق مريض» للبدء من جديد.")
+                return True
+            keyboard, header = self._build_collecting_intro(city, hospital, doctor, spec)
+            context.user_data.update({"pc_state": "collecting", "pc_specialty": spec})
+            request_id = create_companion_request(self.db, user_id, city, hospital, doctor, spec)
+            context.user_data["pc_request_id"] = request_id
+            await message.reply_text(header, parse_mode="Markdown", reply_markup=keyboard)
+            return True
+
+        # ── جمع بيانات المرافق ──────────────────────────────────
+        if context.user_data.get("pc_state") != "collecting":
             return False
         city = context.user_data.get("pc_city")
         hospital = context.user_data.get("pc_hospital")
-        if not city or not hospital:
+        doctor = context.user_data.get("pc_doctor")
+        specialty = context.user_data.get("pc_specialty")
+        if not all([city, hospital, doctor, specialty]):
             context.user_data["pc_state"] = "cities"
             await message.reply_text("انتهت جلسة الاختيار. اضغط «🏥 مرافق مريض» للبدء من جديد.")
             return True
-        request_id = create_companion_request(self.db, user_id, city, hospital, text)
-        if request_id is None:
-            context.user_data["pc_state"] = "request_details"
-            await message.reply_text("⚠️ تعذر حفظ الطلب. أرسل التفاصيل مرة أخرى أو تواصل مع الإدارة.")
-        else:
-            context.user_data["pc_state"] = "submitted"
-            if hasattr(self.db, "log_activity"):
-                try:
-                    self.db.log_activity(user_id, "patient_companion_request", f"طلب مرافق مريض #{request_id}")
-                except Exception:
-                    logger.exception("تعذر تسجيل نشاط طلب مرافق مريض #%s", request_id)
+
+        # استخراج بيانات المرافق بذكاء
+        extracted = self._extract_companion_data(text)
+        missing = self._get_missing_fields(extracted)
+
+        if missing:
+            context.user_data["pc_extracted"] = extracted
+            prompt = self._build_missing_prompt(missing)
             await message.reply_text(
-                f"✅ تم تسجيل طلب مرافق المريض رقم *#{request_id}*.\n\n"
-                "ستتم مراجعته والتواصل معك عند توفر مرافق مناسب.",
-                parse_mode="Markdown",
+                f"⚠️ توجد بيانات ناقصة:\n\n{prompt}\n\n"
+                "أرسلها بأي أسلوب:",
+            )
+            return True
+
+        # البيانات كاملة → إصدار الـ PDF
+        return await self._issue_companion_pdf(
+            message, context, user_id,
+            city=city, hospital=hospital, doctor=doctor, specialty=specialty,
+            extracted=extracted,
+        )
+
+    @staticmethod
+    def _extract_companion_data(text: str) -> Dict:
+        """يستخرج بيانات المرافق من النص الحر."""
+        data = {}
+        t = " ".join((text or "").split()).strip()
+        if not t:
+            return data
+
+        # محاولة الاستخراج بالذكاء الاصطناعي
+        try:
+            from ai_data_processor import SmartDataExtractor  # noqa: F401
+            extractor = SmartDataExtractor()
+            ai_data = extractor.extract(t) or {}
+            mapping = {
+                "companion_name": "companion_name",
+                "id_number": "id_number",
+                "nationality": "nationality",
+                "relation": "relation",
+                "workplace": "workplace",
+                "excuse_date": "admission_date",
+                "exit_date": "discharge_date",
+                "days_count": "days_count",
+            }
+            for src_key, dst_key in mapping.items():
+                value = ai_data.get(src_key)
+                if value is not None and str(value).strip():
+                    data[dst_key] = str(value).strip()
+        except Exception:
+            logger.exception("تعذر استخراج البيانات بالذكاء الاصطناعي")
+
+        # قص اسم المرافق من أي قيمة التقطت حقولًا أخرى كاملةً
+        if data.get("companion_name") and len(data.get("companion_name", "")) > 40:
+            value = data["companion_name"]
+            for marker in ["رقم الهوية", "الهوية", "الجنسية", "صلة القرابة", "جهة العمل", "تاريخ الدخول", "عدد الأيام"]:
+                idx = value.find(marker)
+                if idx > 0:
+                    value = value[:idx]
+                    break
+            data["companion_name"] = " ".join(value.split()).strip().rstrip("،,؛؛.。")
+
+        # تحليل تكميلي بالعبارات النمطية
+        patterns = [
+            (r"(?:اسم\s*(?:المرافق|المرافقة))\s*[:\-–]\s*(.+)", "companion_name"),
+            (r"(?:رقم\s*(?:الهوية|الاقامة|الإقامة))\s*[:\-–]\s*(\d{1,6}\s?\d{2,4}\s?\d{1,4}|\d{9,10})", "id_number"),
+            (r"الجنسية\s*[:\-–]\s*(.+)", "nationality"),
+            (r"(?:صلة\s*القرابة|صلة\s*القرابة\s*بالمريض)\s*[:\-–]\s*(.+)", "relation"),
+            (r"(?:جهة\s*العمل|مكان\s*العمل|العمل)\s*[:\-–]\s*(.+)", "workplace"),
+            (r"(?:تاريخ\s*(?:الدخول|القبول))\s*[:\-–]\s*(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})", "admission_date"),
+            (r"(?:عدد\s*(?:الأيام|ايام|أيام))\s*[:\-–]\s*(\d+)", "days_count"),
+        ]
+        for pattern, field in patterns:
+            match = re.search(pattern, t, re.IGNORECASE)
+            if match and field not in data:
+                data[field] = match.group(1).strip()
+
+        # تحويل إلى أرقام غربية
+        if data.get("days_count"):
+            try:
+                data["days_count"] = int(data["days_count"])
+            except (ValueError, TypeError):
+                pass
+
+        # توحيد تاريخ الدخول لصيغة DD-MM-YYYY
+        if data.get("admission_date"):
+            raw = data["admission_date"]
+            for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y", "%d-%m-%y", "%Y-%m-%d", "%Y/%m/%d"):
+                try:
+                    from datetime import datetime as _dt
+                    data["admission_date"] = _dt.strptime(raw, fmt).strftime("%d-%m-%Y")
+                    break
+                except Exception:
+                    continue
+
+        return data
+
+    @staticmethod
+    def _get_missing_fields(data: Dict) -> List[str]:
+        """يحدد الحقول الناقصة من البيانات المستخرجة."""
+        required = [
+            ("companion_name", "👤 اسم المرافق"),
+            ("id_number", "🪪 رقم الهوية"),
+            ("nationality", "🌍 الجنسية"),
+            ("relation", "🔗 صلة القرابة"),
+            ("workplace", "🏢 جهة العمل"),
+            ("admission_date", "📅 تاريخ الدخول"),
+            ("days_count", "🔢 عدد الأيام"),
+        ]
+        return [label for key, label in required
+                if key not in data or not str(data.get(key, "")).strip()]
+
+    @staticmethod
+    def _build_missing_prompt(missing: List[str]) -> str:
+        """يبني رسالة مطالبة بالبيانات الناقصة."""
+        parts = []
+        for item in missing:
+            parts.append(f"• {item}")
+        return "\n".join(parts)
+
+    async def _issue_companion_pdf(self, message, context, user_id, city, hospital,
+                                   doctor, specialty, extracted):
+        """يستدعي دالة توليد وإرسال PDF تقرير مرافقة مريض في bot.py."""
+        if not self._on_generate_pdf:
+            context.user_data["pc_state"] = "cities"
+            await message.reply_text(
+                "⚠️ خدمة إصدار التقرير غير متاحة حالياً.\n"
+                "اضغط «🏥 مرافق مريض» للبدء من جديد."
+            )
+            return True
+
+        try:
+            await self._on_generate_pdf(message, context, user_id, {
+                "city": city, "hospital": hospital,
+                "doctor": doctor, "specialty": specialty,
+                **extracted,
+            })
+        except Exception:
+            logger.exception("خطأ في إصدار PDF مرافق مريض للمستخدم %s", user_id)
+            context.user_data["pc_state"] = "cities"
+            await message.reply_text(
+                "❌ حدث خطأ أثناء إنشاء التقرير.\n\n"
+                "اضغط «🏥 مرافق مريض» للمحاولة مرة أخرى."
             )
         return True

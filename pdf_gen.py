@@ -1743,7 +1743,7 @@ def process_logo_for_pdf(logo_path):
             return None
 
 
-def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_path, website_url="https://sehasa.online", custom_qr_path=None):
+def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_path, website_url="https://sehasa.online", custom_qr_path=None, draw_slots=None, logo_slot=None):
     """
     طبقة شفافة تُرسم فوق القالب:
     • نصوص إنجليزية → Times-Roman / Times-Bold  (مدمج في ReportLab)
@@ -1868,7 +1868,8 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
             size -= 0.5
         return size
 
-    for slot_id, slot in DRAW_SLOTS.items():
+    _slots = draw_slots if draw_slots is not None else DRAW_SLOTS
+    for slot_id, slot in _slots.items():
         value = field_values.get(slot_id)
         if not value:
             continue
@@ -1951,10 +1952,11 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
             from reportlab.lib.utils import ImageReader as _IR
 
             # حدود مربع الشعار (نفس أبعاد الباركود تماماً)
-            lx = LOGO_SLOT['x']      * x_scale
-            ly = LOGO_SLOT['rl_y']   * y_scale
-            lw = LOGO_SLOT['width']  * x_scale   # = عرض QR
-            lh = LOGO_SLOT['height'] * y_scale   # = ارتفاع QR
+            _ls = logo_slot if logo_slot else LOGO_SLOT
+            lx = _ls['x']      * x_scale
+            ly = _ls['rl_y']   * y_scale
+            lw = _ls['width']  * x_scale   # = عرض QR
+            lh = _ls['height'] * y_scale   # = ارتفاع QR
 
             # ── المعالجة الشاملة للشعار (إزالة خلفية + اقتطاع + شفافية) ──
             processed = process_logo_for_pdf(logo_path)
@@ -2003,10 +2005,11 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
         except Exception as _logo_err:
             # Fallback بسيط بدون معالجة — يظهر الشعار بخلفيته الأصلية
             try:
-                lx = LOGO_SLOT['x']      * x_scale
-                ly = LOGO_SLOT['rl_y']   * y_scale
-                lw = LOGO_SLOT['width']  * x_scale
-                lh = LOGO_SLOT['height'] * y_scale
+                _ls = logo_slot if logo_slot else LOGO_SLOT
+                lx = _ls['x']      * x_scale
+                ly = _ls['rl_y']   * y_scale
+                lw = _ls['width']  * x_scale
+                lh = _ls['height'] * y_scale
                 c.drawImage(
                     logo_path,
                     lx, ly,

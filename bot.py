@@ -26,6 +26,7 @@ import database as db
 from admin_auth import parse_admin_ids
 from patient_companion import PatientCompanionFlow
 from external_api import send_leave_to_external_api
+from companion_pdf_gen import generate_companion_pdf
 
 # ══════════════════════════════════════════════
 # نظام المراجعة الإدارية (مدمج)
@@ -592,7 +593,11 @@ async def _patient_companion_back_to_main(query, context: ContextTypes.DEFAULT_T
     )
 
 
-patient_companion_flow = PatientCompanionFlow(db, _patient_companion_back_to_main)
+patient_companion_flow = PatientCompanionFlow(
+    db,
+    _patient_companion_back_to_main,
+    on_generate_pdf=None,  # تُربط بعد تعريف الدالة في أسفل الملف (تُعيّن لاحقاً)
+)
 
 
 def dashboard_keyboard():
@@ -2465,6 +2470,156 @@ async def generate_and_send_pdf(update, context, uid):
 # ══════════════════════════════════════════════
 # راوتر الإدارة
 # ══════════════════════════════════════════════
+
+async def generate_and_send_companion_pdf(update, context, uid, pc_data):
+    """يولّد تقرير مرافقة مريض PDF ويرسله للمستخدم (بدون خصم رصيد)."""
+    if _processing_lock.get(uid):
+        await update.effective_message.reply_text(
+            "⏳ *جاري إنشاء الملف بالفعل...*\n" "يرجى الانتظار.",
+            parse_mode="Markdown",
+        )
+        return
+
+    _processing_lock[uid] = True
+
+    hospital  = pc_data.get("hospital", "—")
+    doctor    = pc_data.get("doctor", "—")
+    specialty = pc_data.get("specialty", "—")
+
+    await update.effective_message.reply_text("⏳ جاري إنشاء ملف PDF...", reply_markup=back_keyboard())
+    pdf_path_temp = None
+    template_path_tmp = None
+
+    try:
+        logo_path = db.get_hospital_logo(hospital)
+        website_url = get_website_url()
+        pdf_path_temp = os.path.join(tempfile.gettempdir(), f"companion_{uid}_{int(datetime.now().timestamp())}.pdf")
+        pdf_path = pdf_path_temp
+
+        # ── جلب القالب من قاعدة البيانات ──
+        active_template = db.get_active_template()
+        if not active_template:
+            raise FileNotFoundError("لا يوجد قالب PDF مفعّل")
+
+        template_path = db.get_template_file_path(active_template["id"])
+        if not template_path or not os.path.exists(template_path):
+            raise FileNotFoundError("ملف القالب مفقود")
+
+        if os.path.getsize(template_path) < 1000:
+            raise FileNotFoundError("ملف القالب تالف أو صغير جداً")
+
+        template_path_tmp = template_path
+
+        hospital_type_val = (db.get_hospital_by_name(hospital) or {}).get("hospital_type") or "حكومي"
+        pre_gsl_code = db.generate_gsl_code(hospital_type=hospital_type_val)
+
+        generate_companion_pdf(
+            companion_data = {
+                "companion_name": pc_data.get("companion_name", ""),
+                "id_number": pc_data.get("id_number", ""),
+                "nationality": pc_data.get("nationality", ""),
+                "relation": pc_data.get("relation", ""),
+                "workplace": pc_data.get("workplace", ""),
+                "admission_date": pc_data.get("admission_date", ""),
+                "days_count": pc_data.get("days_count", 1),
+            },
+            hospital     = hospital,
+            doctor       = doctor,
+            specialty    = specialty,
+            output_path  = pdf_path,
+            logo_path    = logo_path,
+            website_url  = website_url or "https://sehasa.online",
+            gsl_code     = pre_gsl_code,
+        )
+
+        logger.info(f"generate_companion_pdf user={uid}: تم إنشاء PDF بنجاح → {pdf_path} ({os.path.getsize(pdf_path):,} bytes)")
+
+        pc_data["days_count"] = safe_int(pc_data.get("days_count", 1))
+
+        request_id = context.user_data.get("pc_request_id")
+        if request_id:
+            from patient_companion import update_companion_request_fields
+            update_companion_request_fields(db, request_id, {
+                "companion_name": str(pc_data.get("companion_name", "")),
+                "id_number": str(pc_data.get("id_number", "")),
+                "nationality": str(pc_data.get("nationality", "")),
+                "relation": str(pc_data.get("relation", "")),
+                "workplace": str(pc_data.get("workplace", "")),
+                "admission_date": str(pc_data.get("admission_date", "")),
+                "days_count": pc_data.get("days_count"),
+                "gsl_code": pre_gsl_code,
+                "pdf_path": pdf_path_temp,
+            })
+            context.user_data["pc_request_id"] = None
+
+        db.log_activity(uid, "companion_report_created", f"تقرير مرافق مريض — {hospital} — {doctor}")
+
+        gsl_code = pre_gsl_code
+        pdf_bytes = open(pdf_path, "rb").read()
+        await update.effective_message.reply_document(
+            document=pdf_bytes,
+            filename=f"companion_report_{uid}.pdf",
+            caption=(
+                f"✅ *تم إصدار تقرير مرافقة مريض بنجاح*\n\n"
+                f"📋 *تفاصيل التقرير:*\n"
+                f"━━━━━━━━━━━━━━━━━━\n"
+                f"👤 اسم المرافق: {pc_data.get('companion_name', '—')}\n"
+                f"🆔 رقم الهوية: `{pc_data.get('id_number', '—')}`\n"
+                f"🌍 الجنسية: {pc_data.get('nationality', '—')}\n"
+                f"🔗 صلة القرابة: {pc_data.get('relation', '—')}\n"
+                f"🏢 جهة العمل: {pc_data.get('workplace', '—')}\n"
+                f"🏥 المستشفى: {hospital}\n"
+                f"👨‍⚕️ الطبيب: {doctor}\n"
+                f"🩺 المسمى الوظيفي: {specialty}\n"
+                f"📅 تاريخ الدخول: {pc_data.get('admission_date', '—')}\n"
+                f"📆 عدد الأيام: {pc_data.get('days_count') or '—'} يوم\n\n"
+                f"🔍 *للتحقق:*\n"
+                f"━━━━━━━━━━━━━━━━━━\n"
+                f"🔑 رمز الإحالة: `{gsl_code}`\n\n"
+                f"🌐 رابط التحقق:\n"
+                f"[www.seha.sa/#/inquiries/slenquiry]({website_url})\n\n"
+                f"💡 *ملاحظة:* انتظر 3 دقائق قبل التحقيق لظهور البيانات في نفس اللحظة."
+            ),
+            parse_mode="Markdown",
+        )
+
+        context.user_data.clear()
+        await update.effective_message.reply_text(
+            build_main_menu_text(uid, update.effective_user.full_name or ""),
+            parse_mode="Markdown",
+            reply_markup=main_menu_keyboard(is_admin_user(uid)),
+        )
+
+    except Exception as e:
+        import traceback
+        err_details = traceback.format_exc()
+        logger.error(f"Companion PDF error user={uid}: {e}\n{err_details}")
+        short_err = str(e)[:300]
+        await update.effective_message.reply_text(
+            f"❌ *حدث خطأ أثناء إنشاء التقرير.*\n\n"
+            f"🔍 *تفاصيل الخطأ (للدعم الفني):*\n"
+            f"`{type(e).__name__}: {short_err}`",
+            parse_mode="Markdown",
+            reply_markup=back_keyboard(),
+        )
+    finally:
+        _processing_lock.pop(uid, None)
+        try:
+            if pdf_path_temp and os.path.exists(pdf_path_temp):
+                os.remove(pdf_path_temp)
+        except Exception:
+            pass
+        try:
+            if template_path_tmp and os.path.exists(template_path_tmp):
+                if template_path_tmp.startswith(tempfile.gettempdir()):
+                    os.remove(template_path_tmp)
+        except Exception:
+            pass
+
+
+# ربط دالة إصدار تقرير مرافقة مريض بالتدفق (بعد تعريف الدالة)
+patient_companion_flow._on_generate_pdf = generate_and_send_companion_pdf
+
 
 async def show_analytics(update):
     """عرض إحصائيات النظام"""
