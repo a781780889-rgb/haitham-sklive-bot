@@ -465,7 +465,7 @@ class PatientCompanionFlow:
             CB_PC_CITY, CB_PC_HOSP_PAGE, CB_PC_HOSPITAL,
             CB_PC_DOCTOR, CB_PC_DOCTOR_PAGE, CB_PC_SPECIALTY,
             CB_PC_BACK_CITIES, CB_PC_BACK_HOSPITALS, CB_PC_BACK_MAIN,
-            CB_PC_BACK_DOCTORS, CB_PC_CANCEL,
+            CB_PC_BACK_DOCTORS, CB_PC_BACK_SPECIALTY, CB_PC_CANCEL,
         }:
             return False
 
@@ -610,7 +610,17 @@ class PatientCompanionFlow:
                 if not city or not hospital:
                     await query.answer("انتهت صلاحية المستشفى. أعد فتح القائمة.", show_alert=True)
                     return True
-                doctor = _resolve_doctor(self.db, hospital.get("name", ""), parts[3] if len(parts) > 3 else "")
+                # استخدام بيانات الطبيب المحفوظة في الجلسة (تشمل الأطباء اليدويين وغير الموجودين في قاعدة البيانات)
+                doctor_token = parts[3] if len(parts) > 3 else ""
+                doctor = None
+                if doctor_token == "manual":
+                    doctor = {"name": "MANUAL", "specialty": ""}
+                else:
+                    saved_name = context.user_data.get("pc_doctor")
+                    if saved_name:
+                        doctor = {"name": saved_name, "specialty": context.user_data.get("pc_doctor_specialty", "") or ""}
+                    if doctor is None:
+                        doctor = _resolve_doctor(self.db, hospital.get("name", ""), doctor_token)
                 if not doctor:
                     await query.answer("انتهت صلاحية الطبيب. أعد فتح القائمة.", show_alert=True)
                     return True
@@ -655,7 +665,10 @@ class PatientCompanionFlow:
                 if not city or not hospital:
                     await query.answer("انتهت صلاحية المستشفى. أعد فتح القائمة.", show_alert=True)
                     return True
-                doctor = _resolve_doctor(self.db, hospital.get("name", ""), parts[3] if len(parts) > 3 else "")
+                saved_name = context.user_data.get("pc_doctor")
+                doctor = {"name": saved_name, "specialty": context.user_data.get("pc_doctor_specialty", "") or ""} if saved_name else None
+                if doctor is None:
+                    doctor = _resolve_doctor(self.db, hospital.get("name", ""), parts[3] if len(parts) > 3 else "")
                 if not doctor:
                     await query.answer("انتهت صلاحية الطبيب. أعد فتح القائمة.", show_alert=True)
                     return True
