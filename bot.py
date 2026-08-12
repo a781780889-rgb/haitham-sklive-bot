@@ -4554,7 +4554,9 @@ def main():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     # ✅ معالج الصور — لاستقبال شعارات المستشفيات عبر البوت
-    application.add_handler(MessageHandler(filters.Document & ~filters.Document.IMAGE, handle_document))
+    # ملاحظة: لا نستخدم filters.Document & ~filters.Document.IMAGE لأن بعض إصدارات PTB
+    # لا تدعمه؛ نستخدم فلترة MIME داخل المعالج بدلاً من ذلك.
+    application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     application.add_handler(MessageHandler(filters.PHOTO | filters.Document.IMAGE, handle_photo))
 
     # ══════════════════════════════════════════════════════════════
