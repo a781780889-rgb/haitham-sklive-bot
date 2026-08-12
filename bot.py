@@ -12,7 +12,7 @@ import re
 import tempfile
 from datetime import datetime, timedelta
 from telegram import (
-    Update, ReplyKeyboardMarkup, KeyboardButton,
+    Update, Message, ReplyKeyboardMarkup, KeyboardButton,
     InlineKeyboardMarkup, InlineKeyboardButton,
     BotCommand, MenuButtonCommands
 )
@@ -2471,10 +2471,21 @@ async def generate_and_send_pdf(update, context, uid):
 # راوتر الإدارة
 # ══════════════════════════════════════════════
 
+def _get_msg_and_user(update, uid):
+    """يطبّع الوسيط: إن كان Message مباشرة يُستخدم كرسالة، وإلا يُفك من Update."""
+    if isinstance(update, Message):
+        return update, update.from_user
+    return update.effective_message, update.effective_user
+
 async def generate_and_send_companion_pdf(update, context, uid, pc_data):
-    """يولّد تقرير مرافقة مريض PDF ويرسله للمستخدم (بدون خصم رصيد)."""
+    """يولّد تقرير مرافقة مريض PDF ويرسله للمستخدم (بدون خصم رصيد).
+
+    يدعم أن يكون update كائن Update كاملاً أو Message مباشرة
+    (لأن _issue_companion_pdf في patient_companion.py يمرر query.message).
+    """
+    message, effective_user = _get_msg_and_user(update, uid)
     if _processing_lock.get(uid):
-        await update.effective_message.reply_text(
+        await message.reply_text(
             "⏳ *جاري إنشاء الملف بالفعل...*\n" "يرجى الانتظار.",
             parse_mode="Markdown",
         )
@@ -2486,7 +2497,7 @@ async def generate_and_send_companion_pdf(update, context, uid, pc_data):
     doctor    = pc_data.get("doctor", "—")
     specialty = pc_data.get("specialty", "—")
 
-    await update.effective_message.reply_text("⏳ جاري إنشاء ملف PDF...", reply_markup=back_keyboard())
+    await message.reply_text("⏳ جاري إنشاء ملف PDF...", reply_markup=back_keyboard())
     pdf_path_temp = None
     template_path_tmp = None
 
@@ -2557,7 +2568,7 @@ async def generate_and_send_companion_pdf(update, context, uid, pc_data):
 
         gsl_code = pre_gsl_code
         pdf_bytes = open(pdf_path, "rb").read()
-        await update.effective_message.reply_document(
+        await message.reply_document(
             document=pdf_bytes,
             filename=f"companion_report_{uid}.pdf",
             caption=(
@@ -2585,8 +2596,8 @@ async def generate_and_send_companion_pdf(update, context, uid, pc_data):
         )
 
         context.user_data.clear()
-        await update.effective_message.reply_text(
-            build_main_menu_text(uid, update.effective_user.full_name or ""),
+        await message.reply_text(
+            build_main_menu_text(uid, effective_user.full_name or ""),
             parse_mode="Markdown",
             reply_markup=main_menu_keyboard(is_admin_user(uid)),
         )
@@ -2596,7 +2607,7 @@ async def generate_and_send_companion_pdf(update, context, uid, pc_data):
         err_details = traceback.format_exc()
         logger.error(f"Companion PDF error user={uid}: {e}\n{err_details}")
         short_err = str(e)[:300]
-        await update.effective_message.reply_text(
+        await message.reply_text(
             f"❌ *حدث خطأ أثناء إنشاء التقرير.*\n\n"
             f"🔍 *تفاصيل الخطأ (للدعم الفني):*\n"
             f"`{type(e).__name__}: {short_err}`",

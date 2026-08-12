@@ -1094,11 +1094,15 @@ class PatientCompanionFlow:
                 "doctor": doctor, "specialty": specialty,
                 **extracted,
             })
-        except Exception:
+        except Exception as _e:
+            import traceback as _tb
             logger.exception("خطأ في إصدار PDF مرافق مريض للمستخدم %s", user_id)
             context.user_data["pc_state"] = "cities"
             await message.reply_text(
                 "❌ حدث خطأ أثناء إنشاء التقرير.\n\n"
-                "اضغط «🏥 مرافق مريض» للمحاولة مرة أخرى."
+                "🔍 *تفاصيل الخطأ (أرسلها للدعم الفني):*\n"
+                f"```{_tb.format_exc()}```\n\n"
+                "اضغط «🏥 مرافق مريض» للمحاولة مرة أخرى.",
+                parse_mode="Markdown",
             )
         return True
