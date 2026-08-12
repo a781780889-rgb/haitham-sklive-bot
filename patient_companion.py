@@ -23,7 +23,6 @@ logger = logging.getLogger(__name__)
 CB_PC_CITY = "pcc"
 CB_PC_HOSP_PAGE = "pchp"
 CB_PC_HOSPITAL = "pch"
-CB_PC_ACTION = "pca"
 CB_PC_DOCTOR = "pcd"
 CB_PC_DOCTOR_PAGE = "pcdp"
 CB_PC_SPECIALTY = "pcs"
@@ -185,27 +184,6 @@ def build_patient_hospitals_keyboard(
     empty_message = "لا توجد مستشفيات متاحة لهذه المدينة حالياً." if not hospitals else "اختر المستشفى:"
     return InlineKeyboardMarkup(rows), (
         f"🏥 *مرافق مريض*\n\n📍 المدينة: *{city}*\n\n{empty_message}"
-    )
-
-
-def build_patient_actions_keyboard(city: str, hospital: Dict) -> Tuple[InlineKeyboardMarkup, str]:
-    name = hospital.get("name", "")
-    city_token = _token("city", city)
-    hospital_token = _token("hospital", city, name)
-    target = (city_token, hospital_token)
-    rows = [
-        [InlineKeyboardButton("📝 إصدار تقرير مرافقة مريض", callback_data=_callback(CB_PC_ACTION, "report", *target))],
-        [InlineKeyboardButton("📋 طلباتي", callback_data=_callback(CB_PC_ACTION, "requests", *target))],
-        [
-            InlineKeyboardButton("🏥 المستشفيات", callback_data=_callback(CB_PC_BACK_HOSPITALS, city_token)),
-            InlineKeyboardButton("🏠 الرئيسية", callback_data=CB_PC_BACK_MAIN),
-        ],
-    ]
-    return InlineKeyboardMarkup(rows), (
-        "🏥 *مرافق مريض*\n\n"
-        f"📍 المدينة: *{city}*\n"
-        f"🏥 المستشفى: *{name}*\n\n"
-        "اختر الإجراء:"
     )
 
 
@@ -450,43 +428,6 @@ def get_companion_request(db_module, request_id: int) -> Optional[Dict]:
         return None
 
 
-def get_user_companion_requests(db_module, user_id: int, limit: int = 10) -> List[Dict]:
-    try:
-        _ensure_storage(db_module)
-        conn = db_module.get_conn()
-        try:
-            rows = conn.execute(
-                "SELECT * FROM patient_companion_requests "
-                "WHERE user_id=? ORDER BY created_at DESC, id DESC LIMIT ?",
-                (user_id, limit),
-            ).fetchall()
-            return [dict(row) for row in rows]
-        finally:
-            conn.close()
-    except Exception:
-        logger.exception("تعذر قراءة طلبات مرافق مريض للمستخدم %s", user_id)
-        return []
-
-
-def _format_requests(requests: List[Dict]) -> str:
-    if not requests:
-        return "📋 لا توجد طلبات مرافق مريض مسجلة لك حتى الآن."
-    status_labels = {
-        "pending": "⏳ قيد المراجعة", "accepted": "✅ مقبول",
-        "rejected": "❌ مرفوض", "done": "✔️ مكتمل",
-    }
-    lines = ["📋 *طلبات مرافق مريض الأخيرة:*", ""]
-    for request in requests:
-        status = status_labels.get(request.get("status", "pending"), request.get("status", "—"))
-        lines.append(
-            f"#{request.get('id', '—')} — {status}\n"
-            f"📍 {request.get('city', '—')} | 🏥 {request.get('hospital', '—')}\n"
-            f"👨‍⚕️ الطبيب: {request.get('doctor', '—')} — {request.get('specialty', '—')}\n"
-            f"👤 المرافق: {request.get('companion_name', '—')}"
-        )
-    return "\n\n".join(lines)
-
-
 class PatientCompanionFlow:
     """يدير تدفق «مرافق مريض»: مدينة ← مستشفى ← طبيب ← مسمى وظيفي ← بيانات ← PDF."""
 
@@ -521,7 +462,7 @@ class PatientCompanionFlow:
             await query.answer()
             return True
         if prefix not in {
-            CB_PC_CITY, CB_PC_HOSP_PAGE, CB_PC_HOSPITAL, CB_PC_ACTION,
+            CB_PC_CITY, CB_PC_HOSP_PAGE, CB_PC_HOSPITAL,
             CB_PC_DOCTOR, CB_PC_DOCTOR_PAGE, CB_PC_SPECIALTY,
             CB_PC_BACK_CITIES, CB_PC_BACK_HOSPITALS, CB_PC_BACK_MAIN,
             CB_PC_BACK_DOCTORS, CB_PC_CANCEL,
@@ -576,9 +517,9 @@ class PatientCompanionFlow:
                 if not city or not hospital:
                     await query.answer("المستشفى غير متاح حالياً. أعد فتح القائمة.", show_alert=True)
                     return True
-                keyboard, header = build_patient_actions_keyboard(city, hospital)
+                keyboard, header = build_doctors_keyboard(self.db, city, hospital)
                 context.user_data.update({
-                    "pc_state": "actions",
+                    "pc_state": "doctors",
                     "pc_city": city,
                     "pc_hospital": hospital.get("name"),
                     "pc_doctor": None,
@@ -609,29 +550,6 @@ class PatientCompanionFlow:
                 context.user_data.update({"pc_state": "doctors", "pc_doctor": None})
                 await self._edit(query, header, keyboard)
                 await query.answer()
-                return True
-
-            if prefix == CB_PC_ACTION:
-                action = parts[1] if len(parts) > 1 else ""
-                city = _resolve_city(self.db, parts[2] if len(parts) > 2 else "")
-                hospital = _resolve_hospital(self.db, city, parts[3] if len(parts) > 3 else "") if city else None
-                if not city or not hospital:
-                    await query.answer("المستشفى غير متاح حالياً. أعد فتح القائمة.", show_alert=True)
-                    return True
-                context.user_data.update({"pc_city": city, "pc_hospital": hospital.get("name")})
-                if action == "report":
-                    keyboard, header = build_doctors_keyboard(self.db, city, hospital)
-                    context.user_data["pc_state"] = "doctors"
-                    await self._edit(query, header, keyboard)
-                    await query.answer()
-                    return True
-                if action == "requests":
-                    requests = get_user_companion_requests(self.db, query.from_user.id)
-                    keyboard, _ = build_patient_actions_keyboard(city, hospital)
-                    await self._edit(query, _format_requests(requests), keyboard)
-                    await query.answer()
-                    return True
-                await query.answer("الإجراء غير متاح.", show_alert=True)
                 return True
 
             if prefix == CB_PC_DOCTOR_PAGE:
