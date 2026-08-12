@@ -14,6 +14,8 @@
       overflow: hidden; background: #fff; box-shadow: 0 2px 12px #999;
     }
     .sheet > img.background { position: absolute; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; }
+    /* إحداثيات الحقول ثابتة من اليسار، بينما اتجاه النص العربي يُضبط داخل الحقل فقط. */
+    .sheet { direction: ltr; }
     .field {
       position: absolute; z-index: 2; display: none; align-items: center; justify-content: center;
       padding: 0 5px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
