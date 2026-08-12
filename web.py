@@ -5,8 +5,10 @@ web.py — الإجازات المرضية
 واجهة النتيجة: HTML/CSS كاملة مبنية على تصميم منصة صحة الرسمي
 """
 
-import os, sys, base64
+import os, sys, base64, json
 from datetime import datetime, timedelta
+from urllib.parse import quote
+from urllib.request import urlopen
 from flask import Flask, request, jsonify
 
 # ══════════════════════════════════════════════
@@ -88,6 +90,36 @@ def index(gsl_code=None):
 @app.errorhandler(404)
 def not_found(e):
     return get_html(), 200
+
+
+def _get_telegram_chat_url():
+    """إرجاع رابط البوت دون إرسال رمز البوت إلى المتصفح."""
+    explicit_url = (os.environ.get("TELEGRAM_CHAT_URL") or "").strip()
+    if explicit_url.startswith(("https://t.me/", "tg://")):
+        return explicit_url
+
+    bot_token = (os.environ.get("BOT_TOKEN") or "").strip()
+    if not bot_token:
+        return None
+    try:
+        endpoint = f"https://api.telegram.org/bot{quote(bot_token, safe=':')}/getMe"
+        with urlopen(endpoint, timeout=5) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+        username = ((payload.get("result") or {}).get("username") or "").strip()
+        return f"https://t.me/{username}" if username else None
+    except Exception:
+        return None
+
+
+@app.route("/api/chat-link")
+def api_chat_link():
+    chat_url = _get_telegram_chat_url()
+    if not chat_url:
+        return jsonify({
+            "success": False,
+            "message": "المحادثة غير مهيأة حاليًا. يرجى التواصل مع إدارة الموقع."
+        }), 503
+    return jsonify({"success": True, "url": chat_url})
 
 
 @app.route("/api/verify")

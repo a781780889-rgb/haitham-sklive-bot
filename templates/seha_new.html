@@ -509,9 +509,28 @@ body { margin: 0; overflow-x: hidden; }
     text-decoration: none;
   }
   .ft-policy a:hover { color: #fff; }
-  .ft-policy span { opacity: 0.40; }
+    .ft-policy span { opacity: 0.40; }
 
-
+  /* زر المحادثة مستقل عن محتوى الصفحة والتذييل. */
+  .floating-chat { position: fixed; z-index: 1000; right: max(20px, env(safe-area-inset-right)); bottom: max(20px, calc(env(safe-area-inset-bottom) + 20px)); display: flex; flex-direction: column; align-items: flex-start; gap: 14px; direction: rtl; pointer-events: none; }
+  .floating-chat__toggle { width: 164px; min-height: 76px; padding: 8px 12px; border: 0; border-radius: 999px; background: #fff; color: #2563B0; box-shadow: 0 10px 24px rgba(15,55,103,.25), 0 2px 5px rgba(15,55,103,.16); display: inline-flex; align-items: center; justify-content: flex-end; cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; transition: transform 160ms ease, box-shadow 160ms ease; }
+  .floating-chat__toggle:hover { transform: translateY(-2px); box-shadow: 0 14px 28px rgba(15,55,103,.29), 0 3px 7px rgba(15,55,103,.15); }
+  .floating-chat__toggle:active { transform: translateY(0) scale(.98); }
+  .floating-chat__toggle:focus-visible, .floating-chat__close:focus-visible, .floating-chat__start:focus-visible { outline: 3px solid rgba(113,182,238,.9); outline-offset: 3px; }
+  .floating-chat__icon { width: 58px; height: 58px; flex: 0 0 58px; display: grid; place-items: center; border-radius: 50%; background: #2f6fb6; color: #fff; box-shadow: inset 0 -2px 0 rgba(0,0,0,.08); }
+  .floating-chat__icon svg { width: 27px; height: 27px; }
+  .floating-chat__panel { width: min(320px, calc(100vw - 40px)); box-sizing: border-box; padding: 18px; border-radius: 18px; background: #fff; color: #213547; box-shadow: 0 16px 38px rgba(15,55,103,.28); opacity: 0; visibility: hidden; transform: translateY(8px) scale(.98); transform-origin: bottom right; transition: opacity 160ms ease, transform 160ms ease, visibility 160ms ease; pointer-events: none; }
+  .floating-chat.is-open .floating-chat__panel { opacity: 1; visibility: visible; transform: translateY(0) scale(1); pointer-events: auto; }
+  .floating-chat__panel-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
+  .floating-chat__title { margin: 0; font-family: 'Cairo', Tahoma, Arial, sans-serif; font-size: 16px; font-weight: 700; color: #1e5eaa; }
+  .floating-chat__close { width: 32px; height: 32px; padding: 0; border: 0; border-radius: 50%; background: #edf4fb; color: #1e5eaa; font-size: 22px; line-height: 1; cursor: pointer; }
+  .floating-chat__message { margin: 0 0 15px; font-family: 'Cairo', Tahoma, Arial, sans-serif; font-size: 13px; line-height: 1.75; color: #526273; }
+  .floating-chat__start { width: 100%; min-height: 46px; border: 0; border-radius: 10px; background: #2f6fb6; color: #fff; font-family: 'Cairo', Tahoma, Arial, sans-serif; font-size: 14px; font-weight: 700; cursor: pointer; transition: background-color 160ms ease, transform 160ms ease; }
+  .floating-chat__start:hover { background: #215d9f; }
+  .floating-chat__start:active { transform: scale(.99); }
+  .floating-chat__status { min-height: 18px; margin: 9px 0 0; font-family: 'Cairo', Tahoma, Arial, sans-serif; font-size: 11px; line-height: 1.45; color: #7b8794; }
+  @media (min-width: 768px) { .floating-chat { right: 28px; bottom: 28px; } .floating-chat__toggle { width: 174px; min-height: 80px; } .floating-chat__icon { width: 62px; height: 62px; flex-basis: 62px; } }
+  @media (max-width: 360px) { .floating-chat { right: max(14px, env(safe-area-inset-right)); bottom: max(14px, calc(env(safe-area-inset-bottom) + 14px)); } .floating-chat__toggle { width: 146px; min-height: 68px; } .floating-chat__icon { width: 52px; height: 52px; flex-basis: 52px; } }
 </style>
 </head>
 <body>
@@ -911,6 +930,61 @@ body { margin: 0; overflow-x: hidden; }
   if (inputBack) inputBack.addEventListener('click', doReset);
   // Preserve the legacy result-page inline buttons.
   window.doReset = doReset;
+
+  // يفتح الرابط المعرّف للخدمة دون كشف رمز البوت على المتصفح.
+  document.addEventListener('DOMContentLoaded', () => {
+  const floatingChat = document.getElementById('floatingChat');
+  const chatToggle = document.getElementById('floatingChatToggle');
+  const chatClose = document.getElementById('floatingChatClose');
+  const chatStart = document.getElementById('floatingChatStart');
+  const chatStatus = document.getElementById('floatingChatStatus');
+  const setChatOpen = (open) => {
+    if (!floatingChat || !chatToggle) return;
+    floatingChat.classList.toggle('is-open', open);
+    chatToggle.setAttribute('aria-expanded', String(open));
+    if (open) chatStatus.textContent = '';
+  };
+  if (chatToggle) chatToggle.addEventListener('click', () => setChatOpen(!floatingChat.classList.contains('is-open')));
+  if (chatClose) chatClose.addEventListener('click', () => { setChatOpen(false); chatToggle.focus(); });
+  if (chatStart) chatStart.addEventListener('click', async () => {
+    chatStart.disabled = true;
+    chatStatus.textContent = 'جارٍ فتح المحادثة…';
+    try {
+      const response = await fetch('/api/chat-link', { headers: { Accept: 'application/json' } });
+      const payload = await response.json();
+      if (!response.ok || !payload.success || !payload.url) throw new Error(payload.message || 'تعذر فتح المحادثة الآن.');
+      window.open(payload.url, '_blank', 'noopener,noreferrer');
+      chatStatus.textContent = 'تم فتح المحادثة في علامة تبويب جديدة.';
+    } catch (error) {
+      chatStatus.textContent = error.message || 'تعذر فتح المحادثة الآن. حاول مرة أخرى لاحقًا.';
+    } finally {
+      chatStart.disabled = false;
+    }
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && floatingChat && floatingChat.classList.contains('is-open')) {
+      setChatOpen(false);
+      chatToggle.focus();
+    }
+  });
+  });
 })();
-</script></body>
+</script>
+<div id="floatingChat" class="floating-chat">
+  <section id="floatingChatPanel" class="floating-chat__panel" role="dialog" aria-modal="false" aria-labelledby="floatingChatTitle">
+    <div class="floating-chat__panel-header">
+      <h2 id="floatingChatTitle" class="floating-chat__title">مساعد منصة صحة</h2>
+      <button id="floatingChatClose" class="floating-chat__close" type="button" aria-label="إغلاق نافذة المحادثة">×</button>
+    </div>
+    <p class="floating-chat__message">هل تحتاج إلى مساعدة؟ يمكنك بدء محادثة مباشرة مع البوت عبر تيليجرام.</p>
+    <button id="floatingChatStart" class="floating-chat__start" type="button">فتح المحادثة</button>
+    <p id="floatingChatStatus" class="floating-chat__status" role="status" aria-live="polite"></p>
+  </section>
+  <button id="floatingChatToggle" class="floating-chat__toggle" type="button" aria-label="فتح محادثة مساعد منصة صحة" aria-expanded="false" aria-controls="floatingChatPanel">
+    <span class="floating-chat__icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" focusable="false"><path d="M6.5 5.25h11A2.25 2.25 0 0 1 19.75 7.5v6A2.25 2.25 0 0 1 17.5 15.75h-6.2L7 18.75v-3.12A2.24 2.24 0 0 1 4.25 13.5v-6A2.25 2.25 0 0 1 6.5 5.25Z" fill="currentColor"/><circle cx="9" cy="10.5" r="1.05" fill="#2F6FB6"/><circle cx="12" cy="10.5" r="1.05" fill="#2F6FB6"/><circle cx="15" cy="10.5" r="1.05" fill="#2F6FB6"/></svg>
+    </span>
+  </button>
+</div>
+</body>
 </html>
