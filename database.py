@@ -302,11 +302,78 @@ def init_db():
 
     conn.commit()
     conn.close()
+    # ── إضافة الأعمدة الناقصة على PostgreSQL بمعاملات مستقلة ──
+    _ensure_pg_columns()
 
 
 # ═══════════════════════════════════════════════════════════════
 # مزامنة تصنيف المستشفيات من hospitals_data.py
 # ═══════════════════════════════════════════════════════════════
+
+def _ensure_pg_columns() -> None:
+    """
+    إضافة الأعمدة الجديدة على PostgreSQL بمعاملات مستقلة (autocommit).
+
+    سبب إضافتها: الـ migrations داخل init_db تُنفَّذ داخل معاملة واحدة؛
+    وإذا فشلت أي جملة في منتصف المعاملة على PostgreSQL تُوقف المعاملة
+    بالكامل، فيُفقد كل ما سبقها عند الإغلاق.
+    هذه الدالة تعمل باتصال منفصل ومستقل، فتضمن إضافة الأعمدة فعليًا.
+    """
+    if not USE_POSTGRES:
+        return
+    try:
+        import psycopg2
+    except ImportError:
+        return
+    from db_adapter import DATABASE_URL as _db_url
+    if not _db_url:
+        return
+    columns = [
+        ("pdf_templates",        "is_active",     "INTEGER DEFAULT 0"),
+        ("pdf_templates",        "template_type", "TEXT DEFAULT 'excuse'"),
+        ("patient_companion_requests", "details",        "TEXT DEFAULT ''"),
+        ("patient_companion_requests", "doctor",         "TEXT DEFAULT ''"),
+        ("patient_companion_requests", "specialty",      "TEXT DEFAULT ''"),
+        ("patient_companion_requests", "companion_name", "TEXT DEFAULT ''"),
+        ("patient_companion_requests", "id_number",      "TEXT DEFAULT ''"),
+        ("patient_companion_requests", "nationality",    "TEXT DEFAULT ''"),
+        ("patient_companion_requests", "relation",       "TEXT DEFAULT ''"),
+        ("patient_companion_requests", "workplace",      "TEXT DEFAULT ''"),
+        ("patient_companion_requests", "admission_date", "TEXT DEFAULT ''"),
+        ("patient_companion_requests", "days_count",     "INTEGER DEFAULT 1"),
+        ("patient_companion_requests", "gsl_code",       "TEXT DEFAULT ''"),
+        ("patient_companion_requests", "pdf_path",       "TEXT DEFAULT ''"),
+        ("patient_companion_requests", "status",         "TEXT DEFAULT 'pending'"),
+    ]
+    conn = None
+    try:
+        conn = psycopg2.connect(_db_url)
+        conn.autocommit = True
+        with conn.cursor() as cur:
+            for table, column, type_sql in columns:
+                try:
+                    cur.execute(
+                        "SELECT column_name FROM information_schema.columns "
+                        "WHERE table_name=%s AND column_name=%s",
+                        (table, column),
+                    )
+                    if cur.fetchone():
+                        continue
+                    cur.execute(
+                        f"ALTER TABLE {table} ADD COLUMN {column} {type_sql}"
+                    )
+                    logger.info(f"✅ أُضيف العمود {table}.{column}")
+                except Exception as e:
+                    logger.warning(f"⚠️ تعذّر إضافة {table}.{column}: {e}")
+    except Exception as e:
+        logger.warning(f"⚠️ تعذّر تشغيل _ensure_pg_columns: {e}")
+    finally:
+        try:
+            if conn:
+                conn.close()
+        except Exception:
+            pass
+
 
 def sync_hospital_types_from_data(conn=None):
     """
@@ -1710,9 +1777,10 @@ def init_vouchers_table(conn):
     conn.execute("CREATE INDEX IF NOT EXISTS idx_voucher_used    ON voucher_codes(is_used)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_voucher_usedby  ON voucher_codes(used_by)")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_voucher_created ON voucher_codes(created_at)")
-    # إضافة عمود expires_at إن لم يكن موجوداً (migration آمن)
+    # إضافة عمود expires_at إن لم يكن موجوداً (migration آمن — داخل SAVEPOINT لمنع فشل المعاملة الأم على PG)
     try:
-        conn.execute("ALTER TABLE voucher_codes ADD COLUMN expires_at TEXT DEFAULT NULL")
+        with conn.savepoint("voucher_alt"):
+            conn.execute("ALTER TABLE voucher_codes ADD COLUMN expires_at TEXT DEFAULT NULL")
     except Exception:
         pass  # العمود موجود مسبقاً
 

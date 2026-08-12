@@ -401,6 +401,15 @@ class _PGConnection:
         self._conn.autocommit = False
         self.row_factory = None  # يُتجاهل — _Row يُستخدم دوماً
 
+    @property
+    def autocommit(self):
+        """خاصية autocommit المتوافقة مع psycopg2 (تُستخدم في _ensure_pg_columns)."""
+        return self._conn.autocommit
+
+    @autocommit.setter
+    def autocommit(self, value):
+        self._conn.autocommit = bool(value)
+
     def cursor(self):
         return _PGCursor(self._conn.cursor())
 

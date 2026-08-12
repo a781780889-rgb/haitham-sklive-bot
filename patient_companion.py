@@ -317,30 +317,61 @@ def _resolve_specialty(spec_token: str) -> Optional[str]:
 
 
 def _ensure_storage(db_module) -> None:
+    from db_adapter import USE_POSTGRES
     conn = db_module.get_conn()
     try:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS patient_companion_requests (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                city TEXT NOT NULL,
-                hospital TEXT NOT NULL,
-                doctor TEXT NOT NULL DEFAULT '',
-                specialty TEXT NOT NULL DEFAULT '',
-                companion_name TEXT DEFAULT '',
-                id_number TEXT DEFAULT '',
-                nationality TEXT DEFAULT '',
-                relation TEXT DEFAULT '',
-                workplace TEXT DEFAULT '',
-                admission_date TEXT DEFAULT '',
-                days_count INTEGER DEFAULT 1,
-                gsl_code TEXT DEFAULT '',
-                pdf_path TEXT DEFAULT '',
-                status TEXT DEFAULT 'pending',
-                created_at TEXT DEFAULT (datetime('now'))
-            )
-        """)
-        # إضافة أعمدة جديدة للإصدارات القديمة من الجدول
+        # ── إنشاء الجدول بصيغة متوافقة مع SQLite وPostgreSQL ──
+        if USE_POSTGRES:
+            # على PostgreSQL: SERIAL للترقيم، CURRENT_TIMESTAMP بدل datetime('now')
+            create_sql = """
+                CREATE TABLE IF NOT EXISTS patient_companion_requests (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL,
+                    city TEXT NOT NULL,
+                    hospital TEXT NOT NULL,
+                    doctor TEXT NOT NULL DEFAULT '',
+                    specialty TEXT NOT NULL DEFAULT '',
+                    companion_name TEXT DEFAULT '',
+                    id_number TEXT DEFAULT '',
+                    nationality TEXT DEFAULT '',
+                    relation TEXT DEFAULT '',
+                    workplace TEXT DEFAULT '',
+                    admission_date TEXT DEFAULT '',
+                    days_count INTEGER DEFAULT 1,
+                    gsl_code TEXT DEFAULT '',
+                    pdf_path TEXT DEFAULT '',
+                    status TEXT DEFAULT 'pending',
+                    details TEXT DEFAULT '',
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )
+            """
+        else:
+            create_sql = """
+                CREATE TABLE IF NOT EXISTS patient_companion_requests (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    city TEXT NOT NULL,
+                    hospital TEXT NOT NULL,
+                    doctor TEXT NOT NULL DEFAULT '',
+                    specialty TEXT NOT NULL DEFAULT '',
+                    companion_name TEXT DEFAULT '',
+                    id_number TEXT DEFAULT '',
+                    nationality TEXT DEFAULT '',
+                    relation TEXT DEFAULT '',
+                    workplace TEXT DEFAULT '',
+                    admission_date TEXT DEFAULT '',
+                    days_count INTEGER DEFAULT 1,
+                    gsl_code TEXT DEFAULT '',
+                    pdf_path TEXT DEFAULT '',
+                    status TEXT DEFAULT 'pending',
+                    details TEXT DEFAULT '',
+                    created_at TEXT DEFAULT (datetime('now'))
+                )
+            """
+        # ── كل جملة داخل SAVEPOINT: في PostgreSQL فشل أي جملة خارج نقطة الحفظ
+        #     يُبطل المعاملة الأم بالكامل ("transaction is aborted") فنفقد كل ما سبقها ──
+        with conn.savepoint("pc_create"):
+            conn.execute(create_sql)
         for column in [
             ("doctor", "TEXT NOT NULL DEFAULT ''"),
             ("specialty", "TEXT NOT NULL DEFAULT ''"),
@@ -353,13 +384,31 @@ def _ensure_storage(db_module) -> None:
             ("days_count", "INTEGER DEFAULT 1"),
             ("gsl_code", "TEXT DEFAULT ''"),
             ("pdf_path", "TEXT DEFAULT ''"),
+            ("status", "TEXT DEFAULT 'pending'"),
+            ("details", "TEXT DEFAULT ''"),
         ]:
             try:
-                conn.execute(
-                    f"ALTER TABLE patient_companion_requests ADD COLUMN {column[0]} {column[1]}"
-                )
+                with conn.savepoint("pc_alt"):
+                    conn.execute(
+                        f"ALTER TABLE patient_companion_requests ADD COLUMN {column[0]} {column[1]}"
+                    )
             except Exception:
                 pass
+        # إزالة قيد NOT NULL إن كان عمود details قديمًا معرفًا بدون قيمة افتراضية
+        try:
+            with conn.savepoint("pc_details_nn"):
+                conn.execute(
+                    "ALTER TABLE patient_companion_requests ALTER COLUMN details DROP NOT NULL"
+                )
+        except Exception:
+            pass
+        try:
+            with conn.savepoint("pc_details_def"):
+                conn.execute(
+                    "ALTER TABLE patient_companion_requests ALTER COLUMN details SET DEFAULT ''"
+                )
+        except Exception:
+            pass
         conn.commit()
     finally:
         conn.close()
@@ -948,18 +997,21 @@ class PatientCompanionFlow:
             "days_count": "🔢 عدد الأيام",
         }
         lines = [
-            "🏥 *مرافق مريض* — *مراجعة البيانات*\n\n"
-            f"📍 المدينة: *{city}*\n"
-            f"🏥 المستشفى: *{hospital}*\n"
-            f"👨‍⚕️ الطبيب: *{doctor}*\n"
-            f"🩺 المسمى الوظيفي: *{specialty}*\n",
-            "\n📝 *بيانات المرافق:*\n",
+            "🏥 *مرافق مريض* — *مراجعة البيانات*",
+            "",
+            "📍 *المدينة:* " + f"{city}",
+            "🏥 *المستشفى:* " + f"{hospital}",
+            "👨‍⚕️ *الطبيب:* " + f"{doctor}",
+            "🩺 *المسمى الوظيفي:* " + f"{specialty}",
+            "",
+            "📝 *بيانات المرافق:*",
+            "",
         ]
         for key, label in field_labels.items():
             value = str(extracted.get(key, "") or "").strip()
-            if value:
-                lines.append(f"{label}: *{value}*")
-        lines.append("\n⚠️ *راجع البيانات أعلاه قبل إصدار التقرير.*")
+            lines.append(f"{label}: *{value}*" if value else f"{label}: ❌ غير مذكور")
+        lines.append("")
+        lines.append("⚠️ *راجع البيانات أعلاه قبل إصدار التقرير.*")
         keyboard = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton("✅ تأكيد وإصدار التقرير", callback_data=CB_PC_CONFIRM),
