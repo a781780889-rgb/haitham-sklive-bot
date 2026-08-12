@@ -1957,6 +1957,14 @@ def delete_voucher(code: str) -> bool:
 # ════════════════════════════════════════════════════════════
 # ─── تشغيل Migration عند استيراد الملف تلقائياً ───
 # ════════════════════════════════════════════════════════════
+# ── ضمان إضافة الأعمدة الناقصة على PostgreSQL عند الاستيراد ──
+# (init_db() غير مستدعاة صراحة في bot.py، وهذا هو السبب في أن الأعمدة
+#  template_type و details لم تُضف على Railway رغم وجودها في init_db)
+try:
+    _ensure_pg_columns()
+except Exception as _e:
+    logging.getLogger(__name__).warning(f"pg columns migration warning: {_e}")
+
 try:
     _migrate_add_tier_column()
 except Exception as _e:
