@@ -2510,7 +2510,6 @@ async def generate_and_send_companion_pdf(update, context, uid, pc_data):
 
     await message.reply_text("⏳ جاري إنشاء ملف PDF...", reply_markup=back_keyboard())
     pdf_path_temp = None
-    template_path_tmp = None
 
     try:
         logo_path = db.get_hospital_logo(hospital)
@@ -2518,23 +2517,8 @@ async def generate_and_send_companion_pdf(update, context, uid, pc_data):
         pdf_path_temp = os.path.join(tempfile.gettempdir(), f"companion_{uid}_{int(datetime.now().timestamp())}.pdf")
         pdf_path = pdf_path_temp
 
-        # ── جلب القالب من قاعدة البيانات ──
-        # تُفحص أولاً قوالب مرافق مريض المخصصة؛ وعند غيابها يُستخدم القالب الافتراضي (إجازة).
-        active_template = db.get_companion_template()
-        _companion_tpl_missing = active_template is None
-        if _companion_tpl_missing:
-            active_template = db.get_active_template()
-        if not active_template:
-            raise FileNotFoundError("لا يوجد قالب PDF مفعّل")
-        template_path = db.get_template_file_path(active_template["id"])
-        if not template_path or not os.path.exists(template_path):
-            raise FileNotFoundError("ملف القالب مفقود")
-
-        if os.path.getsize(template_path) < 1000:
-            raise FileNotFoundError("ملف القالب تالف أو صغير جداً")
-
-        template_path_tmp = template_path
-
+        # القالب المعتمد لقسم مرافق مريض هو HTML المضمّن في templates/.
+        # لا نعود إلى قوالب PDF القديمة أو قالب الإجازة العام.
         hospital_type_val = (db.get_hospital_by_name(hospital) or {}).get("hospital_type") or "حكومي"
         pre_gsl_code = db.generate_gsl_code(hospital_type=hospital_type_val)
 
@@ -2555,7 +2539,6 @@ async def generate_and_send_companion_pdf(update, context, uid, pc_data):
             logo_path    = logo_path,
             website_url  = website_url or "https://sehasa.online",
             gsl_code     = pre_gsl_code,
-            template_path = template_path,
         )
 
         logger.info(f"generate_companion_pdf user={uid}: تم إنشاء PDF بنجاح → {pdf_path} ({os.path.getsize(pdf_path):,} bytes)")
@@ -2631,12 +2614,6 @@ async def generate_and_send_companion_pdf(update, context, uid, pc_data):
         try:
             if pdf_path_temp and os.path.exists(pdf_path_temp):
                 os.remove(pdf_path_temp)
-        except Exception:
-            pass
-        try:
-            if template_path_tmp and os.path.exists(template_path_tmp):
-                if template_path_tmp.startswith(tempfile.gettempdir()):
-                    os.remove(template_path_tmp)
         except Exception:
             pass
 
