@@ -1105,7 +1105,7 @@ def set_companion_template_active(template_id):
         conn.close()
 
 def delete_companion_template():
-    """يحذف قالب مرافق مريض المعتمد (البند والملف) ويعيد العدد المحذوف."""
+    """يحذف كل قوالب مرافق مريض (البند والملف) ويعيد العدد المحذوف."""
     conn = get_conn()
     try:
         rows = conn.execute(
@@ -1113,15 +1113,46 @@ def delete_companion_template():
         ).fetchall()
         count = 0
         for r in rows:
-            if r["file_path"] and r["file_path"].startswith("db:"):
-                try:
-                    delete_file(r["file_path"][3:])
-                except Exception as _e:
-                    logger.warning(f"delete_companion_template: فشل حذف الملف {r['file_path']}: {_e}")
-            conn.execute("DELETE FROM pdf_templates WHERE id=?", (r["id"],))
+            delete_companion_row(conn, r["id"], r["file_path"])
             count += 1
         conn.commit()
         return count
+    finally:
+        conn.close()
+
+def delete_companion_template_by_id(template_id):
+    """يحذف قالب مرافق معين بالمعرّف (البند والملف) ويعيد True عند النجاح."""
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            "SELECT id, file_path FROM pdf_templates WHERE id=? AND template_type='companion'",
+            (template_id,)
+        ).fetchone()
+        if not row:
+            return False
+        delete_companion_row(conn, row["id"], row["file_path"])
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+def delete_companion_row(conn, tpl_id, file_path):
+    """يحذف بند قالب مرافق وملفه الثنائي. conn: اتصال مفتوح."""
+    if file_path and file_path.startswith("db:"):
+        try:
+            delete_file(file_path[3:])
+        except Exception as _e:
+            logger.warning(f"delete_companion_row: فشل حذف الملف {file_path}: {_e}")
+    conn.execute("DELETE FROM pdf_templates WHERE id=?", (tpl_id,))
+
+def get_all_companion_templates():
+    """يُعيد كل قوالب مرافق مريض المرفوعة (معتمدة وغير معتمدة) مرتبة بـ ID."""
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM pdf_templates WHERE template_type='companion' ORDER BY id DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
     finally:
         conn.close()
 

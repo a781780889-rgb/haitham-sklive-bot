@@ -809,6 +809,16 @@ def templates_keyboard():
         [KeyboardButton("⬅️ رجوع")],
     ], resize_keyboard=True)
 
+def companion_templates_keyboard():
+    """لوحة إدارة قالب مرافق مريض — الأزرار الخمسة الأساسية."""
+    return ReplyKeyboardMarkup([
+        [KeyboardButton("➕ إضافة قالب مرافق مريض")],
+        [KeyboardButton("📋 عرض كل القوالب")],
+        [KeyboardButton("⭐ تعيين القالب الافتراضي")],
+        [KeyboardButton("🗑 حذف القالب")],
+        [KeyboardButton("⬅️ رجوع")],
+    ], resize_keyboard=True)
+
 def logos_keyboard():
     return ReplyKeyboardMarkup([
         [KeyboardButton("➕ رفع شعار (حسب النوع)")],
@@ -2886,12 +2896,12 @@ async def handle_admin_router(update, context, text, uid, name):
 
     # ── قالب مرافق مريض (من لوحة الإدارة مباشرة أو من قوالب PDF) ──
     if text == "🧑‍🤝‍🧑 قالب مرافق مريض":
-        _show_companion_template_panel(uid, update, state)
+        await _show_companion_template_panel(uid, update, state)
         return
 
-    # لوحة إدارة قالب مرافق مريض
+    # ── لوحة إدارة قالب مرافق مريض (الأزرار الخمسة) ──
     if state == "admin_companion_template":
-        if text == "➕ رفع قالب مرافق PDF":
+        if text == "➕ إضافة قالب مرافق مريض":
             context.user_data["state"] = "admin_companion_template_upload"
             await update.message.reply_text(
                 "📤 *رفع قالب مرافق مريض*\n\n"
@@ -2901,24 +2911,49 @@ async def handle_admin_router(update, context, text, uid, name):
                 reply_markup=ReplyKeyboardMarkup([[KeyboardButton("⬅️ رجوع")]], resize_keyboard=True)
             )
             return
-        if text == "🗑 حذف قالب المرافق":
-            deleted = db.delete_companion_template()
-            if deleted:
-                await update.message.reply_text("✅ تم حذف قالب مرافق مريض.\n\nسيُستخدم الآن قالب الإجازة الافتراضي عند إصدار تقارير المرافقين.", reply_markup=templates_keyboard())
-            else:
-                await update.message.reply_text("❌ لا يوجد قالب مرافق مريض لحذفه.", reply_markup=templates_keyboard())
+
+        if text == "📋 عرض كل القوالب":
+            await _show_all_companion_templates(update)
             return
+
+        if text == "⭐ تعيين القالب الافتراضي":
+            await _show_companion_set_default(update, context)
+            return
+
+        if text == "🗑 حذف القالب":
+            await _show_companion_delete(update, context)
+            return
+
         if text == "⬅️ رجوع":
             context.user_data["state"] = "admin_templates"
             await update.message.reply_text("⚙️ قوالب PDF", reply_markup=templates_keyboard())
             return
-        # أي نص آخر غير مطابقة → لوحة المرافق
-        _show_companion_template_panel(uid, update, state)
+
+        # أي نص آخر غير مطابقة → إعادة عرض لوحة المرافق
+        await _show_companion_template_panel(uid, update, state)
         return
 
     if state == "admin_companion_template_upload" and text == "⬅️ رجوع":
         context.user_data["state"] = "admin_companion_template"
-        _show_companion_template_panel(uid, update, state)
+        await _show_companion_template_panel(uid, update, state)
+        return
+
+    if state == "admin_companion_template_set_default" and text == "⬅️ رجوع":
+        context.user_data["state"] = "admin_companion_template"
+        await _show_companion_template_panel(uid, update, state)
+        return
+
+    if state == "admin_companion_template_delete" and text == "⬅️ رجوع":
+        context.user_data["state"] = "admin_companion_template"
+        await _show_companion_template_panel(uid, update, state)
+        return
+
+    # اختيار قالب مرافق معين لتعيينه افتراضياً أو حذفه
+    if state == "admin_companion_template_set_default" and text.startswith("⭐ #"):
+        await _set_companion_default(update, text)
+        return
+    if state == "admin_companion_template_delete" and text.startswith("🗑 #"):
+        await _delete_companion_by_id(update, text)
         return
 
     if text == "🔔 الإشعارات":
@@ -4058,38 +4093,118 @@ async def handle_dashboard_router(update, context, text, uid, name):
 # 🧑‍🤝‍🧑 لوحة إدارة قالب مرافق مريض
 # ══════════════════════════════════════════════
 async def _show_companion_template_panel(uid, update, state):
-    """يعرض حالة قالب مرافق مريض المعتمد مع أزرار الرفع/الحذف/الرجوع."""
+    """يعرض حالة قالب مرافق مريض المعتمد مع الأزرار الخمسة."""
     tpl = db.get_companion_template()
-    _prev = "admin_templates"
-    rows = [
-        [KeyboardButton("➕ رفع قالب مرافق PDF")],
-        [KeyboardButton("🗑 حذف قالب المرافق")],
-        [KeyboardButton("⬅️ رجوع")],
-    ]
+    context.user_data["state"] = "admin_companion_template"
     if tpl:
-        context.user_data["state"] = "admin_companion_template"
         size_kb = tpl.get("size_bytes", 0) // 1024
-        await update.message.reply_text(
+        text = (
             "🧑‍🤝‍🧑 *قالب مرافق مريض*\n\n"
             "📄 *القالب المعتمد حالياً:*\n"
             f"• الاسم: {tpl.get('name', '—')}\n"
             f"• المعرّف: #{tpl.get('id')}\n"
             f"• الحجم: {size_kb:,} كيلو\n"
             f"• الإضافة: {tpl.get('created_at', '—')}\n\n"
-            "عند رفع قالب جديد سيُعتمد تلقائياً ويحل محل الحالي.",
-            parse_mode="Markdown",
-            reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+            "• لإضافة قالب جديد: ➕ إضافة قالب مرافق مريض\n"
+            "• عند رفع قالب جديد سيُعتمد تلقائياً ويحل محل الحالي."
         )
     else:
-        context.user_data["state"] = "admin_companion_template"
-        await update.message.reply_text(
+        text = (
             "🧑‍🤝‍🧑 *قالب مرافق مريض*\n\n"
             "⚠️ *لا يوجد قالب مخصص لقسم مرافق مريض.*\n"
             "يُستخدم حالياً قالب الإجازة الافتراضي.\n\n"
-            "أرسل ملف PDF خاصاً بقسم مرافق مريض ليُعتمد:",
-            parse_mode="Markdown",
-            reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+            "• لإضافة قالب: ➕ إضافة قالب مرافق مريض\n"
+            "• لعرض كل قوالب المرافق المرفوعة: 📋 عرض كل القوالب"
         )
+    await update.message.reply_text(
+        text,
+        parse_mode="Markdown",
+        reply_markup=companion_templates_keyboard()
+    )
+
+async def _show_all_companion_templates(update):
+    """يعرض كل قوالب مرافق مريض المرفوعة مع علامة القالب المعتمد."""
+    tpls = db.get_all_companion_templates()
+    if not tpls:
+        await update.message.reply_text(
+            "📋 لا توجد قوالب مرافق مريض مرفوعة بعد.\n\n"
+            "استخدم ➕ إضافة قالب مرافق مريض لرفع قالب.",
+            reply_markup=companion_templates_keyboard()
+        )
+        return
+    lines = []
+    for t in tpls:
+        mark = "⭐ " if t.get("is_active") else ""
+        lines.append(f"{mark}#{t['id']} — {t.get('name','قالب مرافق')} ({(t.get('file_size') or t.get('size_bytes',0))//1024} كيلو)")
+    await update.message.reply_text(
+        "📋 *قوالب مرافق مريض المرفوعة:*\n\n" + "\n".join(lines) +
+        "\n\n⭐ = القالب المعتمد الذي يُستخدم عند الإصدار",
+        parse_mode="Markdown",
+        reply_markup=companion_templates_keyboard()
+    )
+
+async def _show_companion_set_default(update, context):
+    """يعرض قوالب مرافق مريض للاختيار منها كقالب افتراضي معتمد."""
+    tpls = db.get_all_companion_templates()
+    if not tpls:
+        await update.message.reply_text(
+            "⭐ لا توجد قوالب مرافق مريض لتعيينها.\n\n"
+            "استخدم ➕ إضافة قالب مرافق مريض لرفع قالب أولاً.",
+            reply_markup=companion_templates_keyboard()
+        )
+        return
+    context.user_data["state"] = "admin_companion_template_set_default"
+    rows = [[KeyboardButton(f"⭐ #{t['id']} — {t.get('name','قالب مرافق')}")] for t in tpls]
+    rows.append([KeyboardButton("⬅️ رجوع")])
+    await update.message.reply_text(
+        "⭐ اختر القالب المعتمد لقسم مرافق مريض:",
+        reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+    )
+
+async def _set_companion_default(update, text):
+    """يعيّن قالب مرافق معين كالمعتمد."""
+    try:
+        template_id = int(text.split("#")[1].split("—")[0].strip())
+        db.set_companion_template_active(template_id)
+        await update.message.reply_text(
+            f"✅ تم تعيين قالب مرافق مريض #{template_id} كقالب افتراضي معتمد.\n\n"
+            "سيُستخدم عند إصدار تقارير «مرافق مريض».",
+            reply_markup=companion_templates_keyboard()
+        )
+    except Exception as _e:
+        await update.message.reply_text(f"❌ خطأ: {_e}", reply_markup=companion_templates_keyboard())
+
+async def _show_companion_delete(update, context):
+    """يعرض قوالب مرافق مريض للاختيار منها للحذف."""
+    tpls = db.get_all_companion_templates()
+    if not tpls:
+        await update.message.reply_text(
+            "🗑 لا توجد قوالب مرافق مريض لحذفها.",
+            reply_markup=companion_templates_keyboard()
+        )
+        return
+    context.user_data["state"] = "admin_companion_template_delete"
+    rows = [[KeyboardButton(f"🗑 #{t['id']} — {t.get('name','قالب مرافق')}")] for t in tpls]
+    rows.append([KeyboardButton("⬅️ رجوع")])
+    await update.message.reply_text(
+        "⚠️ اختر القالب لحذفه:\n\n"
+        "يمكن حذف قوالب غير معتمدة، ويُحذف المعتمد أيضاً ويعود النظام لقالب الإجازة الافتراضي.",
+        reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+    )
+
+async def _delete_companion_by_id(update, text):
+    """يحذف قالب مرافق معين بواسطة معرّفه."""
+    try:
+        template_id = int(text.split("#")[1].split("—")[0].strip())
+        if not db.delete_companion_template_by_id(template_id):
+            await update.message.reply_text("❌ لم يُوجد هذا القالب.", reply_markup=companion_templates_keyboard())
+            return
+        await update.message.reply_text(
+            f"✅ تم حذف قالب مرافق مريض #{template_id}.",
+            reply_markup=companion_templates_keyboard()
+        )
+    except Exception as _e:
+        await update.message.reply_text(f"❌ خطأ: {_e}", reply_markup=companion_templates_keyboard())
 
 
 # ══════════════════════════════════════════════
@@ -4144,14 +4259,14 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"• الحجم: {len(pdf_bytes)//1024:,} كيلو\n\n"
                     "سيُستخدم هذا القالب تلقائياً عند إصدار تقارير «مرافق مريض».",
                     parse_mode="Markdown",
-                    reply_markup=templates_keyboard()
+                    reply_markup=companion_templates_keyboard()
                 )
             else:
                 await update.message.reply_text(
                     "❌ فشل حفظ القالب. تحقق من السجلات.",
-                    reply_markup=templates_keyboard()
+                    reply_markup=companion_templates_keyboard()
                 )
-            context.user_data["state"] = "admin_templates"
+            context.user_data["state"] = "admin_companion_template"
         except Exception as _e:
             logger.error(f"handle_document companion error: {_e}", exc_info=True)
             await update.message.reply_text(
