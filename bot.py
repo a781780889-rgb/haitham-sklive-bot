@@ -4558,6 +4558,11 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # 🚀 نقطة التشغيل الرئيسية
 # ══════════════════════════════════════════════
 def main():
+    # ── تهيئة قاعدة البيانات وإضافة الأعمدة الناقصة على PostgreSQL قبل البدء ──
+    try:
+        db.init_db()
+    except Exception as _e:
+        logger.warning(f"⚠️ init_db warning: {_e}")
     application = (
         Application.builder()
         .token(BOT_TOKEN)
