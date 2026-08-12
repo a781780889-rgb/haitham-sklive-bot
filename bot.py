@@ -790,7 +790,7 @@ def admin_keyboard():
     count = pr.get_pending_count()
     badge = f" 🔴{count}" if count > 0 else ""
     return ReplyKeyboardMarkup([
-        [KeyboardButton("📄 قوالب PDF"),     KeyboardButton("🖼️ شعارات المستشفيات")],
+        [KeyboardButton("📄 قوالب PDF"),     KeyboardButton("🧑‍🤝‍🧑 قالب مرافق مريض")],
         [KeyboardButton("🏥 إدارة المستشفيات"), KeyboardButton("👨‍⚕️ إدارة الأطباء")],
         [KeyboardButton("👥 المستخدمين"),    KeyboardButton("📊 الطلبات")],
         [KeyboardButton("💰 المعاملات المالية"), KeyboardButton("🎫 أكواد الشحن")],
@@ -802,6 +802,7 @@ def admin_keyboard():
 def templates_keyboard():
     return ReplyKeyboardMarkup([
         [KeyboardButton("➕ إضافة قالب PDF جديد")],
+        [KeyboardButton("🧑‍🤝‍🧑 قالب مرافق مريض")],
         [KeyboardButton("📋 عرض كل القوالب")],
         [KeyboardButton("⭐ تعيين قالب افتراضي")],
         [KeyboardButton("🗑 حذف قالب")],
@@ -2508,10 +2509,13 @@ async def generate_and_send_companion_pdf(update, context, uid, pc_data):
         pdf_path = pdf_path_temp
 
         # ── جلب القالب من قاعدة البيانات ──
-        active_template = db.get_active_template()
+        # تُفحص أولاً قوالب مرافق مريض المخصصة؛ وعند غيابها يُستخدم القالب الافتراضي (إجازة).
+        active_template = db.get_companion_template()
+        _companion_tpl_missing = active_template is None
+        if _companion_tpl_missing:
+            active_template = db.get_active_template()
         if not active_template:
             raise FileNotFoundError("لا يوجد قالب PDF مفعّل")
-
         template_path = db.get_template_file_path(active_template["id"])
         if not template_path or not os.path.exists(template_path):
             raise FileNotFoundError("ملف القالب مفقود")
@@ -2880,6 +2884,43 @@ async def handle_admin_router(update, context, text, uid, name):
         )
         return
 
+    # ── قالب مرافق مريض (من لوحة الإدارة مباشرة أو من قوالب PDF) ──
+    if text == "🧑‍🤝‍🧑 قالب مرافق مريض":
+        _show_companion_template_panel(uid, update, state)
+        return
+
+    # لوحة إدارة قالب مرافق مريض
+    if state == "admin_companion_template":
+        if text == "➕ رفع قالب مرافق PDF":
+            context.user_data["state"] = "admin_companion_template_upload"
+            await update.message.reply_text(
+                "📤 *رفع قالب مرافق مريض*\n\n"
+                "أرسل ملف PDF الآن.\n"
+                "سيُعتمد تلقائياً لقسم «مرافق مريض» ويُستخدم عند إصدار التقارير.",
+                parse_mode="Markdown",
+                reply_markup=ReplyKeyboardMarkup([[KeyboardButton("⬅️ رجوع")]], resize_keyboard=True)
+            )
+            return
+        if text == "🗑 حذف قالب المرافق":
+            deleted = db.delete_companion_template()
+            if deleted:
+                await update.message.reply_text("✅ تم حذف قالب مرافق مريض.\n\nسيُستخدم الآن قالب الإجازة الافتراضي عند إصدار تقارير المرافقين.", reply_markup=templates_keyboard())
+            else:
+                await update.message.reply_text("❌ لا يوجد قالب مرافق مريض لحذفه.", reply_markup=templates_keyboard())
+            return
+        if text == "⬅️ رجوع":
+            context.user_data["state"] = "admin_templates"
+            await update.message.reply_text("⚙️ قوالب PDF", reply_markup=templates_keyboard())
+            return
+        # أي نص آخر غير مطابقة → لوحة المرافق
+        _show_companion_template_panel(uid, update, state)
+        return
+
+    if state == "admin_companion_template_upload" and text == "⬅️ رجوع":
+        context.user_data["state"] = "admin_companion_template"
+        _show_companion_template_panel(uid, update, state)
+        return
+
     if text == "🔔 الإشعارات":
         await update.message.reply_text(
             "🔔 *الإشعارات*\n\n"
@@ -2890,7 +2931,7 @@ async def handle_admin_router(update, context, text, uid, name):
         return
 
     # ── قوالب PDF ──
-    if state == "admin_templates":
+    if text == "📄 قوالب PDF" or state == "admin_templates":
         if text == "➕ إضافة قالب PDF جديد":
             context.user_data["state"] = "admin_template_upload"
             await update.message.reply_text(
@@ -4014,6 +4055,116 @@ async def handle_dashboard_router(update, context, text, uid, name):
 
 
 # ══════════════════════════════════════════════
+# 🧑‍🤝‍🧑 لوحة إدارة قالب مرافق مريض
+# ══════════════════════════════════════════════
+async def _show_companion_template_panel(uid, update, state):
+    """يعرض حالة قالب مرافق مريض المعتمد مع أزرار الرفع/الحذف/الرجوع."""
+    tpl = db.get_companion_template()
+    _prev = "admin_templates"
+    rows = [
+        [KeyboardButton("➕ رفع قالب مرافق PDF")],
+        [KeyboardButton("🗑 حذف قالب المرافق")],
+        [KeyboardButton("⬅️ رجوع")],
+    ]
+    if tpl:
+        context.user_data["state"] = "admin_companion_template"
+        size_kb = tpl.get("size_bytes", 0) // 1024
+        await update.message.reply_text(
+            "🧑‍🤝‍🧑 *قالب مرافق مريض*\n\n"
+            "📄 *القالب المعتمد حالياً:*\n"
+            f"• الاسم: {tpl.get('name', '—')}\n"
+            f"• المعرّف: #{tpl.get('id')}\n"
+            f"• الحجم: {size_kb:,} كيلو\n"
+            f"• الإضافة: {tpl.get('created_at', '—')}\n\n"
+            "عند رفع قالب جديد سيُعتمد تلقائياً ويحل محل الحالي.",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+        )
+    else:
+        context.user_data["state"] = "admin_companion_template"
+        await update.message.reply_text(
+            "🧑‍🤝‍🧑 *قالب مرافق مريض*\n\n"
+            "⚠️ *لا يوجد قالب مخصص لقسم مرافق مريض.*\n"
+            "يُستخدم حالياً قالب الإجازة الافتراضي.\n\n"
+            "أرسل ملف PDF خاصاً بقسم مرافق مريض ليُعتمد:",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardMarkup(rows, resize_keyboard=True)
+        )
+
+
+# ══════════════════════════════════════════════
+# 📎 معالج المستندات — استقبال قوالب PDF (قالب مرافق مريض)
+# ══════════════════════════════════════════════
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    يستقبل ملفات PDF المرفوعة من المسؤول ويخزنها كقوالب.
+    الحالات المدعومة:
+      • admin_companion_template_upload — رفع قالب مرافق مريض
+    """
+    uid   = update.effective_user.id
+    state = context.user_data.get("state", "main")
+    if not is_admin_user(uid):
+        return
+    if state == "admin_companion_template_upload":
+        doc = update.message.document
+        if not doc or (doc.mime_type or "") != "application/pdf":
+            await update.message.reply_text(
+                "⚠️ يرجى إرسال ملف *PDF* فقط.",
+                parse_mode="Markdown",
+                reply_markup=ReplyKeyboardMarkup([[KeyboardButton("⬅️ رجوع")]], resize_keyboard=True)
+            )
+            return
+        if doc.file_size and doc.file_size > 10 * 1024 * 1024:
+            await update.message.reply_text(
+                "⚠️ حجم الملف يتجاوز 10 ميجابايت. أرسل ملفاً أصغر.",
+                reply_markup=ReplyKeyboardMarkup([[KeyboardButton("⬅️ رجوع")]], resize_keyboard=True)
+            )
+            return
+        await update.message.reply_text("⏳ جاري حفظ قالب مرافق مريض...")
+        try:
+            file_obj = await context.bot.get_file(doc.file_id)
+            import io as _io
+            buf = _io.BytesIO()
+            await file_obj.download_to_memory(buf)
+            pdf_bytes = buf.getvalue()
+            if len(pdf_bytes) < 1000:
+                await update.message.reply_text(
+                    "⚠️ الملف صغير جداً أو تالف. أرسل ملف PDF صالح.",
+                    reply_markup=ReplyKeyboardMarkup([[KeyboardButton("⬅️ رجوع")]], resize_keyboard=True)
+                )
+                return
+            tpl_id = db.save_companion_template(
+                name="قالب مرافق مريض",
+                file_data=pdf_bytes,
+            )
+            if tpl_id:
+                await update.message.reply_text(
+                    f"✅ *تم اعتماد قالب مرافق مريض!*\n\n"
+                    f"• المعرّف: #{tpl_id}\n"
+                    f"• الحجم: {len(pdf_bytes)//1024:,} كيلو\n\n"
+                    "سيُستخدم هذا القالب تلقائياً عند إصدار تقارير «مرافق مريض».",
+                    parse_mode="Markdown",
+                    reply_markup=templates_keyboard()
+                )
+            else:
+                await update.message.reply_text(
+                    "❌ فشل حفظ القالب. تحقق من السجلات.",
+                    reply_markup=templates_keyboard()
+                )
+            context.user_data["state"] = "admin_templates"
+        except Exception as _e:
+            logger.error(f"handle_document companion error: {_e}", exc_info=True)
+            await update.message.reply_text(
+                f"❌ خطأ أثناء الحفظ: {_e}",
+                reply_markup=templates_keyboard()
+            )
+            context.user_data["state"] = "admin_templates"
+        return
+    # غير مستخدم في حالات أخرى — تجاهل
+    return
+
+
+# ══════════════════════════════════════════════
 # 📷 معالج الصور — استقبال شعارات المستشفيات
 # ══════════════════════════════════════════════
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -4403,6 +4554,7 @@ def main():
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
 
     # ✅ معالج الصور — لاستقبال شعارات المستشفيات عبر البوت
+    application.add_handler(MessageHandler(filters.Document & ~filters.Document.IMAGE, handle_document))
     application.add_handler(MessageHandler(filters.PHOTO | filters.Document.IMAGE, handle_photo))
 
     # ══════════════════════════════════════════════════════════════

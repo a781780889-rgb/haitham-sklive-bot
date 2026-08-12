@@ -134,6 +134,7 @@ def init_db():
     c.execute("""CREATE TABLE IF NOT EXISTS pdf_templates (
         id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL,
         hospital_id INTEGER, file_path TEXT NOT NULL, is_active INTEGER DEFAULT 0,
+        template_type TEXT DEFAULT 'excuse',
         created_at TEXT DEFAULT (datetime('now')),
         FOREIGN KEY (hospital_id) REFERENCES hospitals(id))""")
 
@@ -207,6 +208,7 @@ def init_db():
         "ALTER TABLE orders ADD COLUMN issue_date_input TEXT",
         "ALTER TABLE orders ADD COLUMN exit_date TEXT",
         "ALTER TABLE pdf_templates ADD COLUMN is_active INTEGER DEFAULT 0",
+        "ALTER TABLE pdf_templates ADD COLUMN template_type TEXT DEFAULT 'excuse'",
     ]:
         # SAVEPOINT لكل ALTER — إذا كان العمود موجوداً مسبقاً لن يؤثّر على المعاملة الأم
         try:
@@ -1026,6 +1028,102 @@ def add_pdf_template(name, hospital_name, file_path=None, file_data: bytes = Non
     finally:
         conn.close()
 
+
+# ── قوالب مرافق مريض ──
+def save_companion_template(name, file_data: bytes) -> int | None:
+    """يحفظ قالب PDF مخصص لقسم مرافق مريض ويُعتمده فوراً (يلغي اعتماد قالب مرافق سابق).
+
+    يُخزَّن الملف كبيانات ثنائية في file_blobs مع قالب db:key.
+    """
+    if not _FILE_STORAGE_AVAILABLE:
+        raise RuntimeError("تخزين الملفات غير متاح — تحقق من file_storage.py")
+    conn = get_conn()
+    try:
+        conn.execute("UPDATE pdf_templates SET is_active=0 WHERE template_type='companion'")
+        cur = conn.execute(
+            "INSERT INTO pdf_templates (name, hospital_id, file_path, is_active, template_type) "
+            "VALUES (?, NULL, 'pending', 1, 'companion')",
+            (name or "قالب مرافق مريض",)
+        )
+        conn.commit()
+        tpl_id = cur.lastrowid
+        if not tpl_id:
+            logger.error("save_companion_template: فشل الحصول على ID")
+            return None
+        fkey = template_key(tpl_id)
+        conn.execute("""
+            INSERT INTO file_blobs
+                (file_key, file_name, mime_type, data, size_bytes, category, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+            ON CONFLICT(file_key) DO UPDATE SET
+                file_name  = excluded.file_name,
+                mime_type  = excluded.mime_type,
+                data       = excluded.data,
+                size_bytes = excluded.size_bytes,
+                category   = excluded.category,
+                updated_at = datetime('now')
+        """, (fkey, f"{name or 'companion'}.pdf", "application/pdf", file_data, len(file_data), "template"))
+        conn.execute("UPDATE pdf_templates SET file_path=? WHERE id=?", (f"db:{fkey}", tpl_id))
+        conn.commit()
+        logger.info(f"save_companion_template: قالب مرافق #{tpl_id} محفوظ — {len(file_data):,} bytes")
+        return tpl_id
+    except Exception as _exc:
+        logger.error(f"save_companion_template error: {_exc}", exc_info=True)
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        conn.close()
+
+def get_companion_template():
+    """يُعيد قالب مرافق مريض المعتمد، أو أحدث قالب مرافق مرفوع إذا لم يوجد معتمد."""
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            "SELECT * FROM pdf_templates WHERE template_type='companion' AND is_active=1 ORDER BY id DESC LIMIT 1"
+        ).fetchone()
+        if not row:
+            row = conn.execute(
+                "SELECT * FROM pdf_templates WHERE template_type='companion' ORDER BY id DESC LIMIT 1"
+            ).fetchone()
+        return dict(row) if row else None
+    finally:
+        conn.close()
+
+def set_companion_template_active(template_id):
+    """يعتمد قالب مرافق معين (يلغي اعتماد بقية قوالب المرافق)."""
+    conn = get_conn()
+    try:
+        conn.execute("UPDATE pdf_templates SET is_active=0 WHERE template_type='companion'")
+        conn.execute(
+            "UPDATE pdf_templates SET is_active=1 WHERE id=? AND template_type='companion'",
+            (template_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+def delete_companion_template():
+    """يحذف قالب مرافق مريض المعتمد (البند والملف) ويعيد العدد المحذوف."""
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT id, file_path FROM pdf_templates WHERE template_type='companion'"
+        ).fetchall()
+        count = 0
+        for r in rows:
+            if r["file_path"] and r["file_path"].startswith("db:"):
+                try:
+                    delete_file(r["file_path"][3:])
+                except Exception as _e:
+                    logger.warning(f"delete_companion_template: فشل حذف الملف {r['file_path']}: {_e}")
+            conn.execute("DELETE FROM pdf_templates WHERE id=?", (r["id"],))
+            count += 1
+        conn.commit()
+        return count
+    finally:
+        conn.close()
 
 def get_all_templates():
     conn = get_conn()
