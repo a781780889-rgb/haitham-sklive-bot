@@ -32,6 +32,9 @@ CB_PC_BACK_MAIN = "pcbm"
 CB_PC_BACK_DOCTORS = "pcbd"
 CB_PC_BACK_SPECIALTY = "pcbs"
 CB_PC_CANCEL = "pcx"
+CB_PC_CONFIRM = "pck"  # تأكيد وإصدار PDF
+CB_PC_EDIT = "pce"  # تعديل البيانات (رجوع لجمع البيانات)
+CB_PC_EDIT_FIELD = "pcef"  # تعديل حقل محدد (pcef|field)
 
 PC_HOSPITALS_PAGE_SIZE = 12
 PC_DOCTORS_PAGE_SIZE = 10
@@ -392,7 +395,7 @@ def update_companion_request_fields(db_module, request_id: int, fields: Dict) ->
         "workplace", "admission_date", "days_count", "gsl_code", "pdf_path",
     }
     keys = [k for k in fields if k in allowed]
-    if not keys:
+    if not keys or not db_module:
         return False
     try:
         _ensure_storage(db_module)
@@ -466,6 +469,7 @@ class PatientCompanionFlow:
             CB_PC_DOCTOR, CB_PC_DOCTOR_PAGE, CB_PC_SPECIALTY,
             CB_PC_BACK_CITIES, CB_PC_BACK_HOSPITALS, CB_PC_BACK_MAIN,
             CB_PC_BACK_DOCTORS, CB_PC_BACK_SPECIALTY, CB_PC_CANCEL,
+            CB_PC_CONFIRM, CB_PC_EDIT, CB_PC_EDIT_FIELD,
         }:
             return False
 
@@ -678,8 +682,74 @@ class PatientCompanionFlow:
                 await query.answer()
                 return True
 
+            if prefix == CB_PC_CONFIRM:
+                city = context.user_data.get("pc_city")
+                hospital = context.user_data.get("pc_hospital")
+                doctor = context.user_data.get("pc_doctor")
+                specialty = context.user_data.get("pc_specialty")
+                if not all([city, hospital, doctor, specialty]):
+                    await query.answer("انتهت صلاحية البيانات. أعد فتح القائمة.", show_alert=True)
+                    return True
+                extracted = context.user_data.get("pc_extracted", {})
+                if not extracted:
+                    await query.answer("لا توجد بيانات مكتملة. اكتب البيانات أولاً.", show_alert=True)
+                    return True
+                context.user_data["pc_state"] = "issued"  # منع التكرار عند الضغط المزدوج
+                await query.answer("جاري إصدار التقرير...")
+                await self._issue_companion_pdf(
+                    query.message, context, query.from_user.id,
+                    city=city, hospital=hospital, doctor=doctor,
+                    specialty=specialty, extracted=extracted,
+                )
+                return True
+
+            if prefix == CB_PC_EDIT:
+                await query.answer()
+                keyboard = self._build_edit_fields_keyboard()
+                context.user_data["pc_state"] = "reviewing"
+                await query.message.reply_text(
+                    "✏️ اختر الحقل الذي تريد تعديله وأرسل قيمته الجديدة:\n\n"
+                    "أو اضغط «❌ إلغاء التعديل» للعودة للمراجعة.",
+                    reply_markup=keyboard,
+                )
+                return True
+
+            if prefix == CB_PC_EDIT_FIELD:
+                field = parts[1] if len(parts) > 1 else ""
+                if field in ("companion_name", "id_number", "nationality",
+                             "relation", "workplace", "admission_date", "days_count"):
+                    await query.answer()
+                    context.user_data["pc_edit_field"] = field
+                    context.user_data["pc_state"] = "editing"
+                    await query.message.reply_text(
+                        "✏️ أرسل القيمة الجديدة للحقل.",
+                        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ إلغاء", callback_data=CB_PC_CANCEL)]]),
+                    )
+                    return True
+                await query.answer("الحقل غير متاح.", show_alert=True)
+                return True
+
             if prefix == CB_PC_CANCEL:
                 await query.answer()
+                state = context.user_data.get("pc_state")
+                # أثناء المراجعة أو التعديل: العودة لشاشة المراجعة أو لإدخال قيمة الحقل
+                if state in ("reviewing", "editing"):
+                    if state == "editing" and context.user_data.get("pc_edit_field"):
+                        keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("❌ إلغاء", callback_data=CB_PC_CANCEL)]])
+                        await query.message.reply_text("✏️ أرسل القيمة الجديدة للحقل.", reply_markup=keyboard)
+                        context.user_data["pc_state"] = "editing"
+                        return True
+                    city = context.user_data.get("pc_city")
+                    hospital = context.user_data.get("pc_hospital")
+                    doctor = context.user_data.get("pc_doctor")
+                    specialty = context.user_data.get("pc_specialty")
+                    if all([city, hospital, doctor, specialty]):
+                        await self._show_review(query.message, context, query.from_user.id,
+                                                city, hospital, doctor, specialty)
+                    else:
+                        context.user_data["pc_state"] = "cities"
+                        await query.message.reply_text("انتهت الجلسة. اضغط «🏥 مرافق مريض» للبدء من جديد.")
+                    return True
                 context.user_data.update({
                     "pc_state": "doctors", "pc_doctor": None,
                     "pc_specialty": None, "pc_request_id": None,
@@ -731,7 +801,68 @@ class PatientCompanionFlow:
         )
         return keyboard, text
 
+    @staticmethod
+    def _build_edit_fields_keyboard():
+        """لوحة أزرار الحقول القابلة للتعديل."""
+        fields = [
+            ("companion_name", "👤 اسم المرافق"),
+            ("id_number", "🪪 رقم الهوية"),
+            ("nationality", "🌍 الجنسية"),
+            ("relation", "🔗 صلة القرابة"),
+            ("workplace", "🏢 جهة العمل"),
+            ("admission_date", "📅 تاريخ الدخول"),
+            ("days_count", "🔢 عدد الأيام"),
+        ]
+        rows = [[InlineKeyboardButton(label, callback_data=f"{CB_PC_EDIT_FIELD}|{key}")]
+                for key, label in fields]
+        rows.append([InlineKeyboardButton("❌ إلغاء التعديل", callback_data=CB_PC_CANCEL)])
+        return InlineKeyboardMarkup(rows)
+
     async def handle_text(self, text: str, message: Message, context: ContextTypes.DEFAULT_TYPE, user_id: int) -> bool:
+        # ── تعديل حقل محدد من شاشة المراجعة ──────────────────────
+        if context.user_data.get("pc_state") == "editing":
+            field = context.user_data.get("pc_edit_field", "")
+            value = " ".join((text or "").split()).strip()
+            if not value:
+                await message.reply_text("⚠️ القيمة فارغة. أرسل القيمة الجديدة:")
+                return True
+            extracted = context.user_data.get("pc_extracted", {}) or {}
+            if field == "admission_date":
+                for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y", "%d-%m-%y", "%Y-%m-%d", "%Y/%m/%d"):
+                    try:
+                        from datetime import datetime as _dt
+                        value = _dt.strptime(value, fmt).strftime("%d-%m-%Y")
+                        break
+                    except Exception:
+                        continue
+            if field == "days_count":
+                try:
+                    value = int(value)
+                except (ValueError, TypeError):
+                    await message.reply_text("⚠️ عدد الأيام يجب أن يكون رقمًا. أرسل قيمة صحيحة:")
+                    return True
+            extracted[field] = value
+            context.user_data["pc_extracted"] = extracted
+            # تحديث حقل جهة العمل في سجل الطلب إن وجد
+            if field in ("companion_name", "id_number", "nationality", "relation",
+                         "workplace", "admission_date", "days_count"):
+                request_id = context.user_data.get("pc_request_id")
+                if request_id:
+                    update_companion_request_fields(self.db, request_id, {field: str(value)})
+            # تحديث pc_days_count لدعم حسابات مدة الإجازة
+            if field == "days_count":
+                context.user_data["pc_days_count"] = value
+            city = context.user_data.get("pc_city")
+            hospital = context.user_data.get("pc_hospital")
+            doctor = context.user_data.get("pc_doctor")
+            specialty = context.user_data.get("pc_specialty")
+            if not all([city, hospital, doctor, specialty]):
+                context.user_data["pc_state"] = "cities"
+                await message.reply_text("انتهت جلسة الاختيار. اضغط «🏥 مرافق مريض» للبدء من جديد.")
+                return True
+            await self._show_review(message, context, user_id, city, hospital, doctor, specialty)
+            return True
+
         # ── إدخال اسم الطبيب يدويًا ─────────────────────────────
         if context.user_data.get("pc_state") == "manual_doctor":
             name = " ".join((text or "").split()).strip()
@@ -799,12 +930,51 @@ class PatientCompanionFlow:
             )
             return True
 
-        # البيانات كاملة → إصدار الـ PDF
-        return await self._issue_companion_pdf(
-            message, context, user_id,
-            city=city, hospital=hospital, doctor=doctor, specialty=specialty,
-            extracted=extracted,
-        )
+        # البيانات كاملة → شاشة المراجعة قبل الإصدار
+        context.user_data["pc_extracted"] = extracted
+        return await self._show_review(message, context, user_id,
+                                       city, hospital, doctor, specialty)
+
+    async def _show_review(self, message, context, user_id, city, hospital, doctor, specialty):
+        """شاشة مراجعة البيانات مع زرَي تأكيد/تعديل وإلغاء."""
+        extracted = context.user_data.get("pc_extracted", {})
+        field_labels = {
+            "companion_name": "👤 اسم المرافق",
+            "id_number": "🪪 رقم الهوية",
+            "nationality": "🌍 الجنسية",
+            "relation": "🔗 صلة القرابة",
+            "workplace": "🏢 جهة العمل",
+            "admission_date": "📅 تاريخ الدخول",
+            "days_count": "🔢 عدد الأيام",
+        }
+        lines = [
+            "🏥 *مرافق مريض* — *مراجعة البيانات*\n\n"
+            f"📍 المدينة: *{city}*\n"
+            f"🏥 المستشفى: *{hospital}*\n"
+            f"👨‍⚕️ الطبيب: *{doctor}*\n"
+            f"🩺 المسمى الوظيفي: *{specialty}*\n",
+            "\n📝 *بيانات المرافق:*\n",
+        ]
+        for key, label in field_labels.items():
+            value = str(extracted.get(key, "") or "").strip()
+            if value:
+                lines.append(f"{label}: *{value}*")
+        lines.append("\n⚠️ *راجع البيانات أعلاه قبل إصدار التقرير.*")
+        keyboard = InlineKeyboardMarkup([
+            [
+                InlineKeyboardButton("✅ تأكيد وإصدار التقرير", callback_data=CB_PC_CONFIRM),
+            ],
+            [
+                InlineKeyboardButton("✏️ تعديل البيانات", callback_data=CB_PC_EDIT),
+                InlineKeyboardButton("❌ إلغاء", callback_data=CB_PC_CANCEL),
+            ],
+            [
+                InlineKeyboardButton("🏠 الرئيسية", callback_data=CB_PC_BACK_MAIN),
+            ],
+        ])
+        context.user_data["pc_state"] = "reviewing"
+        await message.reply_text("\n".join(lines), parse_mode="Markdown", reply_markup=keyboard)
+        return True
 
     @staticmethod
     def _extract_companion_data(text: str) -> Dict:
@@ -907,6 +1077,9 @@ class PatientCompanionFlow:
     async def _issue_companion_pdf(self, message, context, user_id, city, hospital,
                                    doctor, specialty, extracted):
         """يستدعي دالة توليد وإرسال PDF تقرير مرافقة مريض في bot.py."""
+        if context.user_data.get("pc_state") == "issued":
+            # إعادة تعيين الحالة بعد الإصدار الأول
+            context.user_data["pc_state"] = "reviewing"
         if not self._on_generate_pdf:
             context.user_data["pc_state"] = "cities"
             await message.reply_text(
