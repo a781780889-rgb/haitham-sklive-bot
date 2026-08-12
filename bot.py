@@ -49,6 +49,11 @@ from smart_parser import (
     parse_any_date,
     parse_date_range,
 )
+from patient_review_pipeline import (
+    review_patient_data,
+    assert_pdf_quality,
+    FIELD_LABELS_AR as REVIEW_FIELD_LABELS_AR,
+)
 
 # ══════════════════════════════════════════════
 # الإعدادات الثابتة
@@ -458,7 +463,8 @@ ORDER_FIELDS = [
     {"key": "issue_date_input", "label": "تاريخ الإصدار",       "example": "17/3/2026"},
     {"key": "issue_time",       "label": "وقت الإصدار",         "example": "PM 10:40"},
 ]
-OPTIONAL_FIELDS = {"issue_time", "issue_date_input", "days_count"}
+# جميع الحقول الثمانية مطلوبة قبل السماح بإنشاء PDF.
+OPTIONAL_FIELDS = set()
 HIDDEN_FIELDS   = set()  # لا توجد حقول مخفية — جميع الحقول تظهر في القالب
 
 def parse_free_text_order(text: str) -> dict:
@@ -1569,51 +1575,37 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         od.update(parsed)
         context.user_data["order_data"] = od
 
-        # ─── التحقق من الحقول الناقصة ───────────────────────────
+        # ─── بوابة المراجعة والترجمة قبل التأكيد ─────────────────
+        review = review_patient_data(od, source_text=text)
         missing = get_missing(od)
-
-        if missing:
-            # عرض ما تم استيعابه + طلب الناقص
-            received_lines = []
-            labels_map = {
-                'full_name': 'الاسم', 'id_number': 'رقم الهوية',
-                'nationality': 'الجنسية', 'workplace': 'جهة العمل',
-                'excuse_date': 'تاريخ بدء الإجازة',
-                # hospital/doctor → تُحدَّد عبر الأزرار ولا تُعرض هنا
-            }
-            for key, label in labels_map.items():
-                if od.get(key):
-                    received_lines.append(f"  ✅ {label}: *{od[key]}*")
-
-            received_block = "\n".join(received_lines)
-            missing_prompt = build_missing_prompt(od)
-
-            reply = ""
-            if received_block:
-                reply = f"📥 *تم استيعاب:*\n{received_block}\n\n"
-            reply += missing_prompt
-
+        if missing or review.errors:
+            missing_names = [f["label"] for f in missing]
+            details = []
+            if missing_names:
+                details.append("الحقول الناقصة: " + "، ".join(missing_names))
+            details.extend(review.errors)
             await update.message.reply_text(
-                reply,
-                parse_mode="Markdown", reply_markup=back_keyboard()
+                "⚠️ لم يتم اعتماد البيانات بعد.\n\n" + "\n".join(dict.fromkeys(details)) +
+                "\n\nأرسل التصحيح أو أعد إرسال القالب كاملاً.",
+                reply_markup=back_keyboard()
             )
         else:
-            # ─── اكتملت البيانات ────────────────────────────────
+            # لا نستبدل المصدر العربي بالترجمة؛ نحفظ النسخة المُراجعة فقط.
+            context.user_data["order_data"] = {
+                **{k: review.normalized[k] for k in REVIEW_FIELD_LABELS_AR if k in review.normalized},
+                **({"exit_date": od["exit_date"]} if od.get("exit_date") else {}),
+            }
+            context.user_data["reviewed_patient_data"] = review.audit
             context.user_data["state"] = "confirm_order"
             context.user_data["prev_state"] = "collecting_data"
-            # تهيئة حالة رقم الترخيص (مُعطَّل افتراضياً)
             context.user_data.setdefault("license_enabled", False)
 
-            preview = build_smart_preview(od, context.user_data)
-
             await update.message.reply_text(
-                "✅ *تم استلام جميع البيانات بنجاح!*\n\n" + preview,
-                parse_mode="Markdown",
+                "✅ تم استلام البيانات واجتازت المراجعة الأولية.\n\n" + review.message(),
                 reply_markup=confirm_keyboard()
             )
             await update.message.reply_text(
-                "👆 *راجع البيانات ثم اضغط تأكيد:*",
-                parse_mode="Markdown",
+                "👆 راجع البيانات والترجمة ثم اضغط تأكيد وإنشاء PDF.",
                 reply_markup=confirm_inline_keyboard(context.user_data.get("license_enabled", False))
             )
         return
@@ -2219,13 +2211,27 @@ async def generate_and_send_pdf(update, context, uid):
         )
         return
 
-    # قفل المعالجة لهذا المستخدم
-    _processing_lock[uid] = True
-
     od        = context.user_data.get("order_data", {})
     hospital  = context.user_data.get("selected_hospital", "—")
     doctor    = context.user_data.get("selected_doctor", "—")
     specialty = context.user_data.get("selected_doctor_specialty", "—")
+
+    # إعادة التحقق لحظياً قبل أي خصم أو إنشاء؛ لا نعتمد على معاينة قديمة.
+    final_review = review_patient_data(od)
+    if not final_review.valid:
+        await update.effective_message.reply_text(
+            "❌ أُوقِف إنشاء PDF لأن البيانات لم تجتز المراجعة النهائية.\n\n" +
+            "\n".join(final_review.errors) + "\n\nيرجى تعديل البيانات ثم إعادة التحقق.",
+            reply_markup=back_keyboard()
+        )
+        context.user_data["state"] = "confirm_order"
+        return
+    context.user_data["reviewed_patient_data"] = final_review.audit
+    context.user_data["order_data"] = {
+        **{k: final_review.normalized[k] for k in REVIEW_FIELD_LABELS_AR if k in final_review.normalized},
+        **({"exit_date": od["exit_date"]} if od.get("exit_date") else {}),
+    }
+    od = context.user_data["order_data"]
 
     price = get_scaffold_price(uid)
     if not db.try_deduct_balance(uid, price):
@@ -2240,6 +2246,8 @@ async def generate_and_send_pdf(update, context, uid):
         )
         return
 
+    # لا نثبت القفل إلا بعد نجاح الخصم، حتى لا تُحجز الجلسة عند نقص الرصيد.
+    _processing_lock[uid] = True
     await update.effective_message.reply_text("⏳ جاري إنشاء ملف PDF...", reply_markup=back_keyboard())
     pdf_path_temp     = None
     template_path_tmp = None   # ملف مؤقت للقالب يُحذف في finally
@@ -2374,6 +2382,8 @@ async def generate_and_send_pdf(update, context, uid):
             except Exception:
                 pass
         logger.info(f"generate_pdf user={uid}: تم إنشاء PDF بنجاح → {pdf_path} ({os.path.getsize(pdf_path):,} bytes)")
+        # الفحص الأخير يقرأ الملف الناتج فعلياً ويتحقق من سلامة البيانات الرقمية.
+        assert_pdf_quality(pdf_path, final_review.normalized)
 
         # ✅ تأكد أن days_count رقم صحيح قبل الحفظ في PostgreSQL
         od["days_count"] = safe_int(od.get("days_count", 1))
@@ -4623,6 +4633,45 @@ def main():
                         )
                     except Exception as e:
                         logger.warning(f"فشل إشعار المستخدم {target_uid}: {e}")
+            return
+
+        # ─── بوابة إصدار الطلب بعد مراجعة البيانات ───────────────────────
+        if data == "confirm_order":
+            await generate_and_send_pdf(update, context, uid)
+            return
+        if data == "edit_data":
+            context.user_data["state"] = "collecting_data"
+            await query.message.reply_text(
+                "✏️ أرسل الحقل الذي تريد تعديله بصيغة: الحقل: القيمة\nمثال: الجنسية: سعودي",
+                reply_markup=back_keyboard()
+            )
+            return
+        if data == "toggle_license":
+            context.user_data["license_enabled"] = not context.user_data.get("license_enabled", False)
+            try:
+                await query.edit_message_reply_markup(
+                    reply_markup=confirm_inline_keyboard(context.user_data["license_enabled"])
+                )
+            except Exception as exc:
+                logger.warning("تعذر تحديث زر الترخيص: %s", exc)
+            return
+        if data == "cancel_order":
+            context.user_data.pop("order_data", None)
+            context.user_data.pop("reviewed_patient_data", None)
+            context.user_data["state"] = "main"
+            await query.message.reply_text(
+                "❌ تم إلغاء الطلب.",
+                reply_markup=main_menu_keyboard(is_admin_user(uid))
+            )
+            return
+        if data == "back_to_hospital":
+            context.user_data.pop("order_data", None)
+            context.user_data.pop("reviewed_patient_data", None)
+            context.user_data["state"] = "main"
+            await query.message.reply_text(
+                "⬅️ تم الرجوع. ابدأ اختيار المستشفى من القائمة الرئيسية.",
+                reply_markup=main_menu_keyboard(is_admin_user(uid))
+            )
             return
 
         # ─── نظام الحذف المتكامل ───────────────────────────────────────────

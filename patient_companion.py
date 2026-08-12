@@ -9,6 +9,7 @@
 import hashlib
 import logging
 import re
+from contextlib import contextmanager
 from typing import Dict, List, Optional, Tuple
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Message, CallbackQuery
@@ -19,6 +20,25 @@ from cities_hospitals_ui import CITIES_PAGE_SIZE, _get_all_cities, _get_hospital
 from normalizer import normalize_for_comparison
 
 logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def _savepoint(conn, name: str):
+    """Use the project wrapper's savepoint API or SQLite's native SQL form."""
+    if hasattr(conn, "savepoint"):
+        with conn.savepoint(name):
+            yield
+        return
+    conn.execute(f"SAVEPOINT {name}")
+    try:
+        yield
+    except Exception:
+        conn.execute(f"ROLLBACK TO SAVEPOINT {name}")
+        conn.execute(f"RELEASE SAVEPOINT {name}")
+        raise
+    else:
+        conn.execute(f"RELEASE SAVEPOINT {name}")
+
 
 CB_PC_CITY = "pcc"
 CB_PC_HOSP_PAGE = "pchp"
@@ -370,7 +390,7 @@ def _ensure_storage(db_module) -> None:
             """
         # ── كل جملة داخل SAVEPOINT: في PostgreSQL فشل أي جملة خارج نقطة الحفظ
         #     يُبطل المعاملة الأم بالكامل ("transaction is aborted") فنفقد كل ما سبقها ──
-        with conn.savepoint("pc_create"):
+        with _savepoint(conn, "pc_create"):
             conn.execute(create_sql)
         for column in [
             ("doctor", "TEXT NOT NULL DEFAULT ''"),
@@ -388,7 +408,7 @@ def _ensure_storage(db_module) -> None:
             ("details", "TEXT DEFAULT ''"),
         ]:
             try:
-                with conn.savepoint("pc_alt"):
+                with _savepoint(conn, "pc_alt"):
                     conn.execute(
                         f"ALTER TABLE patient_companion_requests ADD COLUMN {column[0]} {column[1]}"
                     )
@@ -396,14 +416,14 @@ def _ensure_storage(db_module) -> None:
                 pass
         # إزالة قيد NOT NULL إن كان عمود details قديمًا معرفًا بدون قيمة افتراضية
         try:
-            with conn.savepoint("pc_details_nn"):
+            with _savepoint(conn, "pc_details_nn"):
                 conn.execute(
                     "ALTER TABLE patient_companion_requests ALTER COLUMN details DROP NOT NULL"
                 )
         except Exception:
             pass
         try:
-            with conn.savepoint("pc_details_def"):
+            with _savepoint(conn, "pc_details_def"):
                 conn.execute(
                     "ALTER TABLE patient_companion_requests ALTER COLUMN details SET DEFAULT ''"
                 )
@@ -462,6 +482,24 @@ def update_companion_request_fields(db_module, request_id: int, fields: Dict) ->
     except Exception:
         logger.exception("تعذر تحديث حقول طلب المرافق #%s", request_id)
         return False
+
+
+def get_user_companion_requests(db_module, user_id: int) -> list[Dict]:
+    """يعيد طلبات مرافق المريض الخاصة بمستخدم واحد بترتيب الأحدث."""
+    try:
+        _ensure_storage(db_module)
+        conn = db_module.get_conn()
+        try:
+            rows = conn.execute(
+                "SELECT * FROM patient_companion_requests WHERE user_id=? ORDER BY id DESC",
+                (user_id,),
+            ).fetchall()
+            return [dict(row) for row in rows]
+        finally:
+            conn.close()
+    except Exception:
+        logger.exception("تعذر قراءة طلبات مرافق المريض للمستخدم %s", user_id)
+        return []
 
 
 def get_companion_request(db_module, request_id: int) -> Optional[Dict]:
