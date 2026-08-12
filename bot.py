@@ -2599,6 +2599,7 @@ async def generate_and_send_companion_pdf(update, context, uid, pc_data):
                 f"🩺 المسمى الوظيفي: {specialty}\n"
                 f"📅 تاريخ الدخول: {pc_data.get('admission_date', '—')}\n"
                 f"📆 عدد الأيام: {pc_data.get('days_count') or '—'} يوم\n\n"
+                f"🆔 نسخة النظام: Sklive v3.2 (تقرير مرافق مريض)\n\n"
                 f"🔍 *للتحقق:*\n"
                 f"━━━━━━━━━━━━━━━━━━\n"
                 f"🔑 رمز الإحالة: `{gsl_code}`\n\n"
