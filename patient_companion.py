@@ -837,16 +837,16 @@ class PatientCompanionFlow:
             f"🏥 المستشفى: *{hospital}*\n"
             f"👨‍⚕️ الطبيب: *{doctor}*\n"
             f"🩺 المسمى الوظيفي: *{specialty}*\n\n"
-            "📝 *بيانات تقرير مرافقة مريض*\n\n"
-            "أرسل البيانات بأي أسلوب — الذكاء الاصطناعي سيفهمها:\n\n"
-            "اسم المرافق: \n"
-            "رقم الهوية: \n"
-            "الجنسية: \n"
-            "صلة القرابة: \n"
-            "جهة العمل: \n"
-            "تاريخ الدخول: \n"
-            "عدد الأيام: \n\n"
-            "💡 يمكنك الكتابة بجملة حرة أيضاً"
+            "أرسل بيانات المريض:\n\n"
+            "📋 انسخ القالب وأكمل البيانات:\n"
+            "- الاسم: \n"
+            "- رقم الهوية: \n"
+            "- الجنسية: \n"
+            "- جهة العمل: \n"
+            "- تاريخ بدء الإجازة: \n"
+            "- عدد الأيام: \n"
+            "- تاريخ الإصدار: \n"
+            "- وقت الإصدار:"
         )
         return keyboard, text
 
@@ -854,13 +854,12 @@ class PatientCompanionFlow:
     def _build_edit_fields_keyboard():
         """لوحة أزرار الحقول القابلة للتعديل."""
         fields = [
-            ("companion_name", "👤 اسم المرافق"),
-            ("id_number", "🪪 رقم الهوية"),
-            ("nationality", "🌍 الجنسية"),
-            ("relation", "🔗 صلة القرابة"),
-            ("workplace", "🏢 جهة العمل"),
-            ("admission_date", "📅 تاريخ الدخول"),
-            ("days_count", "🔢 عدد الأيام"),
+            ("companion_name", "الاسم"),
+            ("id_number", "رقم الهوية"),
+            ("nationality", "الجنسية"),
+            ("workplace", "جهة العمل"),
+            ("admission_date", "تاريخ بدء الإجازة"),
+            ("days_count", "عدد الأيام"),
         ]
         rows = [[InlineKeyboardButton(label, callback_data=f"{CB_PC_EDIT_FIELD}|{key}")]
                 for key, label in fields]
@@ -987,31 +986,29 @@ class PatientCompanionFlow:
     async def _show_review(self, message, context, user_id, city, hospital, doctor, specialty):
         """شاشة مراجعة البيانات مع زرَي تأكيد/تعديل وإلغاء."""
         extracted = context.user_data.get("pc_extracted", {})
+        from datetime import datetime as _dt
+        now = _dt.now()
         field_labels = {
-            "companion_name": "👤 اسم المرافق",
-            "id_number": "🪪 رقم الهوية",
-            "nationality": "🌍 الجنسية",
-            "relation": "🔗 صلة القرابة",
-            "workplace": "🏢 جهة العمل",
-            "admission_date": "📅 تاريخ الدخول",
-            "days_count": "🔢 عدد الأيام",
+            "companion_name": "الاسم",
+            "id_number": "رقم الهوية",
+            "nationality": "الجنسية",
+            "workplace": "جهة العمل",
+            "admission_date": "تاريخ بدء الإجازة",
+            "days_count": "عدد الأيام",
         }
         lines = [
             "🏥 *مرافق مريض* — *مراجعة البيانات*",
             "",
-            "📍 *المدينة:* " + f"{city}",
-            "🏥 *المستشفى:* " + f"{hospital}",
-            "👨‍⚕️ *الطبيب:* " + f"{doctor}",
-            "🩺 *المسمى الوظيفي:* " + f"{specialty}",
+            "أرسل بيانات المريض:",
             "",
-            "📝 *بيانات المرافق:*",
+            "📋 *بيانات المريض:*",
             "",
         ]
         for key, label in field_labels.items():
             value = str(extracted.get(key, "") or "").strip()
-            lines.append(f"{label}: *{value}*" if value else f"{label}: ❌ غير مذكور")
-        lines.append("")
-        lines.append("⚠️ *راجع البيانات أعلاه قبل إصدار التقرير.*")
+            lines.append(f"- {label}: *{value}*" if value else f"- {label}: ❌ غير مذكور")
+        lines.append(f"- تاريخ الإصدار: *{now.strftime('%d-%m-%Y')}*")
+        lines.append(f"- وقت الإصدار: *{now.strftime('%H:%M')}*")
         keyboard = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton("✅ تأكيد وإصدار التقرير", callback_data=CB_PC_CONFIRM),
@@ -1061,7 +1058,7 @@ class PatientCompanionFlow:
         # قص اسم المرافق من أي قيمة التقطت حقولًا أخرى كاملةً
         if data.get("companion_name") and len(data.get("companion_name", "")) > 40:
             value = data["companion_name"]
-            for marker in ["رقم الهوية", "الهوية", "الجنسية", "صلة القرابة", "جهة العمل", "تاريخ الدخول", "عدد الأيام"]:
+            for marker in ["رقم الهوية", "الهوية", "الجنسية", "صلة القرابة", "جهة العمل", "تاريخ بدء الإجازة", "تاريخ الدخول", "عدد الأيام"]:
                 idx = value.find(marker)
                 if idx > 0:
                     value = value[:idx]
@@ -1070,12 +1067,12 @@ class PatientCompanionFlow:
 
         # تحليل تكميلي بالعبارات النمطية
         patterns = [
-            (r"(?:اسم\s*(?:المرافق|المرافقة))\s*[:\-–]\s*(.+)", "companion_name"),
+            (r"(?:اسم\s*(?:المرافق|المرافقة)|الاسم)\s*[:\-–]\s*(.+)", "companion_name"),
             (r"(?:رقم\s*(?:الهوية|الاقامة|الإقامة))\s*[:\-–]\s*(\d{1,6}\s?\d{2,4}\s?\d{1,4}|\d{9,10})", "id_number"),
             (r"الجنسية\s*[:\-–]\s*(.+)", "nationality"),
             (r"(?:صلة\s*القرابة|صلة\s*القرابة\s*بالمريض)\s*[:\-–]\s*(.+)", "relation"),
             (r"(?:جهة\s*العمل|مكان\s*العمل|العمل)\s*[:\-–]\s*(.+)", "workplace"),
-            (r"(?:تاريخ\s*(?:الدخول|القبول))\s*[:\-–]\s*(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})", "admission_date"),
+            (r"(?:تاريخ\s*(?:الدخول|القبول|بدء\s*الإجازة))\s*[:\-–]\s*(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})", "admission_date"),
             (r"(?:عدد\s*(?:الأيام|ايام|أيام))\s*[:\-–]\s*(\d+)", "days_count"),
         ]
         for pattern, field in patterns:
@@ -1107,13 +1104,12 @@ class PatientCompanionFlow:
     def _get_missing_fields(data: Dict) -> List[str]:
         """يحدد الحقول الناقصة من البيانات المستخرجة."""
         required = [
-            ("companion_name", "👤 اسم المرافق"),
-            ("id_number", "🪪 رقم الهوية"),
-            ("nationality", "🌍 الجنسية"),
-            ("relation", "🔗 صلة القرابة"),
-            ("workplace", "🏢 جهة العمل"),
-            ("admission_date", "📅 تاريخ الدخول"),
-            ("days_count", "🔢 عدد الأيام"),
+            ("companion_name", "الاسم"),
+            ("id_number", "رقم الهوية"),
+            ("nationality", "الجنسية"),
+            ("workplace", "جهة العمل"),
+            ("admission_date", "تاريخ بدء الإجازة"),
+            ("days_count", "عدد الأيام"),
         ]
         return [label for key, label in required
                 if key not in data or not str(data.get(key, "")).strip()]
