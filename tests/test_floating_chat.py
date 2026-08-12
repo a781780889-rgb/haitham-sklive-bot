@@ -19,6 +19,9 @@ def main():
         'position: fixed',
         'z-index: 1000',
         'safe-area-inset-bottom',
+        'width: 126px',
+        'min-height: 58px',
+        'width: 44px; height: 44px',
         '/api/chat-link',
     ]
     missing = [fragment for fragment in required_fragments if fragment not in html]

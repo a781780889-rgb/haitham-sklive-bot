@@ -513,12 +513,12 @@ body { margin: 0; overflow-x: hidden; }
 
   /* زر المحادثة مستقل عن محتوى الصفحة والتذييل. */
   .floating-chat { position: fixed; z-index: 1000; right: max(20px, env(safe-area-inset-right)); bottom: max(20px, calc(env(safe-area-inset-bottom) + 20px)); display: flex; flex-direction: column; align-items: flex-start; gap: 14px; direction: rtl; pointer-events: none; }
-  .floating-chat__toggle { width: 164px; min-height: 76px; padding: 8px 12px; border: 0; border-radius: 999px; background: #fff; color: #2563B0; box-shadow: 0 10px 24px rgba(15,55,103,.25), 0 2px 5px rgba(15,55,103,.16); display: inline-flex; align-items: center; justify-content: flex-end; cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; transition: transform 160ms ease, box-shadow 160ms ease; }
+  .floating-chat__toggle { width: 126px; min-height: 58px; padding: 7px 8px; border: 0; border-radius: 999px; background: #fff; color: #2563B0; box-shadow: 0 8px 19px rgba(15,55,103,.23), 0 2px 4px rgba(15,55,103,.14); display: inline-flex; align-items: center; justify-content: flex-end; cursor: pointer; pointer-events: auto; -webkit-tap-highlight-color: transparent; transition: transform 160ms ease, box-shadow 160ms ease; }
   .floating-chat__toggle:hover { transform: translateY(-2px); box-shadow: 0 14px 28px rgba(15,55,103,.29), 0 3px 7px rgba(15,55,103,.15); }
   .floating-chat__toggle:active { transform: translateY(0) scale(.98); }
   .floating-chat__toggle:focus-visible, .floating-chat__close:focus-visible, .floating-chat__start:focus-visible { outline: 3px solid rgba(113,182,238,.9); outline-offset: 3px; }
-  .floating-chat__icon { width: 58px; height: 58px; flex: 0 0 58px; display: grid; place-items: center; border-radius: 50%; background: #2f6fb6; color: #fff; box-shadow: inset 0 -2px 0 rgba(0,0,0,.08); }
-  .floating-chat__icon svg { width: 27px; height: 27px; }
+  .floating-chat__icon { width: 44px; height: 44px; flex: 0 0 44px; display: grid; place-items: center; border-radius: 50%; background: #2f6fb6; color: #fff; box-shadow: inset 0 -2px 0 rgba(0,0,0,.08); }
+  .floating-chat__icon svg { width: 21px; height: 21px; }
   .floating-chat__panel { width: min(320px, calc(100vw - 40px)); box-sizing: border-box; padding: 18px; border-radius: 18px; background: #fff; color: #213547; box-shadow: 0 16px 38px rgba(15,55,103,.28); opacity: 0; visibility: hidden; transform: translateY(8px) scale(.98); transform-origin: bottom right; transition: opacity 160ms ease, transform 160ms ease, visibility 160ms ease; pointer-events: none; }
   .floating-chat.is-open .floating-chat__panel { opacity: 1; visibility: visible; transform: translateY(0) scale(1); pointer-events: auto; }
   .floating-chat__panel-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
@@ -529,8 +529,8 @@ body { margin: 0; overflow-x: hidden; }
   .floating-chat__start:hover { background: #215d9f; }
   .floating-chat__start:active { transform: scale(.99); }
   .floating-chat__status { min-height: 18px; margin: 9px 0 0; font-family: 'Cairo', Tahoma, Arial, sans-serif; font-size: 11px; line-height: 1.45; color: #7b8794; }
-  @media (min-width: 768px) { .floating-chat { right: 28px; bottom: 28px; } .floating-chat__toggle { width: 174px; min-height: 80px; } .floating-chat__icon { width: 62px; height: 62px; flex-basis: 62px; } }
-  @media (max-width: 360px) { .floating-chat { right: max(14px, env(safe-area-inset-right)); bottom: max(14px, calc(env(safe-area-inset-bottom) + 14px)); } .floating-chat__toggle { width: 146px; min-height: 68px; } .floating-chat__icon { width: 52px; height: 52px; flex-basis: 52px; } }
+  @media (min-width: 768px) { .floating-chat { right: 28px; bottom: 28px; } .floating-chat__toggle { width: 132px; min-height: 60px; } .floating-chat__icon { width: 46px; height: 46px; flex-basis: 46px; } }
+  @media (max-width: 360px) { .floating-chat { right: max(14px, env(safe-area-inset-right)); bottom: max(14px, calc(env(safe-area-inset-bottom) + 14px)); } .floating-chat__toggle { width: 118px; min-height: 56px; } .floating-chat__icon { width: 42px; height: 42px; flex-basis: 42px; } }
 </style>
 </head>
 <body>
