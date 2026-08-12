@@ -826,29 +826,39 @@ class PatientCompanionFlow:
     # جمع بيانات المرافق وإصدار الـ PDF
     # ─────────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _build_patient_data_template(data: Optional[Dict] = None, include_issue_now: bool = True) -> str:
+        """يبني الصيغة الوحيدة المسموح بعرضها لبيانات المريض."""
+        data = data or {}
+        labels = (
+            ("companion_name", "الاسم"),
+            ("id_number", "رقم الهوية"),
+            ("nationality", "الجنسية"),
+            ("workplace", "جهة العمل"),
+            ("admission_date", "تاريخ بدء الإجازة"),
+            ("days_count", "عدد الأيام"),
+        )
+        lines = ["أرسل بيانات المريض:", "", "📋 انسخ القالب وأكمل البيانات:"]
+        for key, label in labels:
+            value = str(data.get(key, "") or "").strip()
+            lines.append(f"- {label}: {value}")
+        issue_date = str(data.get("issue_date", "") or "").strip()
+        issue_time = str(data.get("issue_time", "") or "").strip()
+        if include_issue_now and (not issue_date or not issue_time):
+            from datetime import datetime as _dt
+            now = _dt.now()
+            issue_date = issue_date or now.strftime("%d-%m-%Y")
+            issue_time = issue_time or now.strftime("%H:%M")
+        lines.append(f"- تاريخ الإصدار: {issue_date}" if issue_date else "- تاريخ الإصدار:")
+        lines.append(f"- وقت الإصدار: {issue_time}" if issue_time else "- وقت الإصدار:")
+        return "\n".join(lines)
+
     def _build_collecting_intro(self, city: str, hospital: str, doctor: str, specialty: str):
-        """رسالة التمهيد لجمع بيانات المرافق."""
+        """رسالة التمهيد لجمع بيانات المريض بالقالب الموحد فقط."""
         keyboard = InlineKeyboardMarkup([[
             InlineKeyboardButton("❌ إلغاء", callback_data=CB_PC_CANCEL)
         ]])
-        text = (
-            "🏥 *مرافق مريض*\n\n"
-            f"📍 المدينة: *{city}*\n"
-            f"🏥 المستشفى: *{hospital}*\n"
-            f"👨‍⚕️ الطبيب: *{doctor}*\n"
-            f"🩺 المسمى الوظيفي: *{specialty}*\n\n"
-            "أرسل بيانات المريض:\n\n"
-            "📋 انسخ القالب وأكمل البيانات:\n"
-            "- الاسم: \n"
-            "- رقم الهوية: \n"
-            "- الجنسية: \n"
-            "- جهة العمل: \n"
-            "- تاريخ بدء الإجازة: \n"
-            "- عدد الأيام: \n"
-            "- تاريخ الإصدار: \n"
-            "- وقت الإصدار:"
-        )
-        return keyboard, text
+        return keyboard, self._build_patient_data_template({}, include_issue_now=False)
 
     @staticmethod
     def _build_edit_fields_keyboard():
@@ -971,11 +981,7 @@ class PatientCompanionFlow:
 
         if missing:
             context.user_data["pc_extracted"] = extracted
-            prompt = self._build_missing_prompt(missing)
-            await message.reply_text(
-                f"⚠️ توجد بيانات ناقصة:\n\n{prompt}\n\n"
-                "أرسلها بأي أسلوب:",
-            )
+            await message.reply_text(self._build_patient_data_template(extracted, include_issue_now=False))
             return True
 
         # البيانات كاملة → شاشة المراجعة قبل الإصدار
@@ -986,29 +992,7 @@ class PatientCompanionFlow:
     async def _show_review(self, message, context, user_id, city, hospital, doctor, specialty):
         """شاشة مراجعة البيانات مع زرَي تأكيد/تعديل وإلغاء."""
         extracted = context.user_data.get("pc_extracted", {})
-        from datetime import datetime as _dt
-        now = _dt.now()
-        field_labels = {
-            "companion_name": "الاسم",
-            "id_number": "رقم الهوية",
-            "nationality": "الجنسية",
-            "workplace": "جهة العمل",
-            "admission_date": "تاريخ بدء الإجازة",
-            "days_count": "عدد الأيام",
-        }
-        lines = [
-            "🏥 *مرافق مريض* — *مراجعة البيانات*",
-            "",
-            "أرسل بيانات المريض:",
-            "",
-            "📋 *بيانات المريض:*",
-            "",
-        ]
-        for key, label in field_labels.items():
-            value = str(extracted.get(key, "") or "").strip()
-            lines.append(f"- {label}: *{value}*" if value else f"- {label}: ❌ غير مذكور")
-        lines.append(f"- تاريخ الإصدار: *{now.strftime('%d-%m-%Y')}*")
-        lines.append(f"- وقت الإصدار: *{now.strftime('%H:%M')}*")
+        lines = [self._build_patient_data_template(extracted)]
         keyboard = InlineKeyboardMarkup([
             [
                 InlineKeyboardButton("✅ تأكيد وإصدار التقرير", callback_data=CB_PC_CONFIRM),
@@ -1022,14 +1006,25 @@ class PatientCompanionFlow:
             ],
         ])
         context.user_data["pc_state"] = "reviewing"
-        await message.reply_text("\n".join(lines), parse_mode="Markdown", reply_markup=keyboard)
+        await message.reply_text(lines[0], reply_markup=keyboard)
         return True
 
     @staticmethod
     def _extract_companion_data(text: str) -> Dict:
         """يستخرج بيانات المرافق من النص الحر."""
         data = {}
-        t = " ".join((text or "").split()).strip()
+        raw_text = str(text or "").replace("：", ":").strip()
+        if not raw_text:
+            return data
+        field_markers = (
+            r"الاسم|اسم\s*(?:المرافق|المرافقة)|رقم\s*(?:الهوية|الاقامة|الإقامة)|"
+            r"الجنسية|جهة\s*العمل|مكان\s*العمل|العمل|تاريخ\s*(?:الدخول|القبول|بدء\s*الإجازة)|"
+            r"عدد\s*(?:الأيام|ايام|أيام)"
+        )
+        structured_text = re.sub(
+            rf"\s*-\s*(?=(?:{field_markers})\s*[:：])", "\\n", raw_text
+        )
+        t = " ".join(structured_text.split()).strip()
         if not t:
             return data
 
@@ -1067,16 +1062,16 @@ class PatientCompanionFlow:
 
         # تحليل تكميلي بالعبارات النمطية
         patterns = [
-            (r"(?:اسم\s*(?:المرافق|المرافقة)|الاسم)\s*[:\-–]\s*(.+)", "companion_name"),
+            (r"(?:اسم\s*(?:المرافق|المرافقة)|الاسم)\s*[:\-–]\s*([^\n]+)", "companion_name"),
             (r"(?:رقم\s*(?:الهوية|الاقامة|الإقامة))\s*[:\-–]\s*(\d{1,6}\s?\d{2,4}\s?\d{1,4}|\d{9,10})", "id_number"),
-            (r"الجنسية\s*[:\-–]\s*(.+)", "nationality"),
-            (r"(?:صلة\s*القرابة|صلة\s*القرابة\s*بالمريض)\s*[:\-–]\s*(.+)", "relation"),
-            (r"(?:جهة\s*العمل|مكان\s*العمل|العمل)\s*[:\-–]\s*(.+)", "workplace"),
+            (r"الجنسية\s*[:\-–]\s*([^\n]+)", "nationality"),
+            (r"(?:صلة\s*القرابة|صلة\s*القرابة\s*بالمريض)\s*[:\-–]\s*([^\n]+)", "relation"),
+            (r"(?:جهة\s*العمل|مكان\s*العمل|العمل)\s*[:\-–]\s*([^\n]+)", "workplace"),
             (r"(?:تاريخ\s*(?:الدخول|القبول|بدء\s*الإجازة))\s*[:\-–]\s*(\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4})", "admission_date"),
             (r"(?:عدد\s*(?:الأيام|ايام|أيام))\s*[:\-–]\s*(\d+)", "days_count"),
         ]
         for pattern, field in patterns:
-            match = re.search(pattern, t, re.IGNORECASE)
+            match = re.search(pattern, structured_text, re.IGNORECASE | re.MULTILINE)
             if match and field not in data:
                 data[field] = match.group(1).strip()
 
