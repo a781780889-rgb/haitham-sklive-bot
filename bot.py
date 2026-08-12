@@ -24,6 +24,7 @@ from telegram.ext import (
 import asyncio
 import database as db
 from admin_auth import parse_admin_ids
+from patient_companion import PatientCompanionFlow
 from external_api import send_leave_to_external_api
 
 # ══════════════════════════════════════════════
@@ -568,7 +569,7 @@ def build_main_menu_text(user_id: int, telegram_name: str) -> str:
 
 def main_menu_keyboard(is_admin: bool = False):
     keyboard = [
-        [KeyboardButton("📝 إرسال طلب جديد /go")],
+        [KeyboardButton("📝 إرسال طلب جديد /go"), KeyboardButton("🏥 مرافق مريض")],
         [KeyboardButton("📋 طلباتي"),         KeyboardButton("🧾 اشحن رصيدك")],
         [KeyboardButton("🌐 نظام المواقع"),   KeyboardButton("🏥 نظام المستشفيات")],
         [KeyboardButton("➕ إضافة مستشفى"),   KeyboardButton("➕ إضافة طبيب")],
@@ -578,6 +579,21 @@ def main_menu_keyboard(is_admin: bool = False):
     if is_admin:
         keyboard.insert(5, [KeyboardButton("⚙️ نظام البوت"), KeyboardButton("🎛️ لوحة التحكم")])
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+
+async def _patient_companion_back_to_main(query, context: ContextTypes.DEFAULT_TYPE):
+    """يعيد المستخدم من تدفق مرافق المريض إلى لوحة التحكم الرئيسية."""
+    context.user_data.clear()
+    user = query.from_user
+    await query.message.reply_text(
+        build_main_menu_text(user.id, user.full_name or "مستخدم"),
+        parse_mode="Markdown",
+        reply_markup=main_menu_keyboard(is_admin_user(user.id)),
+    )
+
+
+patient_companion_flow = PatientCompanionFlow(db, _patient_companion_back_to_main)
+
 
 def dashboard_keyboard():
     return ReplyKeyboardMarkup([
@@ -1024,6 +1040,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # ── القائمة الرئيسية ──
+
+    if text == "🏥 مرافق مريض":
+        context.user_data.clear()
+        await patient_companion_flow.start(update.message, context)
+        return
+
+    if await patient_companion_flow.handle_text(text, update.message, context, uid):
+        return
 
     if text == "📝 إرسال طلب جديد /go":
         context.user_data.clear()
@@ -4119,6 +4143,10 @@ def main():
     # معالج الأزرار الإنلاين
     async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
+
+        if await patient_companion_flow.handle_callback(query, context):
+            return
+
         await query.answer()
         uid = query.from_user.id
         data = query.data or ""
