@@ -1,6 +1,6 @@
 import unittest
 
-from companion_review_pipeline import review_companion_data
+from companion_review_pipeline import review_companion_data, translate_job_title
 
 
 class CompanionReviewPipelineTests(unittest.TestCase):
@@ -30,6 +30,26 @@ class CompanionReviewPipelineTests(unittest.TestCase):
         self.assertTrue(any("10 أرقام" in error for error in result.errors))
         self.assertTrue(any("تاريخ الدخول" in error for error in result.errors))
         self.assertTrue(any("عدد الأيام" in error for error in result.errors))
+
+    def test_job_titles_use_semantic_translation_and_reject_transliteration(self):
+        expected = {
+            "مقيم": "Resident", "مهندس": "Engineer", "مدير": "Manager",
+            "طبيب": "Physician", "موظف إداري": "Administrative Employee",
+            "ممرض": "Nurse", "متقاعد": "Retired", "طالب": "Student",
+        }
+        for arabic, english in expected.items():
+            with self.subTest(arabic=arabic):
+                translated, error = translate_job_title(arabic)
+                self.assertEqual((translated, error), (english, ""))
+                self.assertNotIn(translated.lower(), {"mqym", "mhnds", "mudir", "tabib"})
+        rejected, error = translate_job_title("mqym")
+        self.assertEqual(rejected, "")
+        self.assertIn("نقلاً صوتياً", error)
+
+    def test_job_title_is_blocked_when_semantic_translation_is_unknown(self):
+        translated, error = translate_job_title("مسمى غامض جداً")
+        self.assertEqual(translated, "")
+        self.assertIn("تعذر تحديد ترجمة مهنية", error)
 
     def test_original_arabic_values_are_preserved(self):
         source = {

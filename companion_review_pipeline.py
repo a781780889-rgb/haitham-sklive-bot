@@ -52,6 +52,63 @@ _WORKPLACE_TERMS = {
     "مدرسة": "School", "مؤسسة": "Establishment", "هيئة": "Authority",
 }
 
+# ترجمة دلالية للمسمى الوظيفي، وليست نقلاً صوتياً. تُستخدم قبل الرسم في PDF.
+_JOB_TITLE_TRANSLATIONS = {
+    "مقيم": "Resident", "طبيب": "Physician", "دكتور": "Doctor", "مهندس": "Engineer",
+    "مهندسة": "Engineer", "مدير": "Manager", "مديرة": "Manager", "محاسب": "Accountant",
+    "محاسبة": "Accountant", "موظف إداري": "Administrative Employee", "موظفة إدارية": "Administrative Employee",
+    "معلم": "Teacher", "معلمة": "Teacher", "ممرض": "Nurse", "ممرضة": "Nurse",
+    "فني": "Technician", "فنية": "Technician", "عسكري": "Military Personnel", "ضابط": "Officer",
+    "جندي": "Soldier", "متقاعد": "Retired", "طالب": "Student", "طالبة": "Student",
+    "موظف حكومي": "Government Employee", "موظفة حكومية": "Government Employee",
+    "موظف قطاع خاص": "Private Sector Employee", "موظفة قطاع خاص": "Private Sector Employee",
+    "بدون عمل": "Unemployed", "عاطل": "Unemployed", "باحث عن عمل": "Job Seeker",
+    "أخصائي": "Specialist", "أخصائية": "Specialist", "استشاري": "Consultant", "استشارية": "Consultant",
+    "مشرف": "Supervisor", "سكرتير": "Secretary", "مساعد": "Assistant", "عامل": "Worker",
+    "متدرب": "Intern", "باحث": "Researcher", "مدرس": "Teacher",
+}
+_JOB_TITLE_PHRASES = {
+    "مهندس برمجيات": "Software Engineer", "مهندس مدني": "Civil Engineer", "مهندس كهرباء": "Electrical Engineer",
+    "طبيب عام": "General Practitioner", "طبيب أسنان": "Dentist", "طبيب مقيم": "Resident Physician",
+    "ممرض قانوني": "Registered Nurse", "استشاري باطنية": "Consultant Internist", "استشاري طب باطني": "Internal Medicine Consultant", "طبيب باطنية": "Internist", "مدير موارد بشرية": "Human Resources Manager",
+    "مدير مالي": "Finance Manager", "موظف استقبال": "Receptionist", "أخصائي مختبر": "Laboratory Specialist",
+}
+
+
+def _is_arabic(value: str) -> bool:
+    return any("\u0600" <= char <= "\u06ff" for char in value)
+
+
+def _looks_like_transliteration(value: str) -> bool:
+    compact = re.sub(r"[^a-z]", "", value.lower())
+    return compact in {"mqym", "mhnds", "mudir", "tabib", "mrd", "fny", "askry", "jndy"} or (
+        _is_arabic(value) is False and len(compact) >= 4 and compact in {"muhandis", "muqeem", "mudeer", "tabeeb"}
+    )
+
+
+def translate_job_title(value: str) -> tuple[str, str]:
+    """يعيد (الترجمة المهنية، الخطأ). عند الغموض يرفض ولا ينقل الحروف صوتياً."""
+    raw = _clean(value)
+    if not raw:
+        return "", "المسمى الوظيفي ناقص"
+    if not _is_arabic(raw):
+        if _looks_like_transliteration(raw):
+            return "", "تم رفض المسمى الوظيفي لأنه يبدو نقلاً صوتياً؛ اكتب المسمى بالعربية أو بالإنجليزية المهنية"
+        return raw, ""
+    normalized = re.sub(r"^ال", "", raw).strip()
+    for phrase, english in sorted(_JOB_TITLE_PHRASES.items(), key=lambda item: len(item[0]), reverse=True):
+        if phrase in raw:
+            return english, ""
+    for phrase, english in sorted(_JOB_TITLE_TRANSLATIONS.items(), key=lambda item: len(item[0]), reverse=True):
+        if normalized == re.sub(r"^ال", "", phrase) or raw == phrase:
+            return english, ""
+    # تركيب مهني آمن لبعض الأنماط الجديدة دون اختراع transliteration.
+    if normalized.startswith("موظف "):
+        tail = normalized.removeprefix("موظف ").strip()
+        if tail in {"إداري", "اداري"}:
+            return "Administrative Employee", ""
+    return "", "تعذر تحديد ترجمة مهنية للمسمى الوظيفي؛ يرجى توضيحه قبل إنشاء PDF"
+
 
 def _clean(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "").strip())
@@ -230,4 +287,4 @@ def review_companion_data(text_or_data: Any, current: Optional[Mapping[str, Any]
     return CompanionReview(original, normalized, english, errors, warnings)
 
 
-__all__ = ["CompanionReview", "REQUIRED_FIELDS", "review_companion_data"]
+__all__ = ["CompanionReview", "REQUIRED_FIELDS", "review_companion_data", "translate_job_title"]

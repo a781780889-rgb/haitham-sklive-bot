@@ -1043,21 +1043,30 @@ class PatientCompanionFlow:
 
     async def _show_review(self, message, context, user_id, city, hospital, doctor, specialty):
         """شاشة مراجعة عربية/إنجليزية؛ لا يظهر زر التأكيد إلا بعد اجتياز التحقق."""
-        from companion_review_pipeline import review_companion_data
+        from companion_review_pipeline import review_companion_data, translate_job_title
 
         extracted = context.user_data.get("pc_extracted", {}) or {}
         review = review_companion_data(extracted)
+        specialty_en, specialty_error = translate_job_title(specialty)
+        translation_errors = list(review.errors)
+        if specialty_error:
+            translation_errors.append(f"المسمى الوظيفي: {specialty_error}")
         context.user_data["pc_extracted"] = review.normalized
         context.user_data["pc_review_english"] = review.english
-        context.user_data["pc_review_errors"] = review.errors
-        if not review.valid:
+        context.user_data["pc_specialty_en"] = specialty_en
+        context.user_data["pc_review_errors"] = translation_errors
+        review_text = review.message()
+        review_text += f"\n\nالمسمى الوظيفي: {specialty or '—'}\nPosition: {specialty_en or '—'}"
+        if specialty_error:
+            review_text += f"\n❌ المسمى الوظيفي: {specialty_error}"
+        if not review.valid or translation_errors:
             context.user_data["pc_state"] = "reviewing"
             keyboard = InlineKeyboardMarkup([
                 [InlineKeyboardButton("✏️ تعديل البيانات", callback_data=CB_PC_EDIT)],
                 [InlineKeyboardButton("🔄 إعادة التحقق", callback_data=CB_PC_REVALIDATE)],
                 [InlineKeyboardButton("❌ إلغاء", callback_data=CB_PC_CANCEL)],
             ])
-            await message.reply_text(review.message(), reply_markup=keyboard)
+            await message.reply_text(review_text, reply_markup=keyboard)
             return True
 
         keyboard = InlineKeyboardMarkup([
@@ -1068,7 +1077,7 @@ class PatientCompanionFlow:
             [InlineKeyboardButton("🏠 الرئيسية", callback_data=CB_PC_BACK_MAIN)],
         ])
         context.user_data["pc_state"] = "reviewing"
-        await message.reply_text(review.message(), reply_markup=keyboard)
+        await message.reply_text(review_text, reply_markup=keyboard)
         return True
 
     @staticmethod
@@ -1201,6 +1210,7 @@ class PatientCompanionFlow:
                 "doctor": doctor, "specialty": specialty,
                 "companion_name_en": english.get("companion_name", ""),
                 "nationality_en": english.get("nationality", ""),
+                "specialty_en": context.user_data.get("pc_specialty_en", ""),
                 **extracted,
             })
         except Exception as _e:

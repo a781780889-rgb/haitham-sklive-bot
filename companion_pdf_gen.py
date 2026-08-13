@@ -225,6 +225,12 @@ def _build_field_values(companion_data: Mapping[str, Any], hospital: str, doctor
     name_en = name_en.upper()
     doctor = _text(doctor)
     specialty = _text(specialty)
+    specialty_en = _text(companion_data.get("specialty_en"))
+    if not specialty_en:
+        from companion_review_pipeline import translate_job_title
+        specialty_en, translation_error = translate_job_title(specialty)
+        if translation_error:
+            raise ValueError(translation_error)
     return {
         "leave_id": _text(gsl_code),
         # الأقواس جزء من قيمة مدة الإجازة وتظهر داخل المستطيل الإنجليزي الأول.
@@ -244,7 +250,7 @@ def _build_field_values(companion_data: Mapping[str, Any], hospital: str, doctor
         "employer_ar": workplace,
         "practitioner_en": _translate(doctor).upper(),
         "practitioner_ar": doctor,
-        "position_en": _translate(specialty),
+        "position_en": specialty_en,
         "position_ar": specialty,
     }
 
