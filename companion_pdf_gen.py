@@ -13,7 +13,7 @@ import tempfile
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, NamedTuple
 
 from pypdf import PdfReader, PdfWriter
 from reportlab.pdfbase import pdfmetrics
@@ -58,28 +58,54 @@ FIELD_IDS = (
     "practitioner_en", "practitioner_ar", "position_en", "position_ar",
 )
 
-# الإحداثيات مستخرجة من حدود جدول القالب الجديد (نقاط PDF، الأصل أسفل الصفحة).
-# (x0, x1, y_center, اللغة)
+class FieldBox(NamedTuple):
+    """حدود خانة ديناميكية في نقاط PDF، مع الأصل أسفل الصفحة."""
+
+    x0: float
+    x1: float
+    y0: float
+    y1: float
+    language: str
+
+    @property
+    def width(self) -> float:
+        return self.x1 - self.x0
+
+    @property
+    def height(self) -> float:
+        return self.y1 - self.y0
+
+    @property
+    def center_x(self) -> float:
+        return (self.x0 + self.x1) / 2
+
+    @property
+    def center_y(self) -> float:
+        return (self.y0 + self.y1) / 2
+
+
+# حدود الخانات مستخرجة من جدول القالب الجديد؛ لا تتغير الخلفية أو عناصر التصميم.
+# تُستخدم الحدود نفسها لحساب المركز، والحجم، والتصغير الأفقي، والتحقق النهائي.
 _FIELD_BOXES = {
-    "leave_id": (134, 454, 630.25, "en"),
-    "duration_en": (134, 294, 604.92, "en"),
-    "duration_ar": (294, 454, 604.92, "ar"),
-    "admission_en": (134, 294, 575.54, "en"),
-    "admission_ar": (294, 454, 575.54, "ar"),
-    "discharge_en": (134, 294, 546.16, "en"),
-    "discharge_ar": (294, 454, 546.16, "ar"),
-    "issue_date": (134, 454, 518.36, "en"),
-    "companion_en": (134, 294, 490.55, "en"),
-    "companion_ar": (294, 454, 490.55, "ar"),
-    "national_id": (134, 454, 462.10, "en"),
-    "nationality_en": (134, 294, 433.55, "en"),
-    "nationality_ar": (294, 454, 433.55, "ar"),
-    "relation_ar": (134, 454, 405.74, "ar"),
-    "employer_ar": (134, 454, 377.94, "ar"),
-    "practitioner_en": (134, 294, 349.39, "en"),
-    "practitioner_ar": (294, 454, 349.39, "ar"),
-    "position_en": (134, 294, 321.59, "en"),
-    "position_ar": (294, 454, 321.59, "ar"),
+    "leave_id": FieldBox(134, 454, 619.25, 641.25, "en"),
+    "duration_en": FieldBox(134, 294, 593.92, 615.92, "en"),
+    "duration_ar": FieldBox(294, 454, 593.92, 615.92, "ar"),
+    "admission_en": FieldBox(134, 294, 564.54, 586.54, "en"),
+    "admission_ar": FieldBox(294, 454, 564.54, 586.54, "ar"),
+    "discharge_en": FieldBox(134, 294, 535.16, 557.16, "en"),
+    "discharge_ar": FieldBox(294, 454, 535.16, 557.16, "ar"),
+    "issue_date": FieldBox(134, 454, 507.36, 529.36, "en"),
+    "companion_en": FieldBox(134, 294, 479.55, 501.55, "en"),
+    "companion_ar": FieldBox(294, 454, 479.55, 501.55, "ar"),
+    "national_id": FieldBox(134, 454, 451.10, 473.10, "en"),
+    "nationality_en": FieldBox(134, 294, 422.55, 444.55, "en"),
+    "nationality_ar": FieldBox(294, 454, 422.55, 444.55, "ar"),
+    "relation_ar": FieldBox(134, 454, 394.74, 416.74, "ar"),
+    "employer_ar": FieldBox(134, 454, 366.94, 388.94, "ar"),
+    "practitioner_en": FieldBox(134, 294, 338.39, 360.39, "en"),
+    "practitioner_ar": FieldBox(294, 454, 338.39, 360.39, "ar"),
+    "position_en": FieldBox(134, 294, 310.59, 332.59, "en"),
+    "position_ar": FieldBox(294, 454, 310.59, 332.59, "ar"),
 }
 
 
@@ -97,37 +123,61 @@ def _translate(value: str) -> str:
         return value
 
 
-def _arabic_display(value: str) -> str:
+def _display_text(value: str, language: str) -> str:
     value = _text(value)
-    if _ARABIC_RESHAPER and _BIDI_DISPLAY:
+    has_arabic = any("\u0600" <= char <= "\u06ff" for char in value)
+    if (language == "ar" or has_arabic) and _ARABIC_RESHAPER and _BIDI_DISPLAY:
         return _BIDI_DISPLAY(_ARABIC_RESHAPER(value))
     return value
 
 
-def _fit_size(text: str, font: str, max_width: float, initial: float = 9.5, minimum: float = 5.8) -> float:
+def _fit_text(text: str, font: str, max_width: float, initial: float = 9.5,
+              minimum: float = 5.8) -> tuple[float, float]:
+    """يحسب حجم الخط والتصغير الأفقي حتى يبقى النص داخل الخانة دائماً."""
     size = initial
     while size > minimum and pdfmetrics.stringWidth(text, font, size) > max_width:
         size -= 0.25
-    return max(size, minimum)
+    raw_width = pdfmetrics.stringWidth(text, font, size)
+    horizontal_scale = min(100.0, (max_width / raw_width) * 100.0) if raw_width else 100.0
+    return max(size, minimum), max(horizontal_scale, 35.0)
 
 
-def _draw_centered(c: canvas.Canvas, value: str, box: tuple[float, float, float, str],
-                   light_text: bool = False) -> None:
-    x0, x1, y_center, language = box
+def _draw_centered(c: canvas.Canvas, value: str, box: FieldBox,
+                   light_text: bool = False) -> dict[str, float]:
+    if not value:
+        return {"width": 0.0, "height": 0.0, "scale": 100.0, "x": box.center_x, "y": box.center_y}
+    is_arabic = box.language == "ar"
+    font = AR_FONT if is_arabic else EN_FONT
+    rendered = _display_text(value, box.language)
+    size, horizontal_scale = _fit_text(rendered, font, box.width - 10, initial=9.0 if is_arabic else 8.7)
+    c.setFillColorRGB(1, 1, 1) if light_text else c.setFillColorRGB(*TEXT_COLOR)
+    text = c.beginText()
+    text.setFont(font, size)
+    text.setHorizScale(horizontal_scale)
+    # التعويض عن التصغير الأفقي يجعل المركز الحقيقي للخانة هو نقطة البداية.
+    text_width = pdfmetrics.stringWidth(rendered, font, size) * horizontal_scale / 100.0
+    text.setTextOrigin(box.center_x - text_width / 2, box.center_y - size * 0.34)
+    text.textOut(rendered)
+    c.drawText(text)
+    return {"width": text_width, "height": size, "scale": horizontal_scale,
+            "x": box.center_x, "y": box.center_y}
+
+
+def _validate_field_layout(field_id: str, value: str, box: FieldBox, metrics: Mapping[str, float]) -> None:
+    """يفشل مبكراً إذا خرج النص عن حدود الخانة أو لم يكن مركزه محسوباً."""
     if not value:
         return
-    is_arabic = language == "ar"
-    font = AR_FONT if is_arabic else EN_FONT
-    rendered = _arabic_display(value) if is_arabic else value
-    size = _fit_size(rendered, font, x1 - x0 - 10, initial=9.0 if is_arabic else 8.7)
-    c.setFont(font, size)
-    c.setFillColorRGB(1, 1, 1) if light_text else c.setFillColorRGB(*TEXT_COLOR)
-    c.drawCentredString((x0 + x1) / 2, y_center - size * 0.34, rendered)
+    horizontal_margin = (box.width - metrics["width"]) / 2
+    vertical_margin = (box.height - metrics["height"]) / 2
+    if horizontal_margin < -0.01 or vertical_margin < -0.01:
+        raise ValueError(f"النص خارج حدود خانة {field_id}")
+    if abs(metrics["x"] - box.center_x) > 0.01 or abs(metrics["y"] - box.center_y) > 0.01:
+        raise ValueError(f"النص غير متمركز في خانة {field_id}")
 
 
 def _build_field_values(companion_data: Mapping[str, Any], hospital: str, doctor: str,
                         specialty: str, gsl_code: str | None) -> dict[str, str]:
-    from pdf_gen import calc_dates, format_weekday_date, nat_en, normalize_nat_ar, safe_int, to_hijri, to_hijri_duration
+    from pdf_gen import calc_dates, nat_en, normalize_nat_ar, safe_int, to_hijri, to_hijri_duration
 
     days = max(1, safe_int(companion_data.get("days_count", 1)))
     admission = _text(companion_data.get("admission_date"))
@@ -182,7 +232,9 @@ def render_companion_pdf(companion_data: Mapping[str, Any], hospital: str, docto
     overlay_path = output.with_suffix(".overlay.pdf")
     c = canvas.Canvas(str(overlay_path), pagesize=(PAGE_WIDTH, PAGE_HEIGHT), pageCompression=1)
     for field_id, value in _build_field_values(companion_data, hospital, doctor, specialty, gsl_code).items():
-        _draw_centered(c, value, _FIELD_BOXES[field_id], light_text=field_id in {"duration_en", "duration_ar"})
+        box = _FIELD_BOXES[field_id]
+        metrics = _draw_centered(c, value, box, light_text=field_id in {"duration_en", "duration_ar"})
+        _validate_field_layout(field_id, value, box, metrics)
     c.save()
 
     background = PdfReader(str(template))

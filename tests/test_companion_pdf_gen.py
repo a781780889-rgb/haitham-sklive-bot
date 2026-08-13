@@ -52,6 +52,30 @@ class CompanionPdfTemplateTests(unittest.TestCase):
             for value in ("PSL26081183122", "1072727288", "ABDULLAH", "ﻋﺒﺪﷲ"):
                 self.assertIn(value, extracted)
 
+    def test_long_and_mixed_values_are_fitted_without_overflow(self):
+        long_data = {
+            **self.data,
+            "companion_name": "عبدالله محمد عبدالرحمن السهلي القحطاني QLAN HAITHAM",
+            "workplace": "شركة الاتصالات وتقنية المعلومات الوطنية المحدودة جداً",
+            "id_number": "1234567890A1234567890",
+            "relation": "ابن / Son",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "companion-long.pdf"
+            result = generate_companion_pdf(
+                long_data,
+                hospital="مستشفى المانع العام",
+                doctor="د. هيثم عقلان QLAN HAITHAM",
+                specialty="استشاري باطنية وقلب",
+                output_path=output,
+                gsl_code="PSL-LONG-MIXED-1234567890",
+            )
+            self.assertEqual(Path(result), output)
+            self.assertGreater(output.stat().st_size, 1000)
+            page = PdfReader(str(output)).pages[0]
+            self.assertAlmostEqual(float(page.mediabox.width), 595.5, places=1)
+            self.assertAlmostEqual(float(page.mediabox.height), 842.25, places=1)
+
     def test_field_contract_covers_all_dynamic_slots(self):
         expected = {
             "leave_id", "duration_en", "duration_ar", "admission_en", "admission_ar",
