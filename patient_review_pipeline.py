@@ -184,8 +184,8 @@ def review_patient_data(data: Mapping[str, Any], *, source_text: str = "") -> Re
             errors.append(f"الحقل ناقص: {FIELD_LABELS_AR[key]}")
 
     ident = _digits(normalized.get("id_number"))
-    if ident and (not re.fullmatch(r"[12]\d{9}", ident)):
-        errors.append("رقم الهوية يجب أن يتكون من 10 أرقام ويبدأ بـ 1 أو 2")
+    if ident and (not re.fullmatch(r"\d{10}", ident)):
+        errors.append("رقم الهوية يجب أن يتكون من 10 أرقام")
     normalized["id_number"] = ident or normalized.get("id_number", "")
 
     days_raw = _digits(normalized.get("days_count"))

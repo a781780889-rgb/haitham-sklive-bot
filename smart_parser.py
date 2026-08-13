@@ -158,7 +158,7 @@ def merge_parsed_data(existing: Dict, new_parsed: Dict) -> Dict:
             if len(new_val.split()) > len(existing_val.split()):
                 result[key] = new_val
         elif key == 'id_number':
-            if re.match(r'^[12]\d{9}$', new_val) and not re.match(r'^[12]\d{9}$', existing_val):
+            if re.match(r'^\d{10}$', new_val) and not re.match(r'^\d{10}$', existing_val):
                 result[key] = new_val
         else:
             result[key] = new_val
@@ -225,7 +225,7 @@ def _legacy_parse(text: str) -> Dict[str, Any]:
                         result[v] = processed
                 break
     if 'id_number' not in result:
-        m = re.search(r'\b([12]\d{9})\b', text_w)
+        m = re.search(r'\b(\d{10})\b', text_w)
         if m:
             result['id_number'] = m.group(1)
     return result

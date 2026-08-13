@@ -179,12 +179,11 @@ def _process_field_value(key: str, value: str) -> Optional[str]:
     # معالجة رقم الهوية
     if key == 'id_number':
         cleaned = re.sub(r'[\s\-]', '', value)
-        # يجب أن يكون 10 أرقام ويبدأ بـ 1 أو 2
-        if re.match(r'^[12]\d{9}$', cleaned):
+        # يجب أن يكون 10 أرقام دون تقييد الرقم الأول
+        if re.match(r'^\d{10}$', cleaned):
             return cleaned
-        # قبول أي تسلسل من 8-12 رقم (للإقامة والجوازات)
         digits_only = re.sub(r'\D', '', cleaned)
-        if 8 <= len(digits_only) <= 12:
+        if len(digits_only) == 10:
             return digits_only
         return None
     
@@ -273,9 +272,9 @@ def _extract_inline(text: str, existing: Dict[str, Any]) -> Dict[str, Any]:
     result = {}
     text_w = to_western_digits(text)
     
-    # ── رقم الهوية (10 أرقام يبدأ بـ 1 أو 2) ──
+    # ── رقم الهوية (أي عشرة أرقام) ──
     if 'id_number' not in existing:
-        m = re.search(r'\b([12]\d{9})\b', text_w)
+        m = re.search(r'\b(\d{10})\b', text_w)
         if m:
             result['id_number'] = m.group(1)
     

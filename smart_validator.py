@@ -120,28 +120,13 @@ def validate_id_number(raw: str) -> ValidationResult:
     if not cleaned:
         return _err('⚠️ رقم الهوية يجب أن يحتوي على أرقام فقط.')
     
-    # هوية سعودية أو إقامة (10 أرقام، تبدأ بـ 1 أو 2)
-    if re.match(r'^[12]\d{9}$', cleaned):
-        id_type = 'هوية وطنية' if cleaned[0] == '1' else 'إقامة'
-        return _ok(cleaned, confidence=1.0)
-    
-    # قبول 8-12 رقم كرقم جواز أو وثيقة أخرى (تسامح)
+    # رقم الهوية الصحيح: عشرة أرقام دون تقييد الرقم الأول.
     digits_only = re.sub(r'\D', '', cleaned)
-    if 8 <= len(digits_only) <= 12:
-        return _ok(digits_only, confidence=0.75,
-                   warning='💡 تم قبول الرقم. إذا كان رقم هوية سعودية، يجب أن يكون 10 أرقام ويبدأ بـ 1 أو 2.')
-    
-    if len(digits_only) < 8:
-        return _err(
-            f'⚠️ رقم الهوية قصير جداً ({len(digits_only)} أرقام).\n'
-            '📝 رقم الهوية السعودية 10 أرقام ويبدأ بـ 1\n'
-            '📝 رقم الإقامة 10 أرقام ويبدأ بـ 2'
-        )
-    
+    if re.fullmatch(r'\d{10}', digits_only):
+        return _ok(digits_only, confidence=1.0)
+
     return _err(
-        '⚠️ رقم الهوية غير صحيح.\n'
-        '📝 مثال هوية: `1234567890`\n'
-        '📝 مثال إقامة: `2345678901`'
+        f'⚠️ رقم الهوية يجب أن يتكون من 10 أرقام (المُدخَل: {len(digits_only)} أرقام).'
     )
 
 

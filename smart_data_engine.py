@@ -251,12 +251,11 @@ def normalize_id(raw: str) -> Optional[str]:
     if not raw:
         return None
     t = re.sub(r"[\s\-]", "", to_west(str(raw)))
-    # هوية سعودية: 10 أرقام تبدأ بـ 1 أو 2
-    if re.match(r"^[12]\d{9}$", t):
+    # رقم الهوية: أي 10 أرقام، دون تقييد الرقم الأول.
+    if re.match(r"^\d{10}$", t):
         return t
-    # أي تسلسل 8-12 رقم (إقامة/جواز)
     digits = re.sub(r"\D", "", t)
-    if 8 <= len(digits) <= 12:
+    if len(digits) == 10:
         return digits
     return None
 
@@ -766,9 +765,9 @@ def _extract_inline_patterns(text: str, existing: Dict) -> Dict[str, Any]:
     result: Dict[str, Any] = {}
     text_w = to_west(text)
 
-    # رقم الهوية (10 أرقام يبدأ بـ 1 أو 2)
+    # رقم الهوية (أي عشرة أرقام)
     if "id_number" not in existing:
-        m = re.search(r"\b([12]\d{9})\b", text_w)
+        m = re.search(r"\b(\d{10})\b", text_w)
         if m:
             result["id_number"] = m.group(1)
 
@@ -996,12 +995,8 @@ def validate_patient_data(data: Dict) -> List[FieldError]:
     # ── التحقق من رقم الهوية ──
     id_num = data.get("id_number", "")
     if id_num:
-        if not re.match(r"^[12]\d{9}$", id_num):
-            # قد يكون إقامة
-            if not re.match(r"^\d{8,12}$", id_num):
-                errors.append(FieldError("id_number", "❌ رقم الهوية يجب أن يكون 10 أرقام ويبدأ بـ 1 أو 2.", "error"))
-            else:
-                errors.append(FieldError("id_number", "ℹ️ رقم يبدو وكأنه إقامة أو جواز.", "info"))
+        if not re.match(r"^\d{10}$", id_num):
+            errors.append(FieldError("id_number", "❌ رقم الهوية يجب أن يكون 10 أرقام.", "error"))
 
     # ── التحقق من رقم الجوال ──
     phone = data.get("phone", "")
@@ -1330,7 +1325,7 @@ def merge_patient_data(existing: Dict, new_parsed: Dict) -> Dict:
                 result[key] = new_val
         # الهوية: أولوية للصيغة الصحيحة
         elif key == "id_number":
-            if re.match(r"^[12]\d{9}$", new_val) and not re.match(r"^[12]\d{9}$", existing_val):
+            if re.match(r"^\d{10}$", new_val) and not re.match(r"^\d{10}$", existing_val):
                 result[key] = new_val
         # باقي الحقول: القيمة الجديدة تُستبدَل
         else:

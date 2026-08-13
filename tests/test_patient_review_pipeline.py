@@ -28,6 +28,15 @@ class PatientReviewPipelineTests(unittest.TestCase):
         self.assertEqual(result.english["nationality"], "Saudi")
         self.assertIn("National ID Number", result.message())
 
+    def test_any_first_digit_is_accepted_for_ten_digit_id(self):
+        for identifier in ("3456789012", "7890123456", "9876543210"):
+            with self.subTest(identifier=identifier):
+                data = self.valid_data()
+                data["id_number"] = identifier
+                result = review_patient_data(data)
+                self.assertTrue(result.valid, result.errors)
+                self.assertEqual(result.normalized["id_number"], identifier)
+
     def test_missing_issue_fields_are_blocked(self):
         data = self.valid_data()
         data.pop("issue_time")

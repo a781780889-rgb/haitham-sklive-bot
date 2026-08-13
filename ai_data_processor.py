@@ -167,8 +167,8 @@ class SmartDataExtractor:
     4. Date detection
     """
 
-    # أنماط أرقام الهوية السعودية
-    _ID_PATTERN = re.compile(r'\b([12]\d{9})\b')
+    # نمط رقم الهوية: أي عشرة أرقام
+    _ID_PATTERN = re.compile(r'\b(\d{10})\b')
     # أنماط أرقام الجوال
     _PHONE_PATTERN = re.compile(r'\b(05\d{8}|5\d{8}|\+9665\d{8}|009665\d{8})\b')
     # أنماط سنة الميلاد
@@ -516,10 +516,10 @@ class SmartDataExtractor:
 
         if field == 'id_number':
             cleaned = re.sub(r'[\s\-]', '', to_western_digits(v))
-            if re.match(r'^[12]\d{9}$', cleaned):
+            if re.match(r'^\d{10}$', cleaned):
                 return cleaned
             # محاولة استخراج أي 10 أرقام
-            m = re.search(r'[12]\d{9}', cleaned)
+            m = re.search(r'\d{10}', cleaned)
             return m.group() if m else None
 
         if field == 'phone':
@@ -573,7 +573,7 @@ def smart_merge(existing: Dict, new_data: Dict, extractor: SmartDataExtractor) -
                 result[field] = new_val
         # الحقول التي يُفضّل فيها المُطابق للنمط
         elif field == 'id_number':
-            if re.match(r'^[12]\d{9}$', str(new_val)):
+            if re.match(r'^\d{10}$', str(new_val)):
                 result[field] = new_val
         # الحقول الأخرى: استبدال إذا كانت الثقة أعلى
         else:
