@@ -156,7 +156,9 @@ def _draw_centered(c: canvas.Canvas, value: str, box: FieldBox,
     text.setHorizScale(horizontal_scale)
     # التعويض عن التصغير الأفقي يجعل المركز الحقيقي للخانة هو نقطة البداية.
     text_width = pdfmetrics.stringWidth(rendered, font, size) * horizontal_scale / 100.0
-    text.setTextOrigin(box.center_x - text_width / 2, box.center_y - size * 0.34)
+    # خط الأساس في ReportLab يقع أسفل المركز البصري للحروف؛ التعويض 0.66 يضع
+    # مركز glyph الحقيقي في مركز المستطيل بدلاً من ترك البيانات منخفضة داخله.
+    text.setTextOrigin(box.center_x - text_width / 2, box.center_y + size * 0.66)
     text.textOut(rendered)
     c.drawText(text)
     return {"width": text_width, "height": size, "scale": horizontal_scale,
