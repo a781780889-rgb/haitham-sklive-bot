@@ -100,8 +100,9 @@ _FIELD_BOXES = {
     "national_id": FieldBox(134, 454, 451.10, 473.10, "en"),
     "nationality_en": FieldBox(134, 294, 422.55, 444.55, "en"),
     "nationality_ar": FieldBox(294, 454, 422.55, 444.55, "ar"),
-    "relation_ar": FieldBox(134, 454, 394.74, 416.74, "ar"),
-    "employer_ar": FieldBox(134, 454, 366.94, 388.94, "ar"),
+    # يطلب القالب وضع صلة القرابة وجهة العمل في المستطيل الأول من منطقة البيانات.
+    "relation_ar": FieldBox(134, 294, 394.74, 416.74, "ar"),
+    "employer_ar": FieldBox(134, 294, 366.94, 388.94, "ar"),
     "practitioner_en": FieldBox(134, 294, 338.39, 360.39, "en"),
     "practitioner_ar": FieldBox(294, 454, 338.39, 360.39, "ar"),
     "position_en": FieldBox(134, 294, 310.59, 332.59, "en"),
@@ -195,7 +196,8 @@ def _build_field_values(companion_data: Mapping[str, Any], hospital: str, doctor
     specialty = _text(specialty)
     return {
         "leave_id": _text(gsl_code),
-        "duration_en": f"{days} {'day' if days == 1 else 'days'} ( {start} to {end} )",
+        # الأقواس جزء من قيمة مدة الإجازة وتظهر داخل المستطيل الإنجليزي الأول.
+        "duration_en": f"{days} {'day' if days == 1 else 'days'} ({start} to {end})",
         "duration_ar": to_hijri_duration(days, start, end),
         "admission_en": start,
         "admission_ar": to_hijri(start),
