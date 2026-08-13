@@ -100,9 +100,10 @@ _FIELD_BOXES = {
     "national_id": FieldBox(134, 454, 451.10, 473.10, "en"),
     "nationality_en": FieldBox(134, 294, 422.55, 444.55, "en"),
     "nationality_ar": FieldBox(294, 454, 422.55, 444.55, "ar"),
-    # يطلب القالب وضع صلة القرابة وجهة العمل في المستطيل الأول من منطقة البيانات.
-    "relation_ar": FieldBox(134, 294, 394.74, 416.74, "ar"),
-    "employer_ar": FieldBox(134, 294, 366.94, 388.94, "ar"),
+    # المستطيل الأول المقصود في القالب هو الخانة اليمنى من منطقتي البيانات،
+    # الملاصقة للتسمية العربية.
+    "relation_ar": FieldBox(294, 454, 394.74, 416.74, "ar"),
+    "employer_ar": FieldBox(294, 454, 366.94, 388.94, "ar"),
     "practitioner_en": FieldBox(134, 294, 338.39, 360.39, "en"),
     "practitioner_ar": FieldBox(294, 454, 338.39, 360.39, "ar"),
     "position_en": FieldBox(134, 294, 310.59, 332.59, "en"),
