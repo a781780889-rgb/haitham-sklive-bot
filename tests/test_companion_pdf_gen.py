@@ -1,10 +1,21 @@
+import io
 import tempfile
 import unittest
 from pathlib import Path
 
+from PIL import Image
 from pypdf import PdfReader
 
-from companion_pdf_gen import FIELD_IDS, PDF_TEMPLATE_PATH, generate_companion_pdf
+from companion_pdf_gen import (
+    DESIGN_WIDTH,
+    FIELD_IDS,
+    HOSPITAL_LOGO_SLOT,
+    PAGE_HEIGHT,
+    PDF_PT_PER_DESIGN_PX,
+    PDF_TEMPLATE_PATH,
+    generate_companion_pdf,
+)
+
 
 
 class CompanionPdfTemplateTests(unittest.TestCase):
@@ -75,6 +86,40 @@ class CompanionPdfTemplateTests(unittest.TestCase):
             page = PdfReader(str(output)).pages[0]
             self.assertAlmostEqual(float(page.mediabox.width), 595.5, places=1)
             self.assertAlmostEqual(float(page.mediabox.height), 842.25, places=1)
+
+    def test_logo_uses_fixed_slot_for_square_and_wide_assets(self):
+        for size in ((100, 100), (800, 400)):
+            with self.subTest(size=size), tempfile.TemporaryDirectory() as directory:
+                image_buffer = io.BytesIO()
+                Image.new("RGBA", size, (20, 90, 160, 255)).save(image_buffer, format="PNG")
+                output = Path(directory) / "companion-logo.pdf"
+                generate_companion_pdf(
+                    self.data,
+                    hospital="مستشفى المانع العام",
+                    doctor="أحمد سليمان الجباري",
+                    specialty="استشاري باطنية",
+                    output_path=output,
+                    gsl_code="PSL-LOGO-123",
+                    logo_path=image_buffer.getvalue(),
+                )
+                page = PdfReader(str(output)).pages[0]
+                content = page.get_contents().get_data().decode("latin1")
+                slot_left = HOSPITAL_LOGO_SLOT["left"] * PDF_PT_PER_DESIGN_PX
+                slot_top = HOSPITAL_LOGO_SLOT["top"] * PDF_PT_PER_DESIGN_PX
+                slot_width = HOSPITAL_LOGO_SLOT["width"] * PDF_PT_PER_DESIGN_PX
+                slot_height = HOSPITAL_LOGO_SLOT["height"] * PDF_PT_PER_DESIGN_PX
+                slot_bottom = PAGE_HEIGHT - slot_top - slot_height
+                scale = min(slot_width / size[0], slot_height / size[1])
+                draw_height = size[1] * scale
+                expected_draw_bottom = slot_bottom + (slot_height - draw_height) / 2
+                self.assertIn(f"{slot_left:.4f}", content)
+                self.assertIn(f"{slot_width:.3f}", content)
+                self.assertIn(f"{expected_draw_bottom:.4f}", content)
+                self.assertAlmostEqual(PDF_PT_PER_DESIGN_PX, 72 / 96, places=6)
+                self.assertAlmostEqual(DESIGN_WIDTH, 794.0, places=6)
+                # لا توجد منطقة بديلة؛ الرسم يستخدم slot واحداً ثابتاً فقط.
+                self.assertNotIn("LOGO_SLOT", content)
+                self.assertNotIn("QR_SLOT", content)
 
     def test_field_contract_covers_all_dynamic_slots(self):
         expected = {
