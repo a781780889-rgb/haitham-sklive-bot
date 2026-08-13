@@ -2881,7 +2881,7 @@ async def handle_admin_router(update, context, text, uid, name):
 
     # ── قالب مرافق مريض (من لوحة الإدارة مباشرة أو من قوالب PDF) ──
     # نقبل ترتيبَي النص لأن Telegram قد يعيد ترتيب الإيموجي عند النسخ/الإرسال.
-    if text in {"🧑‍🤝‍🧑 قالب مرافق مريض", "قالب مرافق مريض 🧑‍🤝‍🧑", "قالب مرافق مريض"}:
+    if "قالب مرافق مريض" in text:
         await _show_companion_template_panel(uid, update, state)
         return
 
@@ -2891,8 +2891,8 @@ async def handle_admin_router(update, context, text, uid, name):
             context.user_data["state"] = "admin_companion_template_upload"
             await update.message.reply_text(
                 "📤 *رفع قالب مرافق مريض*\n\n"
-                "أرسل ملف PDF الآن.\n"
-                "سيُعتمد تلقائياً لقسم «مرافق مريض» ويُستخدم عند إصدار التقارير.",
+                "أرسل ملف PDF أو صورة PNG/JPG الآن.\n"
+                "سيحوّل البوت الصورة تلقائياً إلى PDF، ثم يعتمد القالب لقسم «مرافق مريض».",
                 parse_mode="Markdown",
                 reply_markup=ReplyKeyboardMarkup([[KeyboardButton("⬅️ رجوع")]], resize_keyboard=True)
             )
@@ -4297,6 +4297,53 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if db.get_setting("maintenance_mode") == "1" and not is_admin_user(uid):
         await update.message.reply_text("🔧 البوت في وضع الصيانة. يرجى المحاولة لاحقاً.")
         return
+
+    # ── قبول صورة القالب مباشرةً وتحويلها إلى PDF ─────────────────────────
+    # هذا المسار يعمل عند إرسال PNG/JPG كصورة أو كمستند، ويمنع مطالبة
+    # المستخدم بتحويل الصورة خارج البوت أولاً.
+    if state == "admin_companion_template_upload" and is_admin_user(uid):
+        try:
+            import io as _io
+            from PIL import Image as _Image
+            if update.message.photo:
+                _source = update.message.photo[-1]
+                _file = await context.bot.get_file(_source.file_id)
+            elif update.message.document and (update.message.document.mime_type or "").startswith("image/"):
+                _file = await context.bot.get_file(update.message.document.file_id)
+            else:
+                _file = None
+            if _file is not None:
+                _buf = _io.BytesIO()
+                await _file.download_to_memory(_buf)
+                _img = _Image.open(_io.BytesIO(_buf.getvalue())).convert("RGB")
+                _pdf_buf = _io.BytesIO()
+                _img.save(_pdf_buf, format="PDF", resolution=300.0)
+                _pdf_bytes = _pdf_buf.getvalue()
+                if not _pdf_bytes.startswith(b"%PDF-") or len(_pdf_bytes) < 1000:
+                    raise ValueError("تعذر تحويل الصورة إلى PDF صالح")
+                tpl_id = db.save_companion_template(
+                    name="قالب مرافق مريض",
+                    file_data=_pdf_bytes,
+                )
+                if not tpl_id:
+                    raise RuntimeError("لم يُرجع التخزين معرّف القالب")
+                await update.message.reply_text(
+                    f"✅ *تم تحويل الصورة واعتماد قالب مرافق مريض!*\n\n"
+                    f"• المعرّف: #{tpl_id}\n"
+                    f"• الحجم: {len(_pdf_bytes)//1024:,} كيلو",
+                    parse_mode="Markdown",
+                    reply_markup=companion_templates_keyboard()
+                )
+                context.user_data["state"] = "admin_companion_template"
+                return
+        except Exception as _e:
+            logger.error(f"handle_photo companion template error: {_e}", exc_info=True)
+            await update.message.reply_text(
+                f"❌ تعذر تحويل الصورة إلى قالب PDF: {_e}",
+                reply_markup=companion_templates_keyboard()
+            )
+            context.user_data["state"] = "admin_companion_template"
+            return
 
     # ── استخراج بيانات الصورة ────────────────────────────────────────────
     try:
