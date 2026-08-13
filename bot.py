@@ -2535,8 +2535,10 @@ async def generate_and_send_companion_pdf(update, context, uid, pc_data):
         generate_companion_pdf(
             companion_data = {
                 "companion_name": pc_data.get("companion_name", ""),
+                "companion_name_en": pc_data.get("companion_name_en", ""),
                 "id_number": pc_data.get("id_number", ""),
                 "nationality": pc_data.get("nationality", ""),
+                "nationality_en": pc_data.get("nationality_en", ""),
                 "relation": pc_data.get("relation", ""),
                 "workplace": pc_data.get("workplace", ""),
                 "admission_date": pc_data.get("admission_date", ""),

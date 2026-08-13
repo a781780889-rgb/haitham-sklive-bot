@@ -55,6 +55,7 @@ CB_PC_CANCEL = "pcx"
 CB_PC_CONFIRM = "pck"  # تأكيد وإصدار PDF
 CB_PC_EDIT = "pce"  # تعديل البيانات (رجوع لجمع البيانات)
 CB_PC_EDIT_FIELD = "pcef"  # تعديل حقل محدد (pcef|field)
+CB_PC_REVALIDATE = "pcr"  # إعادة تحليل ومراجعة البيانات
 
 PC_HOSPITALS_PAGE_SIZE = 12
 PC_DOCTORS_PAGE_SIZE = 10
@@ -769,6 +770,18 @@ class PatientCompanionFlow:
                 await query.answer()
                 return True
 
+            if prefix == CB_PC_REVALIDATE:
+                city = context.user_data.get("pc_city")
+                hospital = context.user_data.get("pc_hospital")
+                doctor = context.user_data.get("pc_doctor")
+                specialty = context.user_data.get("pc_specialty")
+                if not all([city, hospital, doctor, specialty]):
+                    await query.answer("انتهت صلاحية البيانات. أعد فتح القائمة.", show_alert=True)
+                    return True
+                await query.answer("تمت إعادة التحقق من البيانات")
+                await self._show_review(query.message, context, query.from_user.id, city, hospital, doctor, specialty)
+                return True
+
             if prefix == CB_PC_CONFIRM:
                 city = context.user_data.get("pc_city")
                 hospital = context.user_data.get("pc_hospital")
@@ -780,6 +793,10 @@ class PatientCompanionFlow:
                 extracted = context.user_data.get("pc_extracted", {})
                 if not extracted:
                     await query.answer("لا توجد بيانات مكتملة. اكتب البيانات أولاً.", show_alert=True)
+                    return True
+                if context.user_data.get("pc_review_errors"):
+                    await query.answer("صحح البيانات غير الصالحة قبل إنشاء PDF.", show_alert=True)
+                    await self._show_review(query.message, context, query.from_user.id, city, hospital, doctor, specialty)
                     return True
                 context.user_data["pc_state"] = "issued"  # منع التكرار عند الضغط المزدوج
                 await query.answer("جاري إصدار التقرير...")
@@ -1006,38 +1023,52 @@ class PatientCompanionFlow:
             await message.reply_text("انتهت جلسة الاختيار. اضغط «🏥 مرافق مريض» للبدء من جديد.")
             return True
 
-        # استخراج بيانات المرافق بذكاء
-        extracted = self._extract_companion_data(text)
+        # استخراج + مراجعة + ترجمة بيانات المرافق من أي ترتيب أو أسلوب كتابة.
+        from companion_review_pipeline import review_companion_data
+        current = context.user_data.get("pc_extracted", {}) or {}
+        review = review_companion_data(text, current=current)
+        extracted = review.normalized
+        context.user_data["pc_extracted"] = extracted
+        context.user_data["pc_review_english"] = review.english
         missing = self._get_missing_fields(extracted)
 
-        if missing:
-            context.user_data["pc_extracted"] = extracted
-            await message.reply_text(self._build_patient_data_template(extracted, include_issue_now=False))
-            return True
+        if missing or review.errors:
+            # لا يوجد زر تأكيد ما دامت البيانات ناقصة أو غير صالحة.
+            return await self._show_review(message, context, user_id,
+                                           city, hospital, doctor, specialty)
 
-        # البيانات كاملة → شاشة المراجعة قبل الإصدار
-        context.user_data["pc_extracted"] = extracted
+        # البيانات كاملة وسليمة → شاشة المراجعة الثنائية قبل الإصدار.
         return await self._show_review(message, context, user_id,
                                        city, hospital, doctor, specialty)
 
     async def _show_review(self, message, context, user_id, city, hospital, doctor, specialty):
-        """شاشة مراجعة البيانات مع زرَي تأكيد/تعديل وإلغاء."""
-        extracted = context.user_data.get("pc_extracted", {})
-        lines = [self._build_patient_data_template(extracted)]
+        """شاشة مراجعة عربية/إنجليزية؛ لا يظهر زر التأكيد إلا بعد اجتياز التحقق."""
+        from companion_review_pipeline import review_companion_data
+
+        extracted = context.user_data.get("pc_extracted", {}) or {}
+        review = review_companion_data(extracted)
+        context.user_data["pc_extracted"] = review.normalized
+        context.user_data["pc_review_english"] = review.english
+        context.user_data["pc_review_errors"] = review.errors
+        if not review.valid:
+            context.user_data["pc_state"] = "reviewing"
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("✏️ تعديل البيانات", callback_data=CB_PC_EDIT)],
+                [InlineKeyboardButton("🔄 إعادة التحقق", callback_data=CB_PC_REVALIDATE)],
+                [InlineKeyboardButton("❌ إلغاء", callback_data=CB_PC_CANCEL)],
+            ])
+            await message.reply_text(review.message(), reply_markup=keyboard)
+            return True
+
         keyboard = InlineKeyboardMarkup([
-            [
-                InlineKeyboardButton("✅ تأكيد وإصدار التقرير", callback_data=CB_PC_CONFIRM),
-            ],
-            [
-                InlineKeyboardButton("✏️ تعديل البيانات", callback_data=CB_PC_EDIT),
-                InlineKeyboardButton("❌ إلغاء", callback_data=CB_PC_CANCEL),
-            ],
-            [
-                InlineKeyboardButton("🏠 الرئيسية", callback_data=CB_PC_BACK_MAIN),
-            ],
+            [InlineKeyboardButton("✅ تأكيد وإنشاء PDF", callback_data=CB_PC_CONFIRM)],
+            [InlineKeyboardButton("✏️ تعديل البيانات", callback_data=CB_PC_EDIT)],
+            [InlineKeyboardButton("🔄 إعادة التحقق", callback_data=CB_PC_REVALIDATE)],
+            [InlineKeyboardButton("❌ إلغاء", callback_data=CB_PC_CANCEL)],
+            [InlineKeyboardButton("🏠 الرئيسية", callback_data=CB_PC_BACK_MAIN)],
         ])
         context.user_data["pc_state"] = "reviewing"
-        await message.reply_text(lines[0], reply_markup=keyboard)
+        await message.reply_text(review.message(), reply_markup=keyboard)
         return True
 
     @staticmethod
@@ -1164,9 +1195,12 @@ class PatientCompanionFlow:
             return True
 
         try:
+            english = context.user_data.get("pc_review_english", {}) or {}
             await self._on_generate_pdf(message, context, user_id, {
                 "city": city, "hospital": hospital,
                 "doctor": doctor, "specialty": specialty,
+                "companion_name_en": english.get("companion_name", ""),
+                "nationality_en": english.get("nationality", ""),
                 **extracted,
             })
         except Exception as _e:

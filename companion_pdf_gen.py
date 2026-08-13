@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import tempfile
 import uuid
 from datetime import datetime
@@ -149,14 +150,42 @@ def _draw_centered(c: canvas.Canvas, value: str, box: FieldBox,
     if not value:
         return {"width": 0.0, "height": 0.0, "scale": 100.0, "x": box.center_x, "y": box.center_y}
     is_arabic = box.language == "ar"
+    has_arabic = any("\u0600" <= char <= "\u06ff" for char in value)
+    has_latin = bool(re.search(r"[A-Za-z]", value))
+    c.setFillColorRGB(1, 1, 1) if light_text else c.setFillColorRGB(*TEXT_COLOR)
+
+    # النص المختلط يحتاج خطين منفصلين؛ استخدام خط عربي واحد قد يفقد الجزء
+    # اللاتيني في بعض عارضات PDF. نعكس ترتيب المقاطع بصرياً مع الحفاظ على القيمة.
+    if is_arabic and has_arabic and has_latin:
+        runs = []
+        for token in value.split():
+            token_has_ar = any("\u0600" <= char <= "\u06ff" for char in token)
+            rendered = _display_text(token, "ar") if token_has_ar else token
+            runs.append((rendered, AR_FONT if token_has_ar else EN_FONT))
+        runs.reverse()
+        max_width = box.width - 10
+        size = 9.0
+        while size > 5.8 and sum(pdfmetrics.stringWidth(run, font, size) for run, font in runs) > max_width:
+            size -= 0.25
+        raw_width = sum(pdfmetrics.stringWidth(run, font, size) for run, font in runs)
+        horizontal_scale = min(100.0, (max_width / raw_width) * 100.0) if raw_width else 100.0
+        text_width = raw_width * horizontal_scale / 100.0
+        text = c.beginText()
+        text.setTextOrigin(box.center_x - text_width / 2, box.center_y + size * 0.66)
+        text.setHorizScale(horizontal_scale)
+        for run, font in runs:
+            text.setFont(font, size)
+            text.textOut(run + " ")
+        c.drawText(text)
+        return {"width": text_width, "height": size, "scale": horizontal_scale,
+                "x": box.center_x, "y": box.center_y}
+
     font = AR_FONT if is_arabic else EN_FONT
     rendered = _display_text(value, box.language)
     size, horizontal_scale = _fit_text(rendered, font, box.width - 10, initial=9.0 if is_arabic else 8.7)
-    c.setFillColorRGB(1, 1, 1) if light_text else c.setFillColorRGB(*TEXT_COLOR)
     text = c.beginText()
     text.setFont(font, size)
     text.setHorizScale(horizontal_scale)
-    # التعويض عن التصغير الأفقي يجعل المركز الحقيقي للخانة هو نقطة البداية.
     text_width = pdfmetrics.stringWidth(rendered, font, size) * horizontal_scale / 100.0
     # خط الأساس في ReportLab يقع أسفل المركز البصري للحروف؛ التعويض 0.66 يضع
     # مركز glyph الحقيقي في مركز المستطيل بدلاً من ترك البيانات منخفضة داخله.
@@ -192,7 +221,8 @@ def _build_field_values(companion_data: Mapping[str, Any], hospital: str, doctor
     workplace = _text(companion_data.get("workplace"))
     start, end, _ = calc_dates(admission, days, None)
     issue_date = datetime.now().strftime("%d-%m-%Y")
-    name_en = _translate(full_name).upper()
+    name_en = _text(companion_data.get("companion_name_en")) or _translate(full_name)
+    name_en = name_en.upper()
     doctor = _text(doctor)
     specialty = _text(specialty)
     return {
@@ -208,7 +238,7 @@ def _build_field_values(companion_data: Mapping[str, Any], hospital: str, doctor
         "companion_en": name_en,
         "companion_ar": full_name,
         "national_id": id_number,
-        "nationality_en": _text(nat_en(nationality)),
+        "nationality_en": _text(companion_data.get("nationality_en")) or _text(nat_en(nationality)),
         "nationality_ar": _text(normalize_nat_ar(nationality)),
         "relation_ar": relation,
         "employer_ar": workplace,
