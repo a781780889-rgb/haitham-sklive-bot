@@ -869,26 +869,18 @@ class PatientCompanionFlow:
         """يبني الصيغة الوحيدة المسموح بعرضها لبيانات المريض."""
         data = data or {}
         labels = (
-            ("companion_name", "الاسم"),
+            ("companion_name", "اسم المرافق"),
             ("id_number", "رقم الهوية"),
             ("nationality", "الجنسية"),
+            ("relation", "صلة القرابة"),
             ("workplace", "جهة العمل"),
-            ("admission_date", "تاريخ بدء الإجازة"),
+            ("admission_date", "تاريخ الدخول"),
             ("days_count", "عدد الأيام"),
         )
-        lines = ["أرسل بيانات المريض:", "", "📋 انسخ القالب وأكمل البيانات:"]
+        lines = ["📝 بيانات تقرير مرافقة مريض", "", "أرسل البيانات بأي أسلوب :"]
         for key, label in labels:
             value = str(data.get(key, "") or "").strip()
-            lines.append(f"- {label}: {value}")
-        issue_date = str(data.get("issue_date", "") or "").strip()
-        issue_time = str(data.get("issue_time", "") or "").strip()
-        if include_issue_now and (not issue_date or not issue_time):
-            from datetime import datetime as _dt
-            now = _dt.now()
-            issue_date = issue_date or now.strftime("%d-%m-%Y")
-            issue_time = issue_time or now.strftime("%H:%M")
-        lines.append(f"- تاريخ الإصدار: {issue_date}" if issue_date else "- تاريخ الإصدار:")
-        lines.append(f"- وقت الإصدار: {issue_time}" if issue_time else "- وقت الإصدار:")
+            lines.append(f"{label}: {value}")
         return "\n".join(lines)
 
     def _build_collecting_intro(self, city: str, hospital: str, doctor: str, specialty: str):
@@ -902,11 +894,12 @@ class PatientCompanionFlow:
     def _build_edit_fields_keyboard():
         """لوحة أزرار الحقول القابلة للتعديل."""
         fields = [
-            ("companion_name", "الاسم"),
+            ("companion_name", "اسم المرافق"),
             ("id_number", "رقم الهوية"),
             ("nationality", "الجنسية"),
+            ("relation", "صلة القرابة"),
             ("workplace", "جهة العمل"),
-            ("admission_date", "تاريخ بدء الإجازة"),
+            ("admission_date", "تاريخ الدخول"),
             ("days_count", "عدد الأيام"),
         ]
         rows = [[InlineKeyboardButton(label, callback_data=f"{CB_PC_EDIT_FIELD}|{key}")]
@@ -1137,11 +1130,12 @@ class PatientCompanionFlow:
     def _get_missing_fields(data: Dict) -> List[str]:
         """يحدد الحقول الناقصة من البيانات المستخرجة."""
         required = [
-            ("companion_name", "الاسم"),
+            ("companion_name", "اسم المرافق"),
             ("id_number", "رقم الهوية"),
             ("nationality", "الجنسية"),
+            ("relation", "صلة القرابة"),
             ("workplace", "جهة العمل"),
-            ("admission_date", "تاريخ بدء الإجازة"),
+            ("admission_date", "تاريخ الدخول"),
             ("days_count", "عدد الأيام"),
         ]
         return [label for key, label in required
