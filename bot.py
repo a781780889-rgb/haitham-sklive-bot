@@ -2880,7 +2880,8 @@ async def handle_admin_router(update, context, text, uid, name):
         return
 
     # ── قالب مرافق مريض (من لوحة الإدارة مباشرة أو من قوالب PDF) ──
-    if text == "🧑‍🤝‍🧑 قالب مرافق مريض":
+    # نقبل ترتيبَي النص لأن Telegram قد يعيد ترتيب الإيموجي عند النسخ/الإرسال.
+    if text in {"🧑‍🤝‍🧑 قالب مرافق مريض", "قالب مرافق مريض 🧑‍🤝‍🧑", "قالب مرافق مريض"}:
         await _show_companion_template_panel(uid, update, state)
         return
 
@@ -4207,7 +4208,11 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if state == "admin_companion_template_upload":
         doc = update.message.document
-        if not doc or (doc.mime_type or "") != "application/pdf":
+        file_name = (doc.file_name or "").strip().lower() if doc else ""
+        mime_type = (doc.mime_type or "").strip().lower() if doc else ""
+        # بعض تطبيقات Telegram ترسل PDF بـ application/octet-stream أو MIME فارغ.
+        # نقبل الامتداد الموثوق، ثم نتحقق من ترويسة PDF بعد التنزيل.
+        if not doc or (mime_type != "application/pdf" and not file_name.endswith(".pdf")):
             await update.message.reply_text(
                 "⚠️ يرجى إرسال ملف *PDF* فقط.",
                 parse_mode="Markdown",
@@ -4227,6 +4232,12 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             buf = _io.BytesIO()
             await file_obj.download_to_memory(buf)
             pdf_bytes = buf.getvalue()
+            if not pdf_bytes.startswith(b"%PDF-"):
+                await update.message.reply_text(
+                    "⚠️ الملف المرسل ليس PDF صالحاً. أرسل الملف بصيغة PDF مباشرة.",
+                    reply_markup=ReplyKeyboardMarkup([[KeyboardButton("⬅️ رجوع")]], resize_keyboard=True)
+                )
+                return
             if len(pdf_bytes) < 1000:
                 await update.message.reply_text(
                     "⚠️ الملف صغير جداً أو تالف. أرسل ملف PDF صالح.",
@@ -4256,9 +4267,9 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"handle_document companion error: {_e}", exc_info=True)
             await update.message.reply_text(
                 f"❌ خطأ أثناء الحفظ: {_e}",
-                reply_markup=templates_keyboard()
+                reply_markup=companion_templates_keyboard()
             )
-            context.user_data["state"] = "admin_templates"
+            context.user_data["state"] = "admin_companion_template"
         return
     # غير مستخدم في حالات أخرى — تجاهل
     return
