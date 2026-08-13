@@ -146,7 +146,7 @@ def _fit_text(text: str, font: str, max_width: float, initial: float = 9.5,
 
 
 def _draw_centered(c: canvas.Canvas, value: str, box: FieldBox,
-                   light_text: bool = False, mark: bool = False) -> dict[str, float]:
+                   light_text: bool = False) -> dict[str, float]:
     if not value:
         return {"width": 0.0, "height": 0.0, "scale": 100.0, "x": box.center_x, "y": box.center_y}
     is_arabic = box.language == "ar"
@@ -177,8 +177,6 @@ def _draw_centered(c: canvas.Canvas, value: str, box: FieldBox,
             text.setFont(font, size)
             text.textOut(run + " ")
         c.drawText(text)
-        if mark:
-            _draw_duration_mark(c, box, text_width, size, light_text=True)
         return {"width": text_width, "height": size, "scale": horizontal_scale,
                 "x": box.center_x, "y": box.center_y}
 
@@ -194,26 +192,8 @@ def _draw_centered(c: canvas.Canvas, value: str, box: FieldBox,
     text.setTextOrigin(box.center_x - text_width / 2, box.center_y + size * 0.66)
     text.textOut(rendered)
     c.drawText(text)
-    if mark:
-        _draw_duration_mark(c, box, text_width, size, light_text=light_text)
     return {"width": text_width, "height": size, "scale": horizontal_scale,
             "x": box.center_x, "y": box.center_y}
-
-
-def _draw_duration_mark(c: canvas.Canvas, box: FieldBox, text_width: float,
-                        text_height: float, light_text: bool = True) -> None:
-    """يرسم تحديداً دائرياً حول النص فقط، لا حول مستطيل الخانة."""
-    pad_x = 3.2
-    pad_y = 2.2
-    width = min(box.width - 4, text_width + (2 * pad_x))
-    height = min(box.height - 4, text_height + (2 * pad_y))
-    x = box.center_x - (width / 2)
-    y = box.center_y - (height / 2)
-    c.saveState()
-    c.setLineWidth(0.85)
-    c.setStrokeColorRGB(1, 1, 1) if light_text else c.setStrokeColorRGB(*TEXT_COLOR)
-    c.roundRect(x, y, width, height, radius=min(3.2, height / 2), stroke=1, fill=0)
-    c.restoreState()
 
 
 def _validate_field_layout(field_id: str, value: str, box: FieldBox, metrics: Mapping[str, float]) -> None:
@@ -294,11 +274,7 @@ def render_companion_pdf(companion_data: Mapping[str, Any], hospital: str, docto
     c = canvas.Canvas(str(overlay_path), pagesize=(PAGE_WIDTH, PAGE_HEIGHT), pageCompression=1)
     for field_id, value in _build_field_values(companion_data, hospital, doctor, specialty, gsl_code).items():
         box = _FIELD_BOXES[field_id]
-        metrics = _draw_centered(
-            c, value, box,
-            light_text=field_id in {"duration_en", "duration_ar"},
-            mark=field_id == "duration_en",
-        )
+        metrics = _draw_centered(c, value, box, light_text=field_id in {"duration_en", "duration_ar"})
         _validate_field_layout(field_id, value, box, metrics)
     c.save()
 
