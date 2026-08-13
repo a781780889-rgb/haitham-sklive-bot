@@ -154,6 +154,38 @@ def _draw_centered(c: canvas.Canvas, value: str, box: FieldBox,
     has_latin = bool(re.search(r"[A-Za-z]", value))
     c.setFillColorRGB(1, 1, 1) if light_text else c.setFillColorRGB(*TEXT_COLOR)
 
+    # مدة الإجازة العربية تُرسم كمقاطع مستقلة حتى تظهر الأقواس والأرقام
+    # بصرياً بصيغة: 3 أيام(02-03-1448 الى 04-03-1448).
+    if is_arabic and value.startswith(("1 ", "2 ", "3 ", "4 ", "5 ", "6 ", "7 ", "8 ", "9 ")) and "(" in value and ")" in value:
+        before, dates = value.split("(", 1)
+        dates = dates.rsplit(")", 1)[0]
+        if " الى " in dates:
+            start_date, end_date = dates.split(" الى ", 1)
+            runs = [
+                ("(", EN_FONT),
+                (end_date, EN_FONT),
+                (_display_text(" الى ", "ar"), AR_FONT),
+                (start_date, EN_FONT),
+                (")", EN_FONT),
+                (_display_text(f"{before.strip()}", "ar"), AR_FONT),
+            ]
+            max_width = box.width - 10
+            size = 9.0
+            while size > 5.8 and sum(pdfmetrics.stringWidth(run, font, size) for run, font in runs) > max_width:
+                size -= 0.25
+            raw_width = sum(pdfmetrics.stringWidth(run, font, size) for run, font in runs)
+            horizontal_scale = min(100.0, (max_width / raw_width) * 100.0) if raw_width else 100.0
+            text_width = raw_width * horizontal_scale / 100.0
+            text = c.beginText()
+            text.setTextOrigin(box.center_x - text_width / 2, box.center_y + size * 0.66)
+            text.setHorizScale(horizontal_scale)
+            for run, font in runs:
+                text.setFont(font, size)
+                text.textOut(run)
+            c.drawText(text)
+            return {"width": text_width, "height": size, "scale": horizontal_scale,
+                    "x": box.center_x, "y": box.center_y}
+
     # النص المختلط يحتاج خطين منفصلين؛ استخدام خط عربي واحد قد يفقد الجزء
     # اللاتيني في بعض عارضات PDF. نعكس ترتيب المقاطع بصرياً مع الحفاظ على القيمة.
     if is_arabic and has_arabic and has_latin:
@@ -235,7 +267,7 @@ def _build_field_values(companion_data: Mapping[str, Any], hospital: str, doctor
         "leave_id": _text(gsl_code),
         # الأقواس جزء من قيمة مدة الإجازة وتظهر داخل المستطيل الإنجليزي الأول.
         "duration_en": f"{days} {'day' if days == 1 else 'days'} ({start} to {end})",
-        "duration_ar": to_hijri_duration(days, start, end),
+        "duration_ar": f"{days} {'يوم' if days == 1 else 'أيام'}({to_hijri(start)} الى {to_hijri(end)})",
         "admission_en": start,
         "admission_ar": to_hijri(start),
         "discharge_en": end,
