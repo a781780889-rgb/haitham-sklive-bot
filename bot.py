@@ -2527,8 +2527,8 @@ async def generate_and_send_companion_pdf(update, context, uid, pc_data):
         pdf_path_temp = os.path.join(tempfile.gettempdir(), f"companion_{uid}_{int(datetime.now().timestamp())}.pdf")
         pdf_path = pdf_path_temp
 
-        # القالب المعتمد لقسم مرافق مريض هو HTML المضمّن في templates/.
-        # لا نعود إلى قوالب PDF القديمة أو قالب الإجازة العام.
+        # القالب المعتمد والوحيد لقسم مرافق مريض هو PDF الثابت المرفق داخل templates/.
+        # لا نعود إلى قالب HTML السابق أو قالب الإجازة العام.
         hospital_type_val = (db.get_hospital_by_name(hospital) or {}).get("hospital_type") or "حكومي"
         pre_gsl_code = db.generate_gsl_code(hospital_type=hospital_type_val)
 

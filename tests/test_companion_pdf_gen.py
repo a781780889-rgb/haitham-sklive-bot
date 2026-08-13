@@ -2,10 +2,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from companion_pdf_gen import FIELD_IDS, generate_companion_pdf, render_companion_html
+from pypdf import PdfReader
+
+from companion_pdf_gen import FIELD_IDS, PDF_TEMPLATE_PATH, generate_companion_pdf
 
 
-class CompanionHtmlTemplateTests(unittest.TestCase):
+class CompanionPdfTemplateTests(unittest.TestCase):
     def setUp(self):
         self.data = {
             "companion_name": "عبدالله محمد السهلي",
@@ -17,23 +19,19 @@ class CompanionHtmlTemplateTests(unittest.TestCase):
             "days_count": 3,
         }
 
-    def test_all_dynamic_fields_are_rendered(self):
-        document = render_companion_html(
-            self.data,
-            hospital="مستشفى المانع العام",
-            doctor="أحمد سليمان الجباري",
-            specialty="استشاري باطنية",
-            gsl_code="PSL26081183122",
-        )
-        self.assertIn("PSL26081183122", document)
-        self.assertIn("عبدالله محمد السهلي", document)
-        self.assertIn("1072727288", document)
-        self.assertIn('class="dynamic-mode"', document)
-        self.assertNotIn("const data =", document)
-        for field_id in FIELD_IDS:
-            self.assertIn(f'id="{field_id}"', document)
+    def test_official_template_is_the_only_default(self):
+        self.assertEqual(PDF_TEMPLATE_PATH.name, "companion-sick-leave-template.pdf")
+        self.assertTrue(PDF_TEMPLATE_PATH.exists())
+        with self.assertRaises(ValueError):
+            generate_companion_pdf(
+                self.data,
+                "مستشفى المانع العام",
+                "أحمد سليمان الجباري",
+                "استشاري باطنية",
+                template_path=Path("templates/old-companion.html"),
+            )
 
-    def test_html_template_is_converted_to_single_a3_pdf(self):
+    def test_all_dynamic_fields_are_embedded_in_final_pdf(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "companion.pdf"
             result = generate_companion_pdf(
@@ -47,6 +45,21 @@ class CompanionHtmlTemplateTests(unittest.TestCase):
             self.assertEqual(Path(result), output)
             self.assertGreater(output.stat().st_size, 1000)
             self.assertEqual(output.read_bytes()[:5], b"%PDF-")
+            page = PdfReader(str(output)).pages[0]
+            self.assertAlmostEqual(float(page.mediabox.width), 595.5, places=1)
+            self.assertAlmostEqual(float(page.mediabox.height), 842.25, places=1)
+            extracted = page.extract_text() or ""
+            for value in ("PSL26081183122", "1072727288", "ABDULLAH", "ﻋﺒﺪﷲ"):
+                self.assertIn(value, extracted)
+
+    def test_field_contract_covers_all_dynamic_slots(self):
+        expected = {
+            "leave_id", "duration_en", "duration_ar", "admission_en", "admission_ar",
+            "discharge_en", "discharge_ar", "issue_date", "companion_en", "companion_ar",
+            "national_id", "nationality_en", "nationality_ar", "relation_ar", "employer_ar",
+            "practitioner_en", "practitioner_ar", "position_en", "position_ar",
+        }
+        self.assertEqual(set(FIELD_IDS), expected)
 
 
 if __name__ == "__main__":
