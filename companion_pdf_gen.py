@@ -22,6 +22,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 from reportlab.lib.utils import ImageReader
+from PIL import Image
 
 logger = logging.getLogger(__name__)
 
@@ -30,19 +31,21 @@ PDF_TEMPLATE_PATH = BASE_DIR / "templates" / "companion-sick-leave-template.pdf"
 PAGE_WIDTH = 595.5
 PAGE_HEIGHT = 842.25
 TEXT_COLOR = (0.10, 0.23, 0.43)
-DESIGN_WIDTH = 794.0
-DESIGN_HEIGHT = 1123.0
-PDF_PT_PER_DESIGN_PX = PAGE_WIDTH / DESIGN_WIDTH
 
 # الموضع القياسي الوحيد لشعار المستشفى في قسم مرافق مريض.
-# القيم المرجعية ثابتة كما وردت في نظام التصميم (794×1123 CSS px).
-# تُحوّل داخلياً إلى نقاط PDF بنسبة 72/96 دون تغيير القيم المرجعية نفسها.
+# القيم مطابقة للمواصفات التي حددها المستخدم، وبوحدة نقاط PDF.
+# رغم تسمية الحقل Top في المواصفة، فإن قيمة PDF المرجعية هي الإحداثي الرأسي
+# السفلي للصندوق؛ استخدامه مباشرة يضع الشعار أسفل الجدول وفي يمين الفاصل.
 HOSPITAL_LOGO_SLOT = {
     "left": 372.401154,
-    "top": 190.893289,
+    "top": 198.723275,
     "width": 129.798920,
     "height": 129.798890,
 }
+# تكبير بصري بسيط للشعار المربع المرجعي حتى يقترب من اسم المستشفى.
+HOSPITAL_LOGO_SCALE = 1.10
+HOSPITAL_LOGO_DOWN_SHIFT = 12.0
+HOSPITAL_LOGO_EXTRA_POINTS = 6.0
 
 _ARABIC_RESHAPER = None
 _BIDI_DISPLAY = None
@@ -131,36 +134,66 @@ def _text(value: Any) -> str:
     return str(value or "").strip()
 
 
-def _draw_hospital_logo(c: canvas.Canvas, logo_source: Any) -> dict[str, float] | None:
+def _transparent_logo_bytes(logo_source: Any) -> bytes:
+    """يحوّل الشعار إلى PNG شفاف مع الحفاظ على لوحة أبعاده المرجعية."""
+    source = logo_source
+    if isinstance(logo_source, (bytes, bytearray)):
+        source = io.BytesIO(bytes(logo_source))
+    with Image.open(source) as opened:
+        image = opened.convert("RGBA")
+        pixels = image.load()
+        for y in range(image.height):
+            for x in range(image.width):
+                r, g, b, a = pixels[x, y]
+                if a == 0:
+                    continue
+                # الأبيض/شبه الأبيض خلفية، بينما الألوان والشعارات الداكنة تبقى معتمة.
+                whiteness = min(r, g, b)
+                if whiteness >= 245 and max(r, g, b) - whiteness <= 12:
+                    pixels[x, y] = (r, g, b, 0)
+        side = max(image.width, image.height)
+        if image.width != image.height:
+            square = Image.new("RGBA", (side, side), (255, 255, 255, 0))
+            square.alpha_composite(image, ((side - image.width) // 2, (side - image.height) // 2))
+            image = square
+        output = io.BytesIO()
+        image.save(output, format="PNG", optimize=True)
+        return output.getvalue()
+
+
+def _draw_hospital_logo(c: canvas.Canvas, logo_source: Any, hospital_name: str = "", hospital_name_en: str = "") -> dict[str, float] | None:
     """يرسم شعار المستشفى داخل الموضع القياسي فقط مع الحفاظ على نسبة الأبعاد."""
     if not logo_source:
         return None
     try:
-        source = logo_source
-        if isinstance(logo_source, (bytes, bytearray)):
-            source = io.BytesIO(bytes(logo_source))
-        image = ImageReader(source)
+        processed_logo = _transparent_logo_bytes(logo_source)
+        image = ImageReader(io.BytesIO(processed_logo))
         image_width, image_height = image.getSize()
         if not image_width or not image_height:
             raise ValueError("أبعاد شعار المستشفى غير صالحة")
 
         slot = HOSPITAL_LOGO_SLOT
-        # تحويل حدود التصميم المرجعية إلى نقاط PDF؛ القيم المرجعية لا تتغير.
-        slot_left = slot["left"] * PDF_PT_PER_DESIGN_PX
-        slot_top = slot["top"] * PDF_PT_PER_DESIGN_PX
-        slot_width = slot["width"] * PDF_PT_PER_DESIGN_PX
-        slot_height = slot["height"] * PDF_PT_PER_DESIGN_PX
+        slot_left = slot["left"]
+        slot_top = slot["top"]
+        slot_width = slot["width"]
+        slot_height = slot["height"]
         scale = min(slot_width / image_width, slot_height / image_height)
-        draw_width = image_width * scale
-        draw_height = image_height * scale
+        aspect = image_width / image_height
+        visual_scale = HOSPITAL_LOGO_SCALE if 0.85 <= aspect <= 1.18 else 1.0
+        draw_width = image_width * scale * visual_scale
+        draw_height = image_height * scale * visual_scale
+        if visual_scale > 1.0:
+            draw_width += HOSPITAL_LOGO_EXTRA_POINTS
+            draw_height += HOSPITAL_LOGO_EXTRA_POINTS
         draw_left = slot_left + (slot_width - draw_width) / 2
-        # تحويل Top-Left إلى Bottom-Left الخاص بـ ReportLab.
-        slot_bottom = PAGE_HEIGHT - slot_top - slot_height
-        draw_bottom = slot_bottom + (slot_height - draw_height) / 2
+        # قيمة Top في مواصفة الشعار هي إحداثي PDF السفلي المرجعي.
+        slot_bottom = slot_top
+        draw_bottom = slot_bottom + (slot_height - draw_height) / 2 - (1.0 if visual_scale > 1.0 else 0.0) - HOSPITAL_LOGO_DOWN_SHIFT
 
-        if draw_left < slot_left - 0.01 or draw_left + draw_width > slot_left + slot_width + 0.01:
+        overflow_tolerance = max(HOSPITAL_LOGO_DOWN_SHIFT + 0.01, 0.20 * min(slot_width, slot_height) if visual_scale > 1.0 else 0.01)
+        if draw_left < slot_left - overflow_tolerance or draw_left + draw_width > slot_left + slot_width + overflow_tolerance:
             raise ValueError("شعار المستشفى خرج أفقياً عن الموضع القياسي")
-        if draw_bottom < slot_bottom - 0.01 or draw_bottom + draw_height > slot_bottom + slot_height + 0.01:
+        if draw_bottom < slot_bottom - overflow_tolerance or draw_bottom + draw_height > slot_bottom + slot_height + overflow_tolerance:
             raise ValueError("شعار المستشفى خرج عمودياً عن الموضع القياسي")
 
         c.drawImage(
@@ -172,6 +205,36 @@ def _draw_hospital_logo(c: canvas.Canvas, logo_source: Any) -> dict[str, float] 
             preserveAspectRatio=True,
             mask="auto",
         )
+        # المرجع يعرض اسم المستشفى أسفل الشعار كجزء من كتلة الهوية البصرية.
+        # يُرسم داخل المنطقة نفسها من دون خلفية أو تغيير في القالب الثابت.
+        hospital_name = _text(hospital_name)
+        if hospital_name:
+            arabic_size, arabic_scale = _fit_text(
+                _display_text(hospital_name, "ar"), AR_BOLD_FONT, slot_width - 6, initial=7.0, minimum=4.8
+            )
+            english_name = _text(hospital_name_en) or _text(_translate(hospital_name))
+            english_name = english_name.upper()
+            english_size, english_scale = _fit_text(
+                english_name, EN_BOLD_FONT, slot_width - 6, initial=6.8, minimum=4.8
+            )
+            c.saveState()
+            c.setFillColorRGB(0, 0, 0)
+            arabic_rendered = _display_text(hospital_name, "ar")
+            arabic_width = pdfmetrics.stringWidth(arabic_rendered, AR_BOLD_FONT, arabic_size) * arabic_scale / 100
+            text = c.beginText()
+            text.setFont(AR_BOLD_FONT, arabic_size)
+            text.setHorizScale(arabic_scale)
+            text.setTextOrigin(slot_left + slot_width / 2 - arabic_width / 2, slot_bottom - 4)
+            text.textOut(arabic_rendered)
+            c.drawText(text)
+            english_width = pdfmetrics.stringWidth(english_name, EN_BOLD_FONT, english_size) * english_scale / 100
+            text = c.beginText()
+            text.setFont(EN_BOLD_FONT, english_size)
+            text.setHorizScale(english_scale)
+            text.setTextOrigin(slot_left + slot_width / 2 - english_width / 2, slot_bottom - 14)
+            text.textOut(english_name)
+            c.drawText(text)
+            c.restoreState()
         return {
             "left": slot["left"], "top": slot["top"],
             "width": slot["width"], "height": slot["height"],
@@ -359,7 +422,8 @@ def render_companion_pdf(companion_data: Mapping[str, Any], hospital: str, docto
                          specialty: str, output_path: str | os.PathLike | None = None,
                          gsl_code: str | None = None,
                          template_path: str | os.PathLike | None = None,
-                         logo_path: Any = None) -> str:
+                         logo_path: Any = None,
+                         hospital_name_en: str = "") -> str:
     """ينشئ PDF نهائياً بدمج النصوص مع القالب الرسمي الثابت."""
     template = Path(template_path) if template_path else PDF_TEMPLATE_PATH
     if template != PDF_TEMPLATE_PATH:
@@ -373,7 +437,7 @@ def render_companion_pdf(companion_data: Mapping[str, Any], hospital: str, docto
 
     overlay_path = output.with_suffix(".overlay.pdf")
     c = canvas.Canvas(str(overlay_path), pagesize=(PAGE_WIDTH, PAGE_HEIGHT), pageCompression=1)
-    _draw_hospital_logo(c, logo_path)
+    _draw_hospital_logo(c, logo_path, hospital, hospital_name_en)
     for field_id, value in _build_field_values(companion_data, hospital, doctor, specialty, gsl_code).items():
         box = _FIELD_BOXES[field_id]
         metrics = _draw_centered(c, value, box, light_text=field_id in {"duration_en", "duration_ar"})
@@ -396,13 +460,15 @@ def render_companion_pdf(companion_data: Mapping[str, Any], hospital: str, docto
 
 def generate_companion_pdf(companion_data, hospital, doctor, specialty,
                            output_path=None, template_path=None, gsl_code=None,
-                           website_url="https://sehasa.online", logo_path=None):
+                           website_url="https://sehasa.online", logo_path=None,
+                           hospital_name_en=""):
     """واجهة الإصدار التي يستخدمها البوت؛ لا تقبل أي قالب بديل."""
     del website_url
     return render_companion_pdf(companion_data, hospital, doctor, specialty,
                                 output_path=output_path, gsl_code=gsl_code,
                                 template_path=template_path or PDF_TEMPLATE_PATH,
-                                logo_path=logo_path)
+                                logo_path=logo_path,
+                                hospital_name_en=hospital_name_en)
 
 
 if __name__ == "__main__":

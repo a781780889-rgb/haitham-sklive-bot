@@ -2520,10 +2520,12 @@ async def generate_and_send_companion_pdf(update, context, uid, pc_data):
 
     await message.reply_text("⏳ جاري إنشاء ملف PDF...", reply_markup=back_keyboard())
     pdf_path_temp = None
-
     try:
+        hospital_record = db.get_hospital_by_name(hospital) or {}
         logo_path = db.get_hospital_logo(hospital)
+        hospital_name_en = str(hospital_record.get("name_en") or "").strip()
         website_url = get_website_url()
+
         pdf_path_temp = os.path.join(tempfile.gettempdir(), f"companion_{uid}_{int(datetime.now().timestamp())}.pdf")
         pdf_path = pdf_path_temp
 
@@ -2550,6 +2552,7 @@ async def generate_and_send_companion_pdf(update, context, uid, pc_data):
             specialty    = specialty,
             output_path  = pdf_path,
             logo_path    = logo_path,
+            hospital_name_en = hospital_name_en,
             website_url  = website_url or "https://sehasa.online",
             gsl_code     = pre_gsl_code,
         )
