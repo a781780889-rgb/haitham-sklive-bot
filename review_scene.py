@@ -247,7 +247,7 @@ def _pdf(path: str, data: dict):
 
     from pypdf import PdfReader, PdfWriter
     from reportlab.lib import colors
-    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.pagesizes import A3
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.pdfgen import canvas
@@ -263,10 +263,15 @@ def _pdf(path: str, data: dict):
     data.setdefault("issue_date", datetime.now().strftime("%d-%m-%Y"))
 
     ar_font = "SceneArabic"
+    en_font = "SceneEnglish"
     try:
         pdfmetrics.registerFont(TTFont(ar_font, str(base / "fonts/NotoSansArabic-Regular.ttf")))
     except Exception:
         ar_font = "Helvetica"
+    try:
+        pdfmetrics.registerFont(TTFont(en_font, str(base / "fonts/TimesRoman-Regular.ttf")))
+    except Exception:
+        en_font = "Times-Roman"
 
     def shape(value):
         value = str(value or "—")
@@ -278,9 +283,11 @@ def _pdf(path: str, data: dict):
             return value
 
     def draw_centered(c, value, x, y, width, size=9, color=colors.HexColor("#1f1f1f")):
-        raw = str(value or "—")
+        raw = str(value or "").strip()
+        if not raw:
+            return
         rendered = shape(raw)
-        font = ar_font if any("\u0600" <= ch <= "\u06ff" for ch in raw) else "Helvetica"
+        font = ar_font if any("\u0600" <= ch <= "\u06ff" for ch in raw) else en_font
         while size > 6 and pdfmetrics.stringWidth(rendered, font, size) > width - 10:
             size -= 0.5
         c.setFont(font, size)
@@ -303,8 +310,8 @@ def _pdf(path: str, data: dict):
 
     # Write values into the blank cells of the supplied template, then preserve its form fields.
     overlay = BytesIO()
-    c = canvas.Canvas(overlay, pagesize=A4)
-    scale_x, scale_y = A4[0] / 1170.0, A4[1] / 1654.0
+    c = canvas.Canvas(overlay, pagesize=A3)
+    scale_x, scale_y = A3[0] / 1170.0, A3[1] / 1654.0
 
     values = {
         "leave_id": data.get("leave_id"),
@@ -374,6 +381,7 @@ def _pdf(path: str, data: dict):
 
     overlay_pdf = PdfReader(overlay)
     writer = PdfWriter(clone_from=str(template_path))
+    writer.pages[0].scale_to(*A3)
     writer.pages[0].merge_page(overlay_pdf.pages[0])
     if writer.get_fields():
         writer.set_need_appearances_writer()
