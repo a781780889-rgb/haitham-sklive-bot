@@ -27,7 +27,6 @@ from admin_auth import parse_admin_ids
 from patient_companion import PatientCompanionFlow
 from external_api import send_leave_to_external_api
 from companion_pdf_gen import generate_companion_pdf
-from review_scene import ReviewSceneFlow, generate_review_scene_pdf
 
 # ══════════════════════════════════════════════
 # نظام المراجعة الإدارية (مدمج)
@@ -578,7 +577,6 @@ def build_main_menu_text(user_id: int, telegram_name: str) -> str:
 def main_menu_keyboard(is_admin: bool = False):
     keyboard = [
         [KeyboardButton("📝 إرسال طلب جديد /go"), KeyboardButton("🏥 مرافق مريض")],
-        [KeyboardButton("📝 مشهد مراجعة")],
         [KeyboardButton("📋 طلباتي"),         KeyboardButton("🧾 اشحن رصيدك")],
         [KeyboardButton("🌐 نظام المواقع"),   KeyboardButton("🏥 نظام المستشفيات")],
         [KeyboardButton("➕ إضافة مستشفى"),   KeyboardButton("➕ إضافة طبيب")],
@@ -601,27 +599,10 @@ async def _patient_companion_back_to_main(query, context: ContextTypes.DEFAULT_T
     )
 
 
-async def _review_scene_back_to_main(target, context: ContextTypes.DEFAULT_TYPE):
-    """يعيد المستخدم من مشهد المراجعة سواء كان الهدف CallbackQuery أو Message."""
-    user = target.from_user
-    message = target.message if hasattr(target, "message") else target
-    context.user_data.clear()
-    await message.reply_text(
-        build_main_menu_text(user.id, user.full_name or "مستخدم"),
-        parse_mode="Markdown",
-        reply_markup=main_menu_keyboard(is_admin_user(user.id)),
-    )
-
-
 patient_companion_flow = PatientCompanionFlow(
     db,
     _patient_companion_back_to_main,
     on_generate_pdf=None,  # تُربط بعد تعريف الدالة في أسفل الملف (تُعيّن لاحقاً)
-)
-review_scene_flow = ReviewSceneFlow(
-    db,
-    _review_scene_back_to_main,
-    on_generate_pdf=None,
 )
 
 
@@ -1087,14 +1068,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await patient_companion_flow.start(update.message, context)
         return
 
-    if text == "📝 مشهد مراجعة":
-        context.user_data.clear()
-        await review_scene_flow.start(update.message, context)
-        db.log_activity(uid, "review_scene", "Draft")
-        return
-
-    if await review_scene_flow.handle_text(text, update.message, context, uid):
-        return
     if await patient_companion_flow.handle_text(text, update.message, context, uid):
         return
 
@@ -2663,49 +2636,6 @@ async def generate_and_send_companion_pdf(update, context, uid, pc_data):
 
 # ربط دالة إصدار تقرير مرافقة مريض بالتدفق (بعد تعريف الدالة)
 patient_companion_flow._on_generate_pdf = generate_and_send_companion_pdf
-
-
-async def generate_and_send_review_scene_pdf(query, context, uid, data):
-    """ينشئ ويرسل نموذج «مشهد مراجعه» تجريبيًا دون رقم ترخيص رسمي."""
-    message = query.message if hasattr(query, "message") else query
-    pdf_path = os.path.join(tempfile.gettempdir(), f"review_scene_{uid}_{int(datetime.now().timestamp())}.pdf")
-    try:
-        await message.reply_text("⏳ جاري إنشاء ملف PDF التجريبي...")
-        internal_id = generate_review_scene_pdf(data, pdf_path)
-        db.log_activity(uid, "review_scene", f"Confirmed — {internal_id} — {data.get('hospital', '—')} — {data.get('doctor', '—')}")
-        with open(pdf_path, "rb") as pdf_file:
-            await message.reply_document(
-                document=pdf_file,
-                filename=f"review_scene_{internal_id}.pdf",
-                caption=(
-                    "✅ تم إنشاء ملف PDF التجريبي\n\n"
-                    "⚠️ هذا النموذج تجريبي وغير رسمي ولا يمثل ترخيصًا أو مستندًا حكوميًا.\n"
-                    f"🔖 الرقم الداخلي: `{internal_id}`"
-                ),
-                parse_mode="Markdown",
-            )
-        await message.reply_text(
-            "اختر الإجراء التالي:",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("📝 إنشاء نموذج جديد", callback_data="rsc|new")],
-                [InlineKeyboardButton("📋 تعديل البيانات", callback_data="rsc|edit")],
-                [InlineKeyboardButton("🏠 الرئيسية", callback_data="rsc|main")],
-            ]),
-        )
-    except Exception as exc:
-        logger.exception("فشل إنشاء PDF مشهد المراجعة للمستخدم %s", uid)
-        await message.reply_text(
-            f"❌ تعذر إنشاء ملف PDF التجريبي.\n\nالسبب: {type(exc).__name__}",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 الرئيسية", callback_data="rsc|main")]]),
-        )
-    finally:
-        try:
-            if os.path.exists(pdf_path): os.remove(pdf_path)
-        except Exception:
-            pass
-
-
-review_scene_flow.on_generate_pdf = generate_and_send_review_scene_pdf
 
 
 async def show_analytics(update):
@@ -4701,8 +4631,6 @@ def main():
     async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
 
-        if await review_scene_flow.handle_callback(query, context):
-            return
         if await patient_companion_flow.handle_callback(query, context):
             return
 
