@@ -240,27 +240,80 @@ def _valid(data: dict) -> list[str]:
 
 
 def _pdf(path: str, data: dict):
+    """قالب رقمي عام لمشهد مراجعه بخانات ثابتة قابلة لإعادة الاستخدام."""
     from reportlab.lib.pagesizes import A4
-    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-    from reportlab.lib.units import mm
+    from reportlab.pdfgen import canvas
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
     from reportlab.lib import colors
-    font_path = Path(__file__).with_name("fonts") / "NotoSansArabic-Regular.ttf"
-    bold_path = Path(__file__).with_name("fonts") / "NotoSansArabic-Bold.ttf"
-    if font_path.exists():
-        pdfmetrics.registerFont(TTFont("SceneArabic", str(font_path)))
-        if bold_path.exists(): pdfmetrics.registerFont(TTFont("SceneArabicBold", str(bold_path)))
-    font = "SceneArabic" if font_path.exists() else "Helvetica"
-    bold = "SceneArabicBold" if bold_path.exists() else font
-    doc = SimpleDocTemplate(path, pagesize=A4, rightMargin=16*mm, leftMargin=16*mm, topMargin=15*mm, bottomMargin=15*mm)
-    styles = getSampleStyleSheet(); title = ParagraphStyle("t", parent=styles["Title"], fontName=bold, fontSize=18, alignment=1, leading=24); body = ParagraphStyle("b", parent=styles["BodyText"], fontName=font, fontSize=10, leading=16, alignment=2)
-    story = [Paragraph("مشهد مراجعة", title), Spacer(1, 8*mm), Paragraph("Review Scene", ParagraphStyle("en", parent=body, alignment=1, fontName=font)), Spacer(1, 6*mm)]
-    pairs = [("الاسم / Name", data.get("name")), ("الهوية/رقم الاختبار / ID", data.get("id_number")), ("الجنسية / Nationality", data.get("nationality")), ("جهة العمل / Workplace", data.get("workplace")), ("تاريخ ووقت الدخول / Entry", f"{data.get('entry_date')} {data.get('entry_time')}"), ("تاريخ ووقت الخروج / Exit", f"{data.get('exit_date')} {data.get('exit_time')}"), ("مدة الزيارة / Duration", _duration(data)), ("وقت الإصدار / Issue time", data.get("issue_time")), ("نوع الزيارة / Visit type", data.get("visit_type")), ("الممارس الصحي / Practitioner", data.get("doctor")), ("المسمى الوظيفي / Position", data.get("specialty")), ("المدينة / City", data.get("city")), ("المستشفى / Hospital", data.get("hospital")), ("رقم الترخيص / License", data.get("license_code") if data.get("license_enabled") else "معطل")]
-    table = Table([[Paragraph(str(k), body), Paragraph(str(v or "—"), body)] for k, v in pairs], colWidths=[72*mm, 102*mm], repeatRows=0)
-    table.setStyle(TableStyle([("GRID", (0,0), (-1,-1), .5, colors.HexColor("#9aa4b2")), ("BACKGROUND", (0,0), (0,-1), colors.HexColor("#edf2f7")), ("VALIGN", (0,0), (-1,-1), "MIDDLE"), ("LEFTPADDING", (0,0), (-1,-1), 6), ("RIGHTPADDING", (0,0), (-1,-1), 6), ("TOPPADDING", (0,0), (-1,-1), 7), ("BOTTOMPADDING", (0,0), (-1,-1), 7)]))
-    story.append(table); doc.build(story)
+    from reportlab.lib.utils import ImageReader
+    from datetime import datetime
+
+    base = Path(__file__).parent
+    ar_font, ar_bold = "SceneArabic", "SceneArabicBold"
+    try:
+        pdfmetrics.registerFont(TTFont(ar_font, str(base / "fonts/NotoSansArabic-Regular.ttf")))
+        pdfmetrics.registerFont(TTFont(ar_bold, str(base / "fonts/NotoSansArabic-Bold.ttf")))
+    except Exception:
+        ar_font = ar_bold = "Helvetica"
+    en_font, en_bold = "Times-Roman", "Times-Bold"
+    try:
+        pdfmetrics.registerFont(TTFont("SceneEnglish", str(base / "LiberationSerif-Regular.ttf")))
+        pdfmetrics.registerFont(TTFont("SceneEnglishBold", str(base / "LiberationSerif-Bold.ttf")))
+        en_font, en_bold = "SceneEnglish", "SceneEnglishBold"
+    except Exception:
+        pass
+
+    def shape(text):
+        text = str(text or "—")
+        try:
+            import arabic_reshaper
+            from bidi.algorithm import get_display
+            return get_display(arabic_reshaper.reshape(text))
+        except Exception:
+            return text
+
+    def fit(c, text, x, y, max_width, font, size, align="right", color=colors.black):
+        text = shape(text)
+        while size > 6 and pdfmetrics.stringWidth(text, font, size) > max_width:
+            size -= 0.5
+        c.setFont(font, size); c.setFillColor(color)
+        if align == "right": c.drawRightString(x, y, text)
+        elif align == "center": c.drawCentredString(x, y, text)
+        else: c.drawString(x, y, text)
+
+    c = canvas.Canvas(path, pagesize=A4); W, H = A4
+    blue = colors.HexColor("#2D4788"); light_blue = colors.HexColor("#2F73AA"); grid = colors.HexColor("#D2D2D2")
+    for name, x, y, w, h in (("review_seha_logo.png", 28, H-76, 86, 38), ("review_nhic_logo.png", W-104, 42, 76, 36), ("bg_pattern.png", W-150, H-112, 120, 62)):
+        asset = base / name
+        if asset.exists(): c.drawImage(ImageReader(str(asset)), x, y, width=w, height=h, preserveAspectRatio=True, mask="auto")
+    fit(c, "المملكة العربية السعودية", W/2, H-73, 260, ar_bold, 16, "center")
+    fit(c, "Kingdom of Saudi Arabia", W/2, H-91, 260, en_bold, 14, "center")
+    fit(c, "مشهد مراجعة", W/2, H-125, 240, ar_bold, 20, "center", light_blue)
+    fit(c, "Statement of Visit", W/2, H-145, 240, en_bold, 16, "center", blue)
+
+    left, right = 36, W-36; en_w, ar_w = 110, 95; x2, x3 = left+en_w, right-ar_w
+    y = H-178; rows = [28, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30]
+    definitions = [("Leave ID", "رمز الإجازة", "leave_id", False), ("Admission Date", "تاريخ الدخول", "entry_date", True), ("Discharge Date", "تاريخ الخروج", "exit_date", True), ("Waiting Period", "فترة الانتظار", "waiting_period", True), ("Issue Date", "تاريخ إصدار التقرير", "issue_date", False), ("Name", "الاسم", "name", False), ("National ID / Iqama", "رقم الهوية/الإقامة", "id_number", False), ("Nationality", "الجنسية", "nationality", False), ("Employer", "جهة العمل", "workplace", False), ("Practitioner Name", "اسم الممارس", "doctor", False), ("Position", "المسمى الوظيفي", "specialty", False), ("Visit Type", "نوع الزيارة", "visit_type", False)]
+    data = dict(data); data.setdefault("leave_id", data.get("gsl_code") or f"GSL{datetime.now():%y%m%d%H%M%S}"); data.setdefault("waiting_period", _duration(data)); data.setdefault("issue_date", datetime.now().strftime("%d-%m-%Y"))
+    for (en, ar, key, blue_row), rh in zip(definitions, rows):
+        y -= rh; fill = blue if blue_row else colors.white
+        c.setFillColor(fill); c.rect(left, y, right-left, rh, fill=1, stroke=0); c.setStrokeColor(grid); c.rect(left, y, right-left, rh, fill=0, stroke=1); c.line(x2, y, x2, y+rh); c.line(x3, y, x3, y+rh)
+        color = colors.white if blue_row else blue
+        fit(c, en, left+en_w/2, y+rh/2-4, en_w-12, en_bold, 10, "center", color); fit(c, ar, right-8, y+rh/2-5, ar_w-12, ar_bold, 11, "right", color)
+        value = data.get(key) or "—"
+        if key == "entry_date": value = f"{value} {data.get('entry_time','')}".strip()
+        if key == "exit_date": value = f"{value} {data.get('exit_time','')}".strip()
+        if key == "issue_date": value = f"{value} {data.get('issue_time','')}".strip()
+        is_ar = any(ord(ch) > 127 for ch in str(value)); fit(c, value, (x2+x3)/2, y+rh/2-4, x3-x2-30, ar_font if is_ar else en_font, 11, "center", color)
+
+    # بيانات المحادثة التي لا توجد لها خانة أصلية في النموذج تُعرض في سطر تعريفي منظم.
+    facility_en = f"Hospital: {data.get('hospital') or '—'}    |    City: {data.get('city') or '—'}    |    License: {'Enabled' if data.get('license_enabled') else 'Disabled'}"
+    facility_ar = f"المستشفى: {data.get('hospital') or '—'}    |    المدينة: {data.get('city') or '—'}    |    الترخيص: {'مفعل' if data.get('license_enabled') else 'معطل'}"
+    fit(c, facility_en, W/2, 193, W-72, en_font, 8, "center", blue)
+    fit(c, facility_ar, W/2, 179, W-72, ar_font, 8, "center", blue)
+
+    footer_y = 114; fit(c, "للتحقق من بيانات التقرير يرجى التأكد من زيارة موقع منصة صحة", W/2, footer_y+36, 310, ar_bold, 10, "center"); fit(c, "الرسمي", W/2, footer_y+19, 180, ar_bold, 10, "center"); fit(c, "To check the report please visit Seha's official website", W/2, footer_y+2, 330, en_bold, 9, "center"); fit(c, "www.seha.sa/#/inquiries/slenquiry", W/2, footer_y-15, 260, en_bold, 8, "center", colors.HexColor("#1C5FA8")); c.setStrokeColor(grid); c.line(W/2, 74, W/2, 185); c.showPage(); c.save()
 
 
 class ReviewSceneFlow:
