@@ -414,8 +414,6 @@ def _pdf(path: str, data: dict):
             draw_centered(c, values.get(key), left * scale_x, y, (right - left) * scale_x, 9)
 
     # عناصر المرجع خارج الجدول: اسم المستشفى/المدينة ووقت وتاريخ الإصدار.
-    draw_centered(c, data.get("hospital"), 700 * scale_x, (1654 - 1240) * scale_y, 350 * scale_x, 10, colors.HexColor("#1f1f1f"))
-    draw_centered(c, data.get("city"), 700 * scale_x, (1654 - 1270) * scale_y, 350 * scale_x, 10, colors.HexColor("#1f1f1f"))
     draw_centered(c, data.get("issue_time"), 40 * scale_x, (1654 - 1400) * scale_y, 300 * scale_x, 10, colors.black)
     draw_centered(c, data.get("issue_date"), 40 * scale_x, (1654 - 1435) * scale_y, 300 * scale_x, 10, colors.black)
     c.save()
