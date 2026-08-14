@@ -23,6 +23,7 @@ from telegram.ext import (
 
 import asyncio
 import database as db
+import medical_report
 from admin_auth import parse_admin_ids
 from patient_companion import PatientCompanionFlow
 from review_scene import ReviewSceneFlow
@@ -1062,6 +1063,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text == "🔙 الرجوع":
         await handle_back(update, context, uid, name, state)
+        return
+
+    # ── التقرير الطبي ──
+    if text == "التقارير الطبيه":
+        context.user_data.clear()
+        await medical_report.start(update, context)
+        return
+    if await medical_report.handle_text(update, context):
         return
 
     # ── القائمة الرئيسية ──
@@ -4640,6 +4649,8 @@ def main():
         if await review_scene_flow.handle_callback(query, context):
             return
         if await patient_companion_flow.handle_callback(query, context):
+            return
+        if await medical_report.handle_callback(query, context):
             return
 
         await query.answer()
