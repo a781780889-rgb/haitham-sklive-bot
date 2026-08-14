@@ -313,14 +313,24 @@ def _pdf(path: str, data: dict):
     c = canvas.Canvas(overlay, pagesize=A3)
     scale_x, scale_y = A3[0] / 1170.0, A3[1] / 1654.0
 
+    waiting_raw = _clean(data.get("waiting_period"))
+    waiting_en = data.get("waiting_period_en")
+    waiting_ar = data.get("waiting_period_ar")
+    if not waiting_en and waiting_raw and any("\u0600" <= ch <= "\u06ff" for ch in waiting_raw):
+        match = re.search(r"(\d+)\s*ساعة\s*و(\d+)\s*دقيقة", waiting_raw)
+        if match:
+            waiting_en = f"{match.group(1)} hours and {match.group(2)} mins"
+    if not waiting_ar and waiting_raw and any("\u0600" <= ch <= "\u06ff" for ch in waiting_raw):
+        waiting_ar = waiting_raw
+
     values = {
         "leave_id": data.get("leave_id"),
         "admission_date_en": data.get("entry_date_en") or f"{data.get('entry_date', '')} - {data.get('entry_time', '')}".strip(" -"),
         "admission_date_ar": data.get("entry_date_ar") or "",
         "discharge_date_en": data.get("exit_date_en") or f"{data.get('exit_date', '')} - {data.get('exit_time', '')}".strip(" -"),
         "discharge_date_ar": data.get("exit_date_ar") or "",
-        "waiting_period_en": data.get("waiting_period_en") or data.get("waiting_period"),
-        "waiting_period_ar": data.get("waiting_period_ar") or "",
+        "waiting_period_en": waiting_en or (waiting_raw if waiting_raw and not any("\u0600" <= ch <= "\u06ff" for ch in waiting_raw) else ""),
+        "waiting_period_ar": waiting_ar or "",
         "issue_date": data.get("issue_date"),
         "name_en": value_for("name", "_en"),
         "name_ar": value_for("name", "_ar"),
@@ -361,8 +371,9 @@ def _pdf(path: str, data: dict):
         "position": ("position_en", "position_ar"),
         "visit_type": ("visit_type_en", "visit_type_ar"),
     }
-    row_y_offsets = {"name": -19, "admission_date": -10, "discharge_date": -13, "issue_date": -19, "nationality": -21, "employer": -22, "national_id_iqama": -22, "practitioner_name": -32, "position": -32, "visit_type": -32}
+    row_y_offsets = {"name": -19, "admission_date": -10, "discharge_date": -13, "waiting_period": -11, "issue_date": -19, "nationality": -21, "employer": -22, "national_id_iqama": -22, "practitioner_name": -32, "position": -32, "visit_type": -32}
     row_x_offsets = {"admission_date": 16, "discharge_date": 16, "issue_date": 24, "national_id_iqama": 24}
+    split_x_offsets = {"waiting_period": (16, 55)}
     for key, (left, top, right, bottom) in rows.items():
         left += row_x_offsets.get(key, 0) / scale_x
         right += row_x_offsets.get(key, 0) / scale_x
@@ -370,8 +381,13 @@ def _pdf(path: str, data: dict):
         if key in split_rows:
             en_key, ar_key = split_rows[key]
             mid = (left + right) / 2
-            draw_centered(c, values.get(en_key), left * scale_x, y, (mid - left) * scale_x, 9)
-            draw_centered(c, values.get(ar_key), mid * scale_x, y, (right - mid) * scale_x, 9)
+            en_shift, ar_shift = split_x_offsets.get(key, (0, 0))
+            en_left = left + en_shift / scale_x
+            en_mid = mid + en_shift / scale_x
+            ar_mid = mid + ar_shift / scale_x
+            ar_right = right + ar_shift / scale_x
+            draw_centered(c, values.get(en_key), en_left * scale_x, y, (en_mid - en_left) * scale_x, 9)
+            draw_centered(c, values.get(ar_key), ar_mid * scale_x, y, (ar_right - ar_mid) * scale_x, 9)
         else:
             draw_centered(c, values.get(key), left * scale_x, y, (right - left) * scale_x, 9)
 
