@@ -361,8 +361,8 @@ def _pdf(path: str, data: dict):
         "position": ("position_en", "position_ar"),
         "visit_type": ("visit_type_en", "visit_type_ar"),
     }
-    row_y_offsets = {"name": -19, "admission_date": -10, "nationality": -21, "employer": -22, "national_id_iqama": -22, "practitioner_name": -32, "position": -32, "visit_type": -32}
-    row_x_offsets = {"admission_date": 16, "national_id_iqama": 24}
+    row_y_offsets = {"name": -19, "admission_date": -10, "discharge_date": -13, "issue_date": -19, "nationality": -21, "employer": -22, "national_id_iqama": -22, "practitioner_name": -32, "position": -32, "visit_type": -32}
+    row_x_offsets = {"admission_date": 16, "discharge_date": 16, "issue_date": 24, "national_id_iqama": 24}
     for key, (left, top, right, bottom) in rows.items():
         left += row_x_offsets.get(key, 0) / scale_x
         right += row_x_offsets.get(key, 0) / scale_x
