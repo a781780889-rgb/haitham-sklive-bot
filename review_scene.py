@@ -18,7 +18,6 @@ SPECIALTIES = ["استشاري", "أخصائي", "ممارس عام", "طبيب 
 FIELDS = [
     ("name", "الاسم"),
     ("id_number", "الهوية/رقم الاختبار"),
-    ("medical_record_number", "رقم الملف الطبي"),
     ("nationality", "الجنسية"),
     ("workplace", "جهة العمل"),
     ("entry_date", "تاريخ الدخول"),
@@ -27,9 +26,7 @@ FIELDS = [
     ("exit_time", "وقت الخروج"),
     ("issue_time", "وقت الإصدار"),
     ("visit_type", "نوع الزيارة"),
-    ("case_notes", "ملاحظات الحالة"),
 ]
-OPTIONAL_FIELDS = {"medical_record_number", "case_notes"}
 
 
 def _cb(action: str, value: str = "") -> str:
@@ -155,7 +152,7 @@ def _edit_keyboard():
 
 
 def _valid(data: dict) -> list[str]:
-    errors = [f"الحقل ناقص: {label}" for key, label in FIELDS if key not in OPTIONAL_FIELDS and not _clean(data.get(key))]
+    errors = [f"الحقل ناقص: {label}" for key, label in FIELDS if not _clean(data.get(key))]
     if data.get("id_number") and not re.fullmatch(r"[0-9٠-٩]{4,20}", _clean(data["id_number"])):
         errors.append("الهوية/رقم الاختبار يجب أن يكون أرقامًا فقط")
     for key, label in (("entry_date", "تاريخ الدخول"), ("exit_date", "تاريخ الخروج")):
@@ -188,7 +185,7 @@ def _pdf(path: str, data: dict):
     doc = SimpleDocTemplate(path, pagesize=A4, rightMargin=16*mm, leftMargin=16*mm, topMargin=15*mm, bottomMargin=15*mm)
     styles = getSampleStyleSheet(); title = ParagraphStyle("t", parent=styles["Title"], fontName=bold, fontSize=18, alignment=1, leading=24); body = ParagraphStyle("b", parent=styles["BodyText"], fontName=font, fontSize=10, leading=16, alignment=2)
     story = [Paragraph("مشهد مراجعة", title), Spacer(1, 8*mm), Paragraph("Review Scene", ParagraphStyle("en", parent=body, alignment=1, fontName=font)), Spacer(1, 6*mm)]
-    pairs = [("الاسم / Name", data.get("name")), ("الهوية/رقم الاختبار / ID", data.get("id_number")), ("رقم الملف الطبي / Medical record", data.get("medical_record_number")), ("الجنسية / Nationality", data.get("nationality")), ("جهة العمل / Workplace", data.get("workplace")), ("تاريخ ووقت الدخول / Entry", f"{data.get('entry_date')} {data.get('entry_time')}"), ("تاريخ ووقت الخروج / Exit", f"{data.get('exit_date')} {data.get('exit_time')}"), ("مدة الزيارة / Duration", _duration(data)), ("وقت الإصدار / Issue time", data.get("issue_time")), ("نوع الزيارة / Visit type", data.get("visit_type")), ("ملاحظات الحالة / Case notes", data.get("case_notes")), ("الممارس الصحي / Practitioner", data.get("doctor")), ("المسمى الوظيفي / Position", data.get("specialty")), ("المدينة / City", data.get("city")), ("المستشفى / Hospital", data.get("hospital")), ("رقم الترخيص / License", data.get("license_code") if data.get("license_enabled") else "معطل")]
+    pairs = [("الاسم / Name", data.get("name")), ("الهوية/رقم الاختبار / ID", data.get("id_number")), ("الجنسية / Nationality", data.get("nationality")), ("جهة العمل / Workplace", data.get("workplace")), ("تاريخ ووقت الدخول / Entry", f"{data.get('entry_date')} {data.get('entry_time')}"), ("تاريخ ووقت الخروج / Exit", f"{data.get('exit_date')} {data.get('exit_time')}"), ("مدة الزيارة / Duration", _duration(data)), ("وقت الإصدار / Issue time", data.get("issue_time")), ("نوع الزيارة / Visit type", data.get("visit_type")), ("الممارس الصحي / Practitioner", data.get("doctor")), ("المسمى الوظيفي / Position", data.get("specialty")), ("المدينة / City", data.get("city")), ("المستشفى / Hospital", data.get("hospital")), ("رقم الترخيص / License", data.get("license_code") if data.get("license_enabled") else "معطل")]
     table = Table([[Paragraph(str(k), body), Paragraph(str(v or "—"), body)] for k, v in pairs], colWidths=[72*mm, 102*mm], repeatRows=0)
     table.setStyle(TableStyle([("GRID", (0,0), (-1,-1), .5, colors.HexColor("#9aa4b2")), ("BACKGROUND", (0,0), (0,-1), colors.HexColor("#edf2f7")), ("VALIGN", (0,0), (-1,-1), "MIDDLE"), ("LEFTPADDING", (0,0), (-1,-1), 6), ("RIGHTPADDING", (0,0), (-1,-1), 6), ("TOPPADDING", (0,0), (-1,-1), 7), ("BOTTOMPADDING", (0,0), (-1,-1), 7)]))
     story.append(table); doc.build(story)
