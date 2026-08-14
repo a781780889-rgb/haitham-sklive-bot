@@ -16,6 +16,9 @@ REQUIRED_FIELDS = (
     "companion_name", "id_number", "nationality", "relation",
     "workplace", "admission_date", "days_count",
 )
+OPTIONAL_REPORT_FIELDS = (
+    "medical_facility", "diagnosis", "description", "recommendations", "notes",
+)
 LABELS_AR = {
     "companion_name": "اسم المرافق", "id_number": "رقم الهوية",
     "nationality": "الجنسية", "relation": "صلة القرابة",
@@ -170,6 +173,11 @@ def _extract(text: str) -> Dict[str, Any]:
         "workplace": r"(?:جهة\s*العمل|مكان\s*العمل|العمل|الشركة)",
         "admission_date": r"(?:تاريخ\s*(?:الدخول|القبول)|الدخول|بدأ|تاريخ)",
         "days_count": r"(?:عدد\s*(?:الأيام|الايام|أيام)|المدة|كم\s*يوم)",
+        "medical_facility": r"(?:الجهة\s*الطبية|المنشأة\s*الصحية|المرفق\s*الصحي)",
+        "diagnosis": r"(?:التشخيص|التشخيص\s*الطبي)",
+        "description": r"(?:وصف\s*الحالة|تفاصيل\s*الحالة)",
+        "recommendations": r"(?:التوصيات|التوصية)",
+        "notes": r"(?:ملاحظات|ملاحظة)",
     }
     normalized_text = str(text or "").replace("：", ":")
     for field_name, label in aliases.items():
@@ -223,6 +231,13 @@ class CompanionReview:
         lines = ["📝 مراجعة بيانات تقرير مرافقة مريض", ""]
         for key in REQUIRED_FIELDS:
             lines.append(f"{LABELS_AR[key]}: {self.normalized.get(key) or '—'}")
+        optional_labels = {
+            "medical_facility": "الجهة الطبية", "diagnosis": "التشخيص",
+            "description": "وصف الحالة", "recommendations": "التوصيات", "notes": "ملاحظات",
+        }
+        for key, label in optional_labels.items():
+            if self.normalized.get(key):
+                lines.append(f"{label}: {self.normalized[key]}")
         lines += ["", "English Translation:"]
         for key in REQUIRED_FIELDS:
             lines.append(f"{LABELS_EN[key]}: {self.english.get(key) or '—'}")
@@ -242,6 +257,9 @@ def review_companion_data(text_or_data: Any, current: Optional[Mapping[str, Any]
     merged.update({key: value for key, value in extracted.items() if _clean(value)})
     original = {key: merged.get(key) for key in REQUIRED_FIELDS if _clean(merged.get(key))}
     normalized = {key: _clean(original.get(key)) for key in REQUIRED_FIELDS if _clean(original.get(key))}
+    for key in OPTIONAL_REPORT_FIELDS:
+        if _clean(merged.get(key)):
+            normalized[key] = _clean(merged.get(key))
     errors: List[str] = []
     warnings: List[str] = []
 
@@ -287,4 +305,4 @@ def review_companion_data(text_or_data: Any, current: Optional[Mapping[str, Any]
     return CompanionReview(original, normalized, english, errors, warnings)
 
 
-__all__ = ["CompanionReview", "REQUIRED_FIELDS", "review_companion_data", "translate_job_title"]
+__all__ = ["CompanionReview", "REQUIRED_FIELDS", "OPTIONAL_REPORT_FIELDS", "review_companion_data", "translate_job_title"]

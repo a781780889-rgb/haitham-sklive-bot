@@ -418,6 +418,91 @@ def _build_field_values(companion_data: Mapping[str, Any], hospital: str, doctor
     }
 
 
+def _build_companion_details_page(companion_data: Mapping[str, Any], hospital: str,
+                                  doctor: str, specialty: str, output_path: Path) -> None:
+    """ينشئ صفحة تفاصيل اختيارية للنصوص الطويلة دون ضغطها داخل القالب الأساسي."""
+    from html import escape
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+    optional = {
+        "medical_facility": ("الجهة الطبية", "Medical Facility"),
+        "diagnosis": ("التشخيص", "Diagnosis"),
+        "description": ("وصف الحالة", "Case Description"),
+        "recommendations": ("التوصيات", "Recommendations"),
+        "notes": ("ملاحظات", "Notes"),
+    }
+    rows = []
+    for key, labels in optional.items():
+        value = _text(companion_data.get(key))
+        if value:
+            rows.append((labels[0], labels[1], value))
+    if not rows:
+        return
+
+    doc = SimpleDocTemplate(str(output_path), pagesize=A4, rightMargin=18 * mm,
+                            leftMargin=18 * mm, topMargin=16 * mm, bottomMargin=18 * mm)
+    styles = getSampleStyleSheet()
+    title_ar = ParagraphStyle("companion-details-title-ar", parent=styles["Title"],
+                              fontName=AR_BOLD_FONT, fontSize=18, leading=24,
+                              alignment=TA_CENTER, textColor=colors.HexColor("#1F477D"))
+    title_en = ParagraphStyle("companion-details-title-en", parent=styles["Normal"],
+                              fontName=EN_BOLD_FONT, fontSize=12, leading=16,
+                              alignment=TA_CENTER, textColor=colors.HexColor("#1F477D"))
+    label_ar = ParagraphStyle("companion-details-label-ar", parent=styles["Normal"],
+                              fontName=AR_BOLD_FONT, fontSize=10, leading=15,
+                              alignment=TA_RIGHT, textColor=colors.HexColor("#1F477D"))
+    label_en = ParagraphStyle("companion-details-label-en", parent=styles["Normal"],
+                              fontName=EN_BOLD_FONT, fontSize=9, leading=13,
+                              alignment=0, textColor=colors.HexColor("#1F477D"))
+    value_ar = ParagraphStyle("companion-details-value-ar", parent=styles["Normal"],
+                              fontName=AR_FONT, fontSize=10, leading=16,
+                              alignment=TA_RIGHT)
+    value_en = ParagraphStyle("companion-details-value-en", parent=styles["Normal"],
+                              fontName=EN_FONT, fontSize=9, leading=13, alignment=0)
+
+    story = [Paragraph(_display_text("تفاصيل تقرير مرافقة مريض", "ar"), title_ar),
+             Spacer(1, 2 * mm), Paragraph("Companion Sick Leave Report Details", title_en),
+             Spacer(1, 7 * mm)]
+    header = [[Paragraph(_display_text(hospital or "الجهة الصحية", "ar"), label_ar),
+               Paragraph(escape(_translate(hospital) or "Medical Facility"), label_en)],
+              [Paragraph(_display_text(doctor or "—", "ar"), value_ar),
+               Paragraph(escape(_translate(doctor) or "—"), value_en)],
+              [Paragraph(_display_text(specialty or "—", "ar"), value_ar),
+               Paragraph(escape(_translate(specialty) or "—"), value_en)]]
+    identity = Table(header, colWidths=[88 * mm, 88 * mm])
+    identity.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#B7C8D9")),
+                                  ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#EAF1F8")),
+                                  ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                                  ("LEFTPADDING", (0, 0), (-1, -1), 7),
+                                  ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+                                  ("TOPPADDING", (0, 0), (-1, -1), 6),
+                                  ("BOTTOMPADDING", (0, 0), (-1, -1), 6)]))
+    story.extend([identity, Spacer(1, 8 * mm)])
+
+    details = []
+    for ar, en, value in rows:
+        details.append([Paragraph(_display_text(ar, "ar"), label_ar),
+                        Paragraph(escape(en), label_en),
+                        Paragraph(_display_text(value, "ar"), value_ar)])
+    table = Table(details, colWidths=[42 * mm, 42 * mm, 92 * mm], repeatRows=0)
+    table.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#B7C8D9")),
+                               ("BACKGROUND", (0, 0), (1, -1), colors.HexColor("#F4F7FA")),
+                               ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                               ("LEFTPADDING", (0, 0), (-1, -1), 7),
+                               ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+                               ("TOPPADDING", (0, 0), (-1, -1), 8),
+                               ("BOTTOMPADDING", (0, 0), (-1, -1), 8)]))
+    story.extend([table, Spacer(1, 12 * mm),
+                  Paragraph(_display_text("هذه الصفحة جزء من التقرير الأصلي وتحافظ على نفس بياناته وهوية النظام.", "ar"), value_ar),
+                  Spacer(1, 2 * mm), Paragraph("This page is part of the original report and preserves the system identity.", value_en)])
+    doc.build(story)
+
+
 def render_companion_pdf(companion_data: Mapping[str, Any], hospital: str, doctor: str,
                          specialty: str, output_path: str | os.PathLike | None = None,
                          gsl_code: str | None = None,
@@ -450,9 +535,16 @@ def render_companion_pdf(companion_data: Mapping[str, Any], hospital: str, docto
     page.merge_page(overlay.pages[0])
     writer = PdfWriter()
     writer.add_page(page)
+    details_path = output.with_suffix(".details.pdf")
+    _build_companion_details_page(companion_data, hospital, doctor, specialty, details_path)
+    if details_path.exists():
+        details_reader = PdfReader(str(details_path))
+        for details_page in details_reader.pages:
+            writer.add_page(details_page)
     with output.open("wb") as handle:
         writer.write(handle)
     overlay_path.unlink(missing_ok=True)
+    details_path.unlink(missing_ok=True)
     if not output.exists() or output.stat().st_size < 1000:
         raise RuntimeError("فشل إنشاء PDF مرافق مريض بالقالب الرسمي")
     return str(output)

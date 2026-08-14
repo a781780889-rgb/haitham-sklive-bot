@@ -893,6 +893,9 @@ class PatientCompanionFlow:
             ("workplace", "جهة العمل"),
             ("admission_date", "تاريخ الدخول"),
             ("days_count", "عدد الأيام"),
+            ("diagnosis", "التشخيص (اختياري)"),
+            ("description", "وصف الحالة (اختياري)"),
+            ("recommendations", "التوصيات (اختياري)"),
         )
         lines = ["📝 بيانات تقرير مرافقة مريض", "", "أرسل البيانات بأي أسلوب :"]
         for key, label in labels:
