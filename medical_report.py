@@ -291,7 +291,75 @@ def _arabic(value):
     return text
 
 
+def create_template_pdf(data, output_path, template_path):
+    """يعبئ قالب التقرير الطبي العام الجديد ويحافظ على تصميمه الأصلي."""
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.pagesizes import A4
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.ttfonts import TTFont
+    from reportlab.lib.colors import HexColor
+    from reportlab.platypus import Paragraph
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER
+    from pypdf import PdfReader, PdfWriter
+
+    font = _font_path()
+    if not font:
+        raise RuntimeError("لم يتم العثور على خط عربي يدعم Unicode")
+    pdfmetrics.registerFont(TTFont("MedicalArabicTemplate", font))
+    overlay_path = output_path + ".overlay.pdf"
+    page_w, page_h = A4
+    c = canvas.Canvas(overlay_path, pagesize=A4, pageCompression=1)
+    c.setTitle("Medical Report")
+    c.setFont("MedicalArabicTemplate", 10.5)
+    c.setFillColor(HexColor("#1F5D91"))
+
+    def value(key, fallback="—"):
+        return str(data.get(key) or fallback)
+
+    def center(text, x, y, size=10.5):
+        c.setFont("MedicalArabicTemplate", size)
+        c.drawCentredString(x, y, _arabic(text))
+
+    center(value("leave_id", f"MR-{datetime.now().strftime('%Y%m%d%H%M%S')}"), page_w / 2, 706)
+    center(value("admission_date"), page_w / 2, 678)
+    center(value("discharge_date", data.get("discharge_or_days", "—")), page_w / 2, 650)
+    center(value("issue_date", datetime.now().strftime("%d/%m/%Y")), page_w / 2, 622)
+    center(value("patient_name"), page_w / 2, 592)
+    center(value("id_number"), page_w / 2, 563)
+    center(value("nationality"), page_w / 2, 535)
+    center(value("workplace"), page_w / 2, 507)
+    center(value("doctor"), page_w / 2, 479)
+    center(value("specialty"), page_w / 2, 451)
+
+    diagnosis_style = ParagraphStyle(
+        "medical-diagnosis", fontName="MedicalArabicTemplate", fontSize=11,
+        leading=17, alignment=TA_CENTER, textColor=HexColor("#1F5D91"),
+    )
+    paragraph = Paragraph(_arabic(value("diagnosis")), diagnosis_style)
+    paragraph.wrapOn(c, 430, 100)
+    paragraph.drawOn(c, (page_w - 430) / 2, 335)
+    c.save()
+
+    background = PdfReader(template_path)
+    overlay = PdfReader(overlay_path)
+    page = background.pages[0]
+    page.merge_page(overlay.pages[0])
+    writer = PdfWriter()
+    writer.add_page(page)
+    with open(output_path, "wb") as output:
+        writer.write(output)
+    try:
+        os.remove(overlay_path)
+    except OSError:
+        pass
+
+
 def create_pdf(data, output_path):
+    template_path = os.path.join(os.path.dirname(__file__), "templates", "medical_report_template.pdf")
+    if os.path.exists(template_path):
+        create_template_pdf(data, output_path, template_path)
+        return
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
