@@ -240,80 +240,97 @@ def _valid(data: dict) -> list[str]:
 
 
 def _pdf(path: str, data: dict):
-    """قالب رقمي عام لمشهد مراجعه بخانات ثابتة قابلة لإعادة الاستخدام."""
+    """إنشاء مشهد المراجعة باستخدام القالب العام القابل لإعادة الاستخدام."""
+    from datetime import datetime
+    from io import BytesIO
+    from pathlib import Path
+
+    from pypdf import PdfReader, PdfWriter
+    from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
-    from reportlab.pdfgen import canvas
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
-    from reportlab.lib import colors
-    from reportlab.lib.utils import ImageReader
-    from datetime import datetime
+    from reportlab.pdfgen import canvas
 
     base = Path(__file__).parent
-    ar_font, ar_bold = "SceneArabic", "SceneArabicBold"
+    template_path = base / "templates" / "seha_statement_of_visit_template.pdf"
+    if not template_path.exists():
+        raise FileNotFoundError(f"PDF template not found: {template_path}")
+
+    data = dict(data)
+    data.setdefault("leave_id", data.get("gsl_code") or f"GSL{datetime.now():%y%m%d%H%M%S}")
+    data.setdefault("waiting_period", _duration(data))
+    data.setdefault("issue_date", datetime.now().strftime("%d-%m-%Y"))
+
+    ar_font = "SceneArabic"
     try:
         pdfmetrics.registerFont(TTFont(ar_font, str(base / "fonts/NotoSansArabic-Regular.ttf")))
-        pdfmetrics.registerFont(TTFont(ar_bold, str(base / "fonts/NotoSansArabic-Bold.ttf")))
     except Exception:
-        ar_font = ar_bold = "Helvetica"
-    en_font, en_bold = "Times-Roman", "Times-Bold"
-    try:
-        pdfmetrics.registerFont(TTFont("SceneEnglish", str(base / "LiberationSerif-Regular.ttf")))
-        pdfmetrics.registerFont(TTFont("SceneEnglishBold", str(base / "LiberationSerif-Bold.ttf")))
-        en_font, en_bold = "SceneEnglish", "SceneEnglishBold"
-    except Exception:
-        pass
+        ar_font = "Helvetica"
 
-    def shape(text):
-        text = str(text or "—")
+    def shape(value):
+        value = str(value or "—")
         try:
             import arabic_reshaper
             from bidi.algorithm import get_display
-            return get_display(arabic_reshaper.reshape(text))
+            return get_display(arabic_reshaper.reshape(value))
         except Exception:
-            return text
+            return value
 
-    def fit(c, text, x, y, max_width, font, size, align="right", color=colors.black):
-        text = shape(text)
-        while size > 6 and pdfmetrics.stringWidth(text, font, size) > max_width:
-            size -= 0.5
-        c.setFont(font, size); c.setFillColor(color)
-        if align == "right": c.drawRightString(x, y, text)
-        elif align == "center": c.drawCentredString(x, y, text)
-        else: c.drawString(x, y, text)
+    def draw_centered(c, value, x, y, width, size=9, color=colors.HexColor("#1f1f1f")):
+        value = shape(value)
+        font = ar_font if any(ord(ch) > 127 for ch in str(value)) else "Helvetica"
+        c.setFont(font, size)
+        c.setFillColor(color)
+        c.drawCentredString(x + width / 2, y, value)
 
-    c = canvas.Canvas(path, pagesize=A4); W, H = A4
-    blue = colors.HexColor("#2D4788"); light_blue = colors.HexColor("#2F73AA"); grid = colors.HexColor("#D2D2D2")
-    for name, x, y, w, h in (("review_seha_logo.png", 28, H-76, 86, 38), ("review_nhic_logo.png", W-104, 42, 76, 36), ("bg_pattern.png", W-150, H-112, 120, 62)):
-        asset = base / name
-        if asset.exists(): c.drawImage(ImageReader(str(asset)), x, y, width=w, height=h, preserveAspectRatio=True, mask="auto")
-    fit(c, "المملكة العربية السعودية", W/2, H-73, 260, ar_bold, 16, "center")
-    fit(c, "Kingdom of Saudi Arabia", W/2, H-91, 260, en_bold, 14, "center")
-    fit(c, "مشهد مراجعة", W/2, H-125, 240, ar_bold, 20, "center", light_blue)
-    fit(c, "Statement of Visit", W/2, H-145, 240, en_bold, 16, "center", blue)
+    # Write values into the blank cells of the supplied template, then preserve its form fields.
+    overlay = BytesIO()
+    c = canvas.Canvas(overlay, pagesize=A4)
+    scale_x, scale_y = A4[0] / 1170.0, A4[1] / 1654.0
 
-    left, right = 36, W-36; en_w, ar_w = 110, 95; x2, x3 = left+en_w, right-ar_w
-    y = H-178; rows = [28, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30]
-    definitions = [("Leave ID", "رمز الإجازة", "leave_id", False), ("Admission Date", "تاريخ الدخول", "entry_date", True), ("Discharge Date", "تاريخ الخروج", "exit_date", True), ("Waiting Period", "فترة الانتظار", "waiting_period", True), ("Issue Date", "تاريخ إصدار التقرير", "issue_date", False), ("Name", "الاسم", "name", False), ("National ID / Iqama", "رقم الهوية/الإقامة", "id_number", False), ("Nationality", "الجنسية", "nationality", False), ("Employer", "جهة العمل", "workplace", False), ("Practitioner Name", "اسم الممارس", "doctor", False), ("Position", "المسمى الوظيفي", "specialty", False), ("Visit Type", "نوع الزيارة", "visit_type", False)]
-    data = dict(data); data.setdefault("leave_id", data.get("gsl_code") or f"GSL{datetime.now():%y%m%d%H%M%S}"); data.setdefault("waiting_period", _duration(data)); data.setdefault("issue_date", datetime.now().strftime("%d-%m-%Y"))
-    for (en, ar, key, blue_row), rh in zip(definitions, rows):
-        y -= rh; fill = blue if blue_row else colors.white
-        c.setFillColor(fill); c.rect(left, y, right-left, rh, fill=1, stroke=0); c.setStrokeColor(grid); c.rect(left, y, right-left, rh, fill=0, stroke=1); c.line(x2, y, x2, y+rh); c.line(x3, y, x3, y+rh)
-        color = colors.white if blue_row else blue
-        fit(c, en, left+en_w/2, y+rh/2-4, en_w-12, en_bold, 10, "center", color); fit(c, ar, right-8, y+rh/2-5, ar_w-12, ar_bold, 11, "right", color)
-        value = data.get(key) or "—"
-        if key == "entry_date": value = f"{value} {data.get('entry_time','')}".strip()
-        if key == "exit_date": value = f"{value} {data.get('exit_time','')}".strip()
-        if key == "issue_date": value = f"{value} {data.get('issue_time','')}".strip()
-        is_ar = any(ord(ch) > 127 for ch in str(value)); fit(c, value, (x2+x3)/2, y+rh/2-4, x3-x2-30, ar_font if is_ar else en_font, 11, "center", color)
+    values = {
+        "leave_id": data.get("leave_id"),
+        "admission_date": f"{data.get('entry_date', '')} {data.get('entry_time', '')}".strip(),
+        "discharge_date": f"{data.get('exit_date', '')} {data.get('exit_time', '')}".strip(),
+        "waiting_period": data.get("waiting_period"),
+        "issue_date": f"{data.get('issue_date', '')} {data.get('issue_time', '')}".strip(),
+        "name": data.get("name"),
+        "national_id_iqama": data.get("id_number"),
+        "nationality": data.get("nationality"),
+        "employer": data.get("workplace"),
+        "practitioner_name": data.get("doctor"),
+        "position": data.get("specialty"),
+        "visit_type": data.get("visit_type"),
+    }
+    rows = {
+        "leave_id": (265, 320, 884, 368),
+        "admission_date": (265, 375, 884, 425),
+        "discharge_date": (265, 430, 884, 479),
+        "waiting_period": (265, 484, 884, 534),
+        "issue_date": (265, 539, 884, 588),
+        "name": (265, 594, 884, 647),
+        "national_id_iqama": (265, 653, 884, 702),
+        "nationality": (265, 708, 884, 757),
+        "employer": (265, 763, 884, 812),
+        "practitioner_name": (265, 818, 884, 867),
+        "position": (265, 873, 884, 922),
+        "visit_type": (265, 928, 884, 979),
+    }
+    for key, (left, top, right, bottom) in rows.items():
+        value = values.get(key)
+        if value:
+            draw_centered(c, value, left * scale_x, (1654 - bottom) * scale_y + 9, (right - left) * scale_x, 9)
+    c.save()
+    overlay.seek(0)
 
-    # بيانات المحادثة التي لا توجد لها خانة أصلية في النموذج تُعرض في سطر تعريفي منظم.
-    facility_en = f"Hospital: {data.get('hospital') or '—'}    |    City: {data.get('city') or '—'}    |    License: {'Enabled' if data.get('license_enabled') else 'Disabled'}"
-    facility_ar = f"المستشفى: {data.get('hospital') or '—'}    |    المدينة: {data.get('city') or '—'}    |    الترخيص: {'مفعل' if data.get('license_enabled') else 'معطل'}"
-    fit(c, facility_en, W/2, 193, W-72, en_font, 8, "center", blue)
-    fit(c, facility_ar, W/2, 179, W-72, ar_font, 8, "center", blue)
-
-    footer_y = 114; fit(c, "للتحقق من بيانات التقرير يرجى التأكد من زيارة موقع منصة صحة", W/2, footer_y+36, 310, ar_bold, 10, "center"); fit(c, "الرسمي", W/2, footer_y+19, 180, ar_bold, 10, "center"); fit(c, "To check the report please visit Seha's official website", W/2, footer_y+2, 330, en_bold, 9, "center"); fit(c, "www.seha.sa/#/inquiries/slenquiry", W/2, footer_y-15, 260, en_bold, 8, "center", colors.HexColor("#1C5FA8")); c.setStrokeColor(grid); c.line(W/2, 74, W/2, 185); c.showPage(); c.save()
+    overlay_pdf = PdfReader(overlay)
+    writer = PdfWriter(clone_from=str(template_path))
+    writer.pages[0].merge_page(overlay_pdf.pages[0])
+    if writer.get_fields():
+        writer.set_need_appearances_writer()
+    with open(path, "wb") as output:
+        writer.write(output)
 
 
 class ReviewSceneFlow:
