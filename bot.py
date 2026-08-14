@@ -581,6 +581,7 @@ def main_menu_keyboard(is_admin: bool = False):
         [KeyboardButton("🌐 نظام المواقع"),   KeyboardButton("🏥 نظام المستشفيات")],
         [KeyboardButton("➕ إضافة مستشفى"),   KeyboardButton("➕ إضافة طبيب")],
         [KeyboardButton("🖼 إضافة شعار مستشفى")],
+        [KeyboardButton("مشهد مراجعه")],
         [KeyboardButton("🏠 القائمة الرئيسية")],
     ]
     if is_admin:
