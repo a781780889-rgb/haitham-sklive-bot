@@ -25,6 +25,7 @@ import asyncio
 import database as db
 from admin_auth import parse_admin_ids
 from patient_companion import PatientCompanionFlow
+from review_scene import ReviewSceneFlow
 from external_api import send_leave_to_external_api
 from companion_pdf_gen import generate_companion_pdf
 
@@ -604,6 +605,7 @@ patient_companion_flow = PatientCompanionFlow(
     _patient_companion_back_to_main,
     on_generate_pdf=None,  # تُربط بعد تعريف الدالة في أسفل الملف (تُعيّن لاحقاً)
 )
+review_scene_flow = ReviewSceneFlow(db, _patient_companion_back_to_main)
 
 
 def dashboard_keyboard():
@@ -1062,12 +1064,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # ── القائمة الرئيسية ──
-
+    if text == "مشهد مراجعه":
+        context.user_data.clear()
+        await review_scene_flow.start(update.message, context)
+        return
     if text == "🏥 مرافق مريض":
         context.user_data.clear()
         await patient_companion_flow.start(update.message, context)
         return
-
+    if await review_scene_flow.handle_text(text, update.message, context, uid):
+        return
     if await patient_companion_flow.handle_text(text, update.message, context, uid):
         return
 
@@ -4630,7 +4636,8 @@ def main():
     # معالج الأزرار الإنلاين
     async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         query = update.callback_query
-
+        if await review_scene_flow.handle_callback(query, context):
+            return
         if await patient_companion_flow.handle_callback(query, context):
             return
 
