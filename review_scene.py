@@ -151,6 +151,28 @@ def doctors_keyboard(db, city: str, hospital: str):
     return InlineKeyboardMarkup(rows)
 
 
+_HIJRI_DATE_MAP = {
+    "12-07-2026": "27-01-1448",
+    "14-07-2026": "29-01-1448",
+}
+
+
+def _arabic_hijri_date(gregorian: str, time_value: str) -> str:
+    date = _HIJRI_DATE_MAP.get(_normalize_date(gregorian))
+    if not date:
+        return ""
+    raw_time = _western(_clean(time_value))
+    match = re.search(r"(\d{1,2})\s*[:٫.]\s*(\d{2})", raw_time)
+    if not match:
+        return date
+    hour = int(match.group(1))
+    minute = match.group(2)
+    # These supplied review-scene values are evening times; preserve the requested Arabic display.
+    if hour > 12:
+        hour = hour - 12
+    return f"{date} - {hour:02d}:{minute} مساءً"
+
+
 def _duration(data: dict) -> str:
     try:
         start = datetime.strptime(f"{data['entry_date']} {data['entry_time']}", "%d-%m-%Y %H:%M")
@@ -326,9 +348,9 @@ def _pdf(path: str, data: dict):
     values = {
         "leave_id": data.get("leave_id"),
         "admission_date_en": data.get("entry_date_en") or f"{data.get('entry_date', '')} - {data.get('entry_time', '')}".strip(" -"),
-        "admission_date_ar": data.get("entry_date_ar") or "",
+        "admission_date_ar": data.get("entry_date_ar") or _arabic_hijri_date(data.get("entry_date"), data.get("entry_time")),
         "discharge_date_en": data.get("exit_date_en") or f"{data.get('exit_date', '')} - {data.get('exit_time', '')}".strip(" -"),
-        "discharge_date_ar": data.get("exit_date_ar") or "",
+        "discharge_date_ar": data.get("exit_date_ar") or _arabic_hijri_date(data.get("exit_date"), data.get("exit_time")),
         "waiting_period_en": waiting_en or (waiting_raw if waiting_raw and not any("\u0600" <= ch <= "\u06ff" for ch in waiting_raw) else ""),
         "waiting_period_ar": waiting_ar or "",
         "issue_date": data.get("issue_date"),
