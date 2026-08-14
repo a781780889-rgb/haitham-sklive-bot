@@ -15,6 +15,11 @@ from doctors_data import get_doctors_for_hospital
 from hospitals_data import KSA_HOSPITALS
 
 try:
+    from smart_parser import smart_parse_full
+except Exception:  # pragma: no cover
+    smart_parse_full = None
+
+try:
     import arabic_reshaper
     from bidi.algorithm import get_display
 except ImportError:  # pragma: no cover
@@ -160,6 +165,47 @@ def _parse_date(value):
         except ValueError:
             continue
     return None
+
+
+def _parse_free_report(text):
+    """يستخرج حقول التقرير من النص الحر، مع الاستفادة من المحلل الذكي ثم fallback واضح."""
+    aliases = {
+        "patient_name": ["اسم المريض", "المريض", "اسم الشخص"],
+        "id_number": ["رقم الهوية", "رقم الهويه", "الهوية", "الهويه", "رقم السجل"],
+        "nationality": ["الجنسية", "الجنسيه"],
+        "workplace": ["جهة العمل", "جهه العمل", "العمل", "جهة الموظف"],
+        "admission_date": ["تاريخ الدخول", "تاريخ دخول", "الدخول", "تاريخ الحضور"],
+        "discharge_or_days": ["تاريخ الخروج", "تاريخ خروج", "الخروج", "عدد الأيام", "عدد الايام", "المدة", "المده"],
+        "diagnosis": ["التشخيص", "تشخيص", "الحالة المرضية", "الحاله المرضيه"],
+    }
+    parsed = {}
+    if smart_parse_full:
+        try:
+            ai_data = smart_parse_full(text) or {}
+            mapping = {
+                "full_name": "patient_name", "name": "patient_name", "id_number": "id_number",
+                "nationality": "nationality", "workplace": "workplace", "excuse_date": "admission_date",
+                "exit_date": "discharge_or_days", "days_count": "discharge_or_days", "diagnosis": "diagnosis",
+            }
+            for source, target in mapping.items():
+                if ai_data.get(source) and target not in parsed:
+                    parsed[target] = str(ai_data[source]).strip()
+        except Exception:
+            pass
+    lines = [line.strip() for line in str(text or "").splitlines() if line.strip()]
+    for line in lines:
+        if ":" not in line and "：" not in line:
+            continue
+        label, value = re.split(r"[:：]", line, maxsplit=1)
+        label = re.sub(r"^[^\wء-ي]+", "", label).strip().lower()
+        value = value.strip()
+        if not value:
+            continue
+        for key, labels in aliases.items():
+            if any(label == alias.lower() or label.startswith(alias.lower()) for alias in labels):
+                parsed[key] = value
+                break
+    return parsed
 
 
 def _validate(data):
@@ -325,9 +371,19 @@ async def _show_doctors(query, context, hospital):
 
 
 async def _begin_fields(message, context):
-    _set(context, "field:patient_name")
-    prompt, markup = _prompt_text("patient_name", "اسم المريض", _data(context))
-    await message.reply_text(prompt, parse_mode="Markdown", reply_markup=markup)
+    _set(context, "free_input")
+    prompt = (
+        "📝 *بيانات التقرير الطبي*\n\n"
+        "أرسل البيانات بأي أسلوب — الذكاء الاصطناعي سيفهمها:\n\n"
+        "اسم المريض: \n"
+        "رقم الهوية: \n"
+        "الجنسية: \n"
+        "جهة العمل: \n"
+        "تاريخ الدخول: \n"
+        "تاريخ الخروج: (أو عدد الأيام)\n"
+        "التشخيص: (فكرة مختصرة، مثال: التهاب حلق)"
+    )
+    await message.reply_text(prompt, parse_mode="Markdown", reply_markup=_back_cancel("mr:back:doctor"))
 
 
 async def _show_review(message, context):
@@ -461,6 +517,24 @@ async def handle_callback(query, context):
 
 async def handle_text(update, context):
     state = context.user_data.get(STATE, "")
+    if state == "free_input":
+        text = (update.message.text or "").strip()
+        if not text:
+            await update.message.reply_text("❌ أرسل بيانات التقرير في رسالة واحدة.")
+            return True
+        parsed = _parse_free_report(text)
+        current = _data(context)
+        current.update(parsed)
+        missing = [label for key, label in FIELDS if not str(current.get(key, "")).strip()]
+        if missing:
+            await update.message.reply_text(
+                "⚠️ لم أتمكن من استكمال بعض البيانات:\n" + "\n".join(f"• {item}" for item in missing) +
+                "\n\nأعد إرسال البيانات الناقصة في رسالة واحدة.",
+                reply_markup=_back_cancel("mr:back:doctor"),
+            )
+            return True
+        await _show_review(update.message, context)
+        return True
     if not state.startswith("field:") and state not in {"manual_doctor_name", "manual_doctor_specialty"}:
         return False
     text = (update.message.text or "").strip()
