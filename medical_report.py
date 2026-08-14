@@ -304,51 +304,246 @@ def _arabic(value):
 def create_template_pdf(data, output_path, template_path):
     """يعبئ قالب التقرير الطبي العام الجديد ويحافظ على تصميمه الأصلي."""
     from reportlab.pdfgen import canvas
-    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.pagesizes import A3
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
     from reportlab.lib.colors import HexColor
     from reportlab.platypus import Paragraph
     from reportlab.lib.styles import ParagraphStyle
-    from reportlab.lib.enums import TA_CENTER
+    from reportlab.lib.enums import TA_CENTER, TA_RIGHT
     from pypdf import PdfReader, PdfWriter
 
     font = _font_path()
     if not font:
         raise RuntimeError("لم يتم العثور على خط عربي يدعم Unicode")
     pdfmetrics.registerFont(TTFont("MedicalArabicTemplate", font))
+    output_path = str(output_path)
     overlay_path = output_path + ".overlay.pdf"
-    page_w, page_h = A4
-    c = canvas.Canvas(overlay_path, pagesize=A4, pageCompression=1)
+    page_w, page_h = A3
+    c = canvas.Canvas(overlay_path, pagesize=A3, pageCompression=1)
+    # المرجع المعتمد A3، والإحداثيات الأصلية مبنية على قالب A4.
+    scale = page_w / 595.276
+    def sx(value):
+        return value * scale
+    def sy(value):
+        return value * scale
     c.setTitle("Medical Report")
     c.setFont("MedicalArabicTemplate", 10.5)
     c.setFillColor(HexColor("#1F5D91"))
+    english_font_path = os.path.join(os.path.dirname(__file__), "fonts", "TimesRoman-Regular.ttf")
+    if os.path.exists(english_font_path):
+        pdfmetrics.registerFont(TTFont("MedicalEnglishTemplate", english_font_path))
+    english_font = "MedicalEnglishTemplate" if os.path.exists(english_font_path) else "MedicalArabicTemplate"
 
     def value(key, fallback="—"):
-        return str(data.get(key) or fallback)
+        return str(data.get(key) or fallback).strip()
 
-    def center(text, x, y, size=10.5):
-        c.setFont("MedicalArabicTemplate", size)
-        c.drawCentredString(x, y, _arabic(text))
+    def english_value(text):
+        try:
+            from pdf_gen import _to_en
+            translated = str(_to_en(text) or "").strip()
+            return translated or text
+        except Exception:
+            return text
 
-    center(value("leave_id", f"MR-{datetime.now().strftime('%Y%m%d%H%M%S')}"), page_w / 2, 706)
-    center(value("admission_date"), page_w / 2, 678)
-    center(value("discharge_date", data.get("discharge_or_days", "—")), page_w / 2, 650)
-    center(value("issue_date", datetime.now().strftime("%d/%m/%Y")), page_w / 2, 622)
-    center(value("patient_name"), page_w / 2, 592)
-    center(value("id_number"), page_w / 2, 563)
-    center(value("nationality"), page_w / 2, 535)
-    center(value("workplace"), page_w / 2, 507)
-    center(value("doctor"), page_w / 2, 479)
-    center(value("specialty"), page_w / 2, 451)
+    def date_display(text):
+        parsed = _parse_date(text)
+        return parsed.strftime("%d/%m/%Y") if parsed else str(text or "—").strip()
 
-    diagnosis_style = ParagraphStyle(
-        "medical-diagnosis", fontName="MedicalArabicTemplate", fontSize=11,
-        leading=17, alignment=TA_CENTER, textColor=HexColor("#1F5D91"),
+    def hijri_value(text):
+        try:
+            from pdf_gen import to_hijri
+            return str(to_hijri(date_display(text)) or "").strip() or "—"
+        except Exception:
+            return "—"
+
+    def fit_center(text, x, y, font_name, size=9.4, max_width=150, rtl=False):
+        rendered = _arabic(text) if rtl else str(text or "—")
+        current_size = size
+        while current_size > 5.5 and pdfmetrics.stringWidth(rendered, font_name, current_size) > max_width:
+            current_size -= 0.25
+        c.setFont(font_name, current_size)
+        c.drawCentredString(x, y, rendered)
+
+    # تنظيف القيم القديمة المضمنة في نسخة المرجع قبل رسم البيانات الديناميكية.
+    c.saveState()
+    c.setFillColorRGB(1, 1, 1)
+    c.rect(sx(155), sy(414), sx(295), sy(300), stroke=0, fill=1)
+    c.rect(sx(24), sy(262), sx(547), sy(151), stroke=0, fill=1)
+    c.restoreState()
+    c.saveState()
+    c.setStrokeColor(HexColor("#D9D9D9"))
+    c.setLineWidth(0.8 * scale)
+    c.roundRect(sx(27), sy(265), sx(541), sy(145), sx(7), stroke=1, fill=0)
+    c.line(sx(297.5), sy(265), sx(297.5), sy(410))
+    c.restoreState()
+    # القالب يقسم منطقة القيم إلى عمود إنجليزي يسارًا وعمود عربي يمينًا.
+    x_en, x_ar, x_single = sx(214), sx(374), sx(294)
+    admission = date_display(value("admission_date"))
+    discharge = date_display(value("discharge_date", data.get("discharge_or_days", "—")))
+    issue_date = date_display(value("issue_date", datetime.now().strftime("%d/%m/%Y")))
+    id_number = _normalize_digits(value("id_number"))
+    name_ar = value("patient_name")
+    name_en = value("patient_name_en", english_value(name_ar)).upper()
+    nationality_ar = value("nationality")
+    nationality_en = value("nationality_en", english_value(nationality_ar))
+    workplace_ar = value("workplace")
+    workplace_en = value("workplace_en", english_value(workplace_ar))
+    doctor_ar = value("doctor")
+    doctor_en = value("doctor_en", english_value(doctor_ar)).upper()
+    specialty_ar = value("specialty")
+    specialty_en = value("specialty_en", english_value(specialty_ar))
+
+    # مركز رقم التقرير مقابل صف «رمز الإجازة» بدقة.
+    leave_code_center_x, leave_code_center_y = x_single, sy(698)
+    fit_center(value("leave_id", f"MR-{datetime.now().strftime('%Y%m%d%H%M%S')}"), leave_code_center_x, leave_code_center_y, english_font)
+    fit_center(admission, x_en, sy(678), english_font)
+    # مركز تاريخ الدخول الهجري مقابل صف «تاريخ الدخول» بدقة.
+    admission_hijri_x, admission_hijri_y = x_ar, sy(662)
+    fit_center(hijri_value(admission), admission_hijri_x, admission_hijri_y, english_font)
+    fit_center(discharge, x_en, sy(650), english_font)
+    # مركز تاريخ الخروج الهجري مقابل صف «تاريخ الخروج» بدقة.
+    discharge_hijri_x, discharge_hijri_y = x_ar, sy(634)
+    fit_center(hijri_value(discharge), discharge_hijri_x, discharge_hijri_y, english_font)
+    # إنزال تاريخ الإصدار إلى مركز صف «تاريخ إصدار التقرير» فقط.
+    issue_center_x, issue_center_y = x_single, sy(600)
+    fit_center(issue_date, issue_center_x, issue_center_y, english_font)
+    # إنزال اسم المريض إلى مركز صف «الاسم» فقط.
+    name_center_x_en, name_center_x_ar, name_center_y = x_en, x_ar, sy(570)
+    fit_center(name_en, name_center_x_en, name_center_y, english_font)
+    fit_center(name_ar, name_center_x_ar, name_center_y, "MedicalArabicTemplate", rtl=True)
+    # إنزال رقم الهوية إلى مركز صف «رقم الهوية / الإقامة» فقط.
+    identity_center_x, identity_center_y = x_single, sy(541)
+    fit_center(id_number, identity_center_x, identity_center_y, english_font)
+    # مركز صف «الجنسية» مقابل التسمية العربية مباشرة.
+    nationality_center_x_en, nationality_center_x_ar, nationality_center_y = x_en, x_ar, sy(513)
+    fit_center(nationality_en, nationality_center_x_en, nationality_center_y, english_font)
+    fit_center(nationality_ar, nationality_center_x_ar, nationality_center_y, "MedicalArabicTemplate", rtl=True)
+    # مركز صف «جهة العمل» قبل صف اسم الممارس مباشرة.
+    workplace_center_x_en, workplace_center_x_ar, workplace_center_y = x_en, x_ar, sy(485)
+    fit_center(workplace_en, workplace_center_x_en, workplace_center_y, english_font)
+    fit_center(workplace_ar, workplace_center_x_ar, workplace_center_y, "MedicalArabicTemplate", rtl=True)
+    # مركز صف «اسم الممارس» أعلى صف المسمى الوظيفي مباشرة.
+    practitioner_center_x_en, practitioner_center_x_ar, practitioner_center_y = x_en, x_ar, sy(457)
+    fit_center(doctor_en, practitioner_center_x_en, practitioner_center_y, english_font)
+    fit_center(doctor_ar, practitioner_center_x_ar, practitioner_center_y, "MedicalArabicTemplate", rtl=True)
+    # مركز خانة «المسمى الوظيفي»: نفس المركز الأفقي للعمود مع ضبط خط الأساس بصريًا.
+    position_center_x_en, position_center_x_ar, position_center_y = x_en, x_ar, sy(429)
+    fit_center(specialty_en, position_center_x_en, position_center_y, english_font)
+    fit_center(specialty_ar, position_center_x_ar, position_center_y, "MedicalArabicTemplate", rtl=True)
+
+    diagnosis_ar_style = ParagraphStyle(
+        "medical-diagnosis-ar", fontName="MedicalArabicTemplate", fontSize=10.5,
+        leading=16, alignment=TA_RIGHT, textColor=HexColor("#1F5D91"),
     )
-    paragraph = Paragraph(_arabic(value("diagnosis")), diagnosis_style)
-    paragraph.wrapOn(c, 430, 100)
-    paragraph.drawOn(c, (page_w - 430) / 2, 335)
+    diagnosis_en_style = ParagraphStyle(
+        "medical-diagnosis-en", fontName=english_font, fontSize=9.2,
+        leading=13, alignment=0, textColor=HexColor("#1F5D91"),
+    )
+    # النص الرسمي الديناميكي داخل المستطيل الأيمن في القالب.
+    patient_for_text = value("patient_name")
+    diagnosis_for_text = value("diagnosis")
+    days_for_text = data.get("visit_days") or data.get("days") or "—"
+    start_for_text = date_display(value("admission_date"))
+    end_for_text = date_display(value("discharge_date", data.get("discharge_or_days", "—")))
+    medical_text = (
+        f"دخل المريض: {patient_for_text}<br/>"
+        f"التشخيص: المريض يعاني من {diagnosis_for_text}، وتم تقييم الحالة سريريًا مع تقديم العلاج "
+        f"والإرشادات الطبية اللازمة، والتوصية بالراحة التامة والمتابعة الطبية المستمرة حسب الحاجة "
+        f"لضمان استقرار الحالة وتحسنها.<br/>"
+        f"وتم منحه إجازة لمدة {days_for_text} يوم، وذلك من تاريخ {start_for_text} إلى تاريخ {end_for_text}."
+    )
+    # رسم يدوي مضبوط الأسطر داخل المستطيل لتفادي أي تجاوز أو تداخل.
+    box_x, box_y, box_w, box_h = sx(300), sy(265), sx(265), sy(145)
+    medical_font = "MedicalArabicTemplate"
+    # نفس حجم الخط والتباعد المستخدمين في المستطيل الثاني لضمان تطابق التنسيق.
+    medical_font_size = 11.0
+    medical_leading = 14.0
+    c.setFillColor(HexColor("#1F5D91"))
+    c.setFont(medical_font, medical_font_size)
+    # ترتيب مطابق للمستطيل الثاني: اسم المريض، التشخيص والتفاصيل الطبية، ثم الإجازة والتواريخ.
+    source_paragraphs = [
+        f"دخل المريض: {patient_for_text}",
+        (
+            f"التشخيص: {diagnosis_for_text}. التقييم والعلاج: تم تقييم الحالة سريريًا مع تقديم العلاج "
+            "والإرشادات الطبية اللازمة. التوصية: الراحة التامة والمتابعة الطبية المستمرة حسب الحاجة "
+            "لضمان استقرار الحالة وتحسنها."
+        ),
+        (
+            f"تم منحه إجازة لمدة {days_for_text} يوم، من تاريخ "
+            f"{str(start_for_text).replace('/', '-')} إلى تاريخ {str(end_for_text).replace('/', '-')}."
+        ),
+    ]
+    wrapped_lines = []
+    for paragraph in source_paragraphs:
+        current_words = []
+        for word in paragraph.split():
+            candidate = " ".join(current_words + [word])
+            if current_words and pdfmetrics.stringWidth(_arabic(candidate), medical_font, medical_font_size) > box_w:
+                wrapped_lines.append(" ".join(current_words))
+                current_words = [word]
+            else:
+                current_words.append(word)
+        if current_words:
+            wrapped_lines.append(" ".join(current_words))
+    max_lines = int(box_h // medical_leading)
+    if len(wrapped_lines) > max_lines:
+        wrapped_lines = wrapped_lines[:max_lines]
+    # تنظيم عربي مطابق للمرجع: محاذاة يمين، بداية من أعلى المستطيل، وهوامش ثابتة.
+    y_cursor = box_y + box_h - medical_leading - sy(5)
+    right_text_x = box_x + box_w - sx(8)
+    for line in wrapped_lines:
+        if line:
+            c.setFont(medical_font, medical_font_size)
+            c.drawRightString(right_text_x, y_cursor, _arabic(line))
+        y_cursor -= medical_leading
+
+    # النص الطبي الإنجليزي الديناميكي داخل المستطيل الثاني.
+    english_patient = english_value(value("patient_name"))
+    english_diagnosis = english_value(value("diagnosis"))
+    english_days = english_value(str(days_for_text))
+    english_start = str(start_for_text).replace("/", "-")
+    english_end = str(end_for_text).replace("/", "-")
+    english_source_paragraphs = [
+        f"Patient Name: {english_patient}",
+        (
+            f"Diagnosis: The patient is suffering from {english_diagnosis}. "
+            "The patient was clinically evaluated, and the necessary treatment and medical instructions "
+            "were provided. Complete rest and continuous medical follow-up were recommended as needed "
+            "to ensure the patient's condition remains stable and improves."
+        ),
+        (
+            f"The patient was granted medical leave for {english_days} days, "
+            f"from {english_start} to {english_end}."
+        ),
+    ]
+    english_font_size = 11.0
+    english_leading = 14.0
+    english_box_x, english_box_y, english_box_w, english_box_h = sx(30), sy(265), sx(265), sy(145)
+    english_lines = []
+    for paragraph in english_source_paragraphs:
+        current_words = []
+        for word in paragraph.split():
+            candidate = " ".join(current_words + [word])
+            if current_words and pdfmetrics.stringWidth(candidate, english_font, english_font_size) > english_box_w:
+                english_lines.append(" ".join(current_words))
+                current_words = [word]
+            else:
+                current_words.append(word)
+        if current_words:
+            english_lines.append(" ".join(current_words))
+    english_max_lines = int(english_box_h // english_leading)
+    if len(english_lines) > english_max_lines:
+        english_lines = english_lines[:english_max_lines]
+    # تنظيم إنجليزي مطابق للمرجع: محاذاة يسار، بداية من أعلى المستطيل، وهوامش ثابتة.
+    english_y = english_box_y + english_box_h - english_leading - sy(5)
+    english_left_x = english_box_x + sx(8)
+    c.setFillColor(HexColor("#1F5D91"))
+    c.setFont(english_font, english_font_size)
+    for english_line in english_lines:
+        c.drawString(english_left_x, english_y, english_line)
+        english_y -= english_leading
+
     c.save()
 
     background = PdfReader(template_path)
@@ -366,7 +561,7 @@ def create_template_pdf(data, output_path, template_path):
 
 
 def create_pdf(data, output_path):
-    template_path = os.path.join(os.path.dirname(__file__), "templates", "medical_report_template.pdf")
+    template_path = os.path.join(os.path.dirname(__file__), "templates", "medical_report_reference_a3.pdf")
     if os.path.exists(template_path):
         create_template_pdf(data, output_path, template_path)
         return
