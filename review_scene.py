@@ -13,6 +13,8 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 
 CB = "rs"
+SPECIALTIES = ["استشاري", "أخصائي", "ممارس عام", "طبيب عام", "مقيم", "استشاري تخدير", "أخصائي تخدير", "كبير ممرضين"]
+
 FIELDS = [
     ("name", "الاسم"),
     ("id_number", "الهوية/رقم الاختبار"),
@@ -88,7 +90,7 @@ def doctors_keyboard(db, city: str, hospital: str):
         label = f"👨‍⚕️ {name}" + (f" ({specialty})" if specialty else "")
         rows.append([InlineKeyboardButton(label[:64], callback_data=_cb("doctor", name))])
     rows.append([InlineKeyboardButton("✏️ إدخال اسم الطبيب يدويًا", callback_data=_cb("manual_doctor"))])
-    rows += _back_keyboard(("🏥 المستشفيات", _cb("hospitals")), ("🏠 الرئيسية", _cb("main")))
+    rows += _back_keyboard(("⬅️ رجوع", _cb("hospitals")), ("🏠 الرئيسية", _cb("main")))
     return InlineKeyboardMarkup(rows)
 
 
@@ -117,6 +119,30 @@ def _main_text(data: dict) -> str:
 def _review_keyboard(data: dict):
     rows = [[InlineKeyboardButton("✅ تأكيد إنشاء النموذج", callback_data=_cb("confirm"))], [InlineKeyboardButton("✏️ تعديل البيانات", callback_data=_cb("edit"))], [InlineKeyboardButton("🔄 إعادة التحقق", callback_data=_cb("review"))], [InlineKeyboardButton("🔴 رقم الترخيص: معطل" if not data.get("license_enabled") else "🟢 رقم الترخيص: مفعل", callback_data=_cb("license"))], [InlineKeyboardButton("❌ إلغاء", callback_data=_cb("cancel")), InlineKeyboardButton("🏠 الرئيسية", callback_data=_cb("main"))]]
     return InlineKeyboardMarkup(rows)
+
+
+def specialty_keyboard():
+    rows = [[InlineKeyboardButton(f"🩺 {specialty}", callback_data=_cb("specialty", specialty))] for specialty in SPECIALTIES]
+    rows.append([InlineKeyboardButton("✏️ إدخال المسمى الوظيفي يدويًا", callback_data=_cb("manual_specialty"))])
+    rows.append([InlineKeyboardButton("⬅️ رجوع", callback_data=_cb("back_doctors")), InlineKeyboardButton("🏠 الرئيسية", callback_data=_cb("main"))])
+    return InlineKeyboardMarkup(rows)
+
+
+def doctor_confirmation_keyboard():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("✅ تأكيد", callback_data=_cb("doctor_confirm"))],
+        [InlineKeyboardButton("✏️ تعديل الطبيب", callback_data=_cb("edit_doctor"))],
+        [InlineKeyboardButton("🎓 تعديل المسمى الوظيفي", callback_data=_cb("edit_specialty"))],
+        [InlineKeyboardButton("⬅️ رجوع", callback_data=_cb("back_specialty")), InlineKeyboardButton("🏠 الرئيسية", callback_data=_cb("main"))],
+    ])
+
+
+def _doctor_summary(data: dict) -> str:
+    return ("✅ *تم اختيار بيانات الطبيب*\n\n"
+            f"👨‍⚕️ الطبيب: {data.get('doctor') or '—'}\n"
+            f"🎓 المسمى الوظيفي: {data.get('specialty') or '—'}\n"
+            f"🏥 المستشفى: {data.get('hospital') or '—'}\n"
+            f"📍 المدينة: {data.get('city') or '—'}")
 
 
 def _edit_keyboard():
@@ -196,16 +222,38 @@ class ReviewSceneFlow:
         if action == "hospitals":
             context.user_data["rs_state"] = "hospitals"; await query.edit_message_text(f"🏥 *اختر المستشفى*\n\nالمدينة: {state.get('city')}", parse_mode="Markdown", reply_markup=hospitals_keyboard(self.db, state.get("city", ""))); return True
         if action == "hospital":
-            state["hospital"] = values[0]; context.user_data["rs_state"] = "doctors"; await query.edit_message_text(f"🏥 المستشفى: {values[0]}\n\n👨‍⚕️ *اختر الطبيب*", parse_mode="Markdown", reply_markup=doctors_keyboard(self.db, state.get("city", ""), values[0])); return True
+            state["hospital"] = values[0]; state["doctor"] = None; state["specialty"] = None; context.user_data["rs_state"] = "doctors"
+            doctors = _doctors(self.db, values[0])
+            prompt = f"🏥 *مستشفى: {values[0]}*\n\n👨‍⚕️ *اختر الطبيب:*"
+            if not doctors:
+                prompt = f"🏥 *مستشفى: {values[0]}*\n\n👨‍⚕️ *الطبيب: {values[0]}*\n\nلا يوجد أطباء مسجلون حاليًا لهذا المستشفى.\n\nيمكنك إدخال اسم الطبيب يدويًا:"
+            await query.edit_message_text(prompt, parse_mode="Markdown", reply_markup=doctors_keyboard(self.db, state.get("city", ""), values[0])); return True
         if action == "back_doctors":
             context.user_data["rs_state"] = "doctors"
-            await query.edit_message_text(f"🏥 المستشفى: {state.get('hospital')}\n\n👨‍⚕️ *اختر الطبيب*", parse_mode="Markdown", reply_markup=doctors_keyboard(self.db, state.get("city", ""), state.get("hospital", "")))
+            prompt = f"🏥 *مستشفى: {state.get('hospital')}*\n\n👨‍⚕️ *اختر الطبيب:*"
+            if not _doctors(self.db, state.get("hospital", "")):
+                prompt += "\n\nلا يوجد أطباء مسجلون حاليًا لهذا المستشفى.\nيمكنك إدخال اسم الطبيب يدويًا:"
+            await query.edit_message_text(prompt, parse_mode="Markdown", reply_markup=doctors_keyboard(self.db, state.get("city", ""), state.get("hospital", "")))
             return True
         if action == "doctor":
-            state["doctor"] = values[0]; state["specialty"] = next((_clean(x.get("specialty")) for x in _doctors(self.db, state.get("hospital", "")) if _clean(x.get("name")) == values[0]), "")
-            context.user_data["rs_state"] = "collect"; await query.edit_message_text("📋 *بيانات مشهد مراجعة*\n\nأرسل الحقول بالتتابع. ابدأ بـ: الاسم", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(_back_keyboard(("👨‍⚕️ الأطباء", _cb("back_doctors")), ("❌ إلغاء", _cb("cancel"))))); state["field_index"] = 0; return True
+            state["doctor"] = values[0]; state["specialty"] = ""; context.user_data["rs_state"] = "specialty_select"
+            await query.edit_message_text(f"👨‍⚕️ *الطبيب: {values[0]}*\n\n🎓 *اختر المسمى الوظيفي:*", parse_mode="Markdown", reply_markup=specialty_keyboard()); return True
         if action == "manual_doctor":
-            context.user_data["rs_state"] = "manual_doctor"; await query.message.reply_text("✏️ أرسل اسم الطبيب ثم المسمى الوظيفي مفصولين بعلامة |\nمثال: صلاح الدين حامد | استشاري", reply_markup=InlineKeyboardMarkup(_back_keyboard(("❌ إلغاء", _cb("cancel"))))); return True
+            context.user_data["rs_state"] = "manual_doctor"; await query.message.reply_text("✏️ اكتب اسم الطبيب:", reply_markup=InlineKeyboardMarkup(_back_keyboard(("👨‍⚕️ الأطباء", _cb("back_doctors")), ("🏠 الرئيسية", _cb("main"))))); return True
+        if action == "specialty":
+            state["specialty"] = values[0]; context.user_data["rs_state"] = "doctor_confirm"
+            await query.edit_message_text(_doctor_summary(state), parse_mode="Markdown", reply_markup=doctor_confirmation_keyboard()); return True
+        if action == "manual_specialty":
+            context.user_data["rs_state"] = "manual_specialty"; await query.message.reply_text("📝 اكتب المسمى الوظيفي للطبيب:", reply_markup=InlineKeyboardMarkup(_back_keyboard(("🎓 المسميات الوظيفية", _cb("back_specialty")), ("🏠 الرئيسية", _cb("main"))))); return True
+        if action == "back_specialty":
+            context.user_data["rs_state"] = "specialty_select"; await query.edit_message_text(f"👨‍⚕️ *الطبيب: {state.get('doctor')}*\n\n🎓 *اختر المسمى الوظيفي:*", parse_mode="Markdown", reply_markup=specialty_keyboard()); return True
+        if action == "edit_doctor":
+            context.user_data["rs_state"] = "doctors"; await query.edit_message_text(f"🏥 *مستشفى: {state.get('hospital')}*\n\n👨‍⚕️ *اختر الطبيب:*", parse_mode="Markdown", reply_markup=doctors_keyboard(self.db, state.get("city", ""), state.get("hospital", ""))); return True
+        if action == "edit_specialty":
+            context.user_data["rs_state"] = "specialty_select"; await query.edit_message_text(f"👨‍⚕️ *الطبيب: {state.get('doctor')}*\n\n🎓 *اختر المسمى الوظيفي:*", parse_mode="Markdown", reply_markup=specialty_keyboard()); return True
+        if action == "doctor_confirm":
+            context.user_data["rs_state"] = "collect"; state["field_index"] = 0
+            await query.edit_message_text("📋 *بيانات مشهد مراجعة*\n\nالاسم:", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(_back_keyboard(("👨‍⚕️ تعديل الطبيب", _cb("edit_doctor")), ("❌ إلغاء", _cb("cancel"))))); return True
         if action == "cancel":
             context.user_data.clear(); await query.message.reply_text("❌ تم إلغاء مشهد المراجعة."); return True
         if action == "field":
@@ -232,9 +280,13 @@ class ReviewSceneFlow:
         st = context.user_data.get("rs_state")
         state = context.user_data.get("rs", {})
         if st == "manual_doctor":
-            parts = [x.strip() for x in text.split("|", 1)]
-            if len(parts) != 2 or not all(parts): await message.reply_text("⚠️ أرسل الاسم والمسمى الوظيفي بهذا الشكل: الاسم | المسمى الوظيفي"); return True
-            state["doctor"], state["specialty"] = parts; context.user_data["rs_state"] = "collect"; state["field_index"] = 0; await message.reply_text("📋 *بيانات مشهد مراجعة*\n\nالاسم:", parse_mode="Markdown"); return True
+            doctor = _clean(text)
+            if len(doctor) < 2: await message.reply_text("⚠️ اسم الطبيب قصير جدًا. اكتب الاسم كاملًا:"); return True
+            state["doctor"] = doctor; state["specialty"] = ""; context.user_data["rs_state"] = "specialty_select"; await message.reply_text(f"👨‍⚕️ *الطبيب: {doctor}*\n\n🎓 *اختر المسمى الوظيفي:*", parse_mode="Markdown", reply_markup=specialty_keyboard()); return True
+        if st == "manual_specialty":
+            specialty = _clean(text)
+            if len(specialty) < 2: await message.reply_text("⚠️ المسمى الوظيفي قصير جدًا. اكتب قيمة واضحة:"); return True
+            state["specialty"] = specialty; context.user_data["rs_state"] = "doctor_confirm"; await message.reply_text(_doctor_summary(state), parse_mode="Markdown", reply_markup=doctor_confirmation_keyboard()); return True
         if st == "edit_field":
             field = context.user_data.pop("rs_edit_field", None); state[field] = _clean(text); context.user_data["rs_state"] = "review"; await self._show_review(message, context); return True
         if st != "collect": return False
