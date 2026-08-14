@@ -361,8 +361,9 @@ def _pdf(path: str, data: dict):
         "position": ("position_en", "position_ar"),
         "visit_type": ("visit_type_en", "visit_type_ar"),
     }
+    row_y_offsets = {"practitioner_name": -32, "position": -32, "visit_type": -32}
     for key, (left, top, right, bottom) in rows.items():
-        y = (1654 - bottom) * scale_y + 9
+        y = (1654 - bottom) * scale_y + 9 + row_y_offsets.get(key, 0)
         if key in split_rows:
             en_key, ar_key = split_rows[key]
             mid = (left + right) / 2
