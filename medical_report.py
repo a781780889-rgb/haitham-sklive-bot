@@ -157,8 +157,16 @@ def _edit_keyboard():
     return _kb(rows)
 
 
+def _normalize_digits(value):
+    """تحويل الأرقام العربية/الفارسية إلى أرقام غربية مع توحيد فواصل التاريخ."""
+    text = str(value or "").strip().translate(str.maketrans(
+        "٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789"
+    ))
+    return re.sub(r"[.／\\\\|،،]", "/", text)
+
+
 def _parse_date(value):
-    value = (value or "").strip()
+    value = _normalize_digits(value)
     for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%Y-%m-%d", "%d/%m/%y", "%d-%m-%y"):
         try:
             return datetime.strptime(value, fmt).date()
@@ -214,9 +222,11 @@ def _validate(data):
         if not str(data.get(key, "")).strip():
             errors.append(f"• {label} مطلوب.")
     admission = _parse_date(data.get("admission_date"))
-    if data.get("admission_date") and not admission:
+    if data.get("admission_date") and admission:
+        data["admission_date"] = admission.strftime("%d/%m/%Y")
+    elif data.get("admission_date") and not admission:
         errors.append("• تاريخ الدخول غير صحيح. استخدم DD/MM/YYYY.")
-    discharge_raw = str(data.get("discharge_or_days", "")).strip()
+    discharge_raw = _normalize_digits(data.get("discharge_or_days", ""))
     if discharge_raw.isdigit():
         days = int(discharge_raw)
         if days < 1 or days > 365:
