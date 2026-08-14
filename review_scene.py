@@ -37,63 +37,6 @@ def _clean(value: Any) -> str:
     return " ".join(str(value or "").strip().split())
 
 
-def _western(value: str) -> str:
-    return str(value or "").translate(str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789"))
-
-
-def _normalize_date(value: str) -> str:
-    raw = _western(_clean(value)).replace("\\", "/").replace("-", "/")
-    parts = [p for p in raw.split("/") if p]
-    if len(parts) == 3:
-        day, month, year = parts
-        if len(year) == 2: year = "20" + year
-        return f"{int(day):02d}-{int(month):02d}-{int(year):04d}"
-    return _clean(value)
-
-
-def _normalize_time(value: str) -> str:
-    raw = _western(_clean(value)).lower()
-    match = re.search(r"(\d{1,2})\s*[:٫.]\s*(\d{2})", raw)
-    if not match: return _clean(value)
-    hour, minute = int(match.group(1)), int(match.group(2))
-    if "مساء" in raw or "م" in raw:
-        if hour < 12: hour += 12
-    elif "صباح" in raw or "ص" in raw:
-        if hour == 12: hour = 0
-    return f"{hour:02d}:{minute:02d}"
-
-
-_FIELD_ALIASES = {
-    "الاسم": "name", "الهوية": "id_number", "الهوية/رقم الاختبار": "id_number",
-    "الجنسية": "nationality", "جهة العمل": "workplace", "تاريخ الدخول": "entry_date",
-    "وقت الدخول": "entry_time", "تاريخ الخروج": "exit_date", "وقت الخروج": "exit_time",
-    "وقت الإصدار": "issue_time", "وقت الاصدار": "issue_time", "نوع الزيارة": "visit_type",
-}
-
-
-def parse_single_message(text: str) -> dict:
-    result = {}
-    for line in str(text or "").splitlines():
-        if ":" not in line: continue
-        label, value = line.split(":", 1)
-        key = _FIELD_ALIASES.get(_clean(label).strip())
-        if not key: continue
-        value = _clean(value)
-        if key.endswith("date"): value = _normalize_date(value)
-        elif key.endswith("time"): value = _normalize_time(value)
-        elif key == "id_number": value = _western(value).replace(" ", "")
-        result[key] = value
-    return result
-
-
-def _data_template() -> str:
-    return ("📋 *بيانات مشهد مراجعه*\n\n"
-            "أرسل جميع البيانات في رسالة واحدة بهذا القالب:\n\n"
-            "الاسم: \nالهوية: \nالجنسية: \nجهة العمل: \n"
-            "تاريخ الدخول: \nوقت الدخول: \nتاريخ الخروج: \nوقت الخروج: \n"
-            "وقت الإصدار: \nنوع الزيارة:")
-
-
 def _cities(db) -> list[str]:
     try:
         rows = db.get_all_hospitals(active_only=True)
@@ -164,32 +107,17 @@ def _duration(data: dict) -> str:
         return "—"
 
 
-_EN_LABELS = {
-    "name": "Name", "id_number": "ID", "nationality": "Nationality", "workplace": "Workplace",
-    "entry_date": "Entry date", "entry_time": "Entry time", "exit_date": "Exit date",
-    "exit_time": "Exit time", "issue_time": "Issue time", "visit_type": "Visit type",
-}
-
-
-def _english_value(key: str, value: Any) -> str:
-    known = {"سعودي": "Saudi", "مراجعة": "Review", "استشاري": "Consultant", "أخصائي": "Specialist", "ممارس عام": "General practitioner", "طبيب عام": "General doctor", "مقيم": "Resident"}
-    return known.get(_clean(value), _clean(value)) or "—"
-
-
 def _main_text(data: dict) -> str:
     lines = ["🔎 *مراجعة البيانات قبل إنشاء النموذج*", ""]
     for key, label in FIELDS:
         lines.append(f"{label}: {data.get(key) or '—'}")
     license_label = f"🟢 مفعل ({data.get('license_code')})" if data.get('license_enabled') else "🔴 معطل"
-    lines += [f"الممارس الصحي: {data.get('doctor') or '—'}", f"المسمى الوظيفي: {data.get('specialty') or '—'}", f"المدينة: {data.get('city') or '—'}", f"المستشفى: {data.get('hospital') or '—'}", f"مدة الزيارة: {_duration(data)}", "", f"رقم الترخيص: {license_label}", "", "🌐 *English Review*"]
-    for key, _ in FIELDS:
-        lines.append(f"{_EN_LABELS[key]}: {_english_value(key, data.get(key))}")
-    lines += [f"Practitioner: {_english_value('doctor', data.get('doctor'))}", f"Position: {_english_value('specialty', data.get('specialty'))}", f"City: {_english_value('city', data.get('city'))}", f"Hospital: {_english_value('hospital', data.get('hospital'))}", f"Duration: {_duration(data)}", f"License: {'Enabled' if data.get('license_enabled') else 'Disabled'}"]
+    lines += [f"الممارس الصحي: {data.get('doctor') or '—'}", f"المسمى الوظيفي: {data.get('specialty') or '—'}", f"المدينة: {data.get('city') or '—'}", f"المستشفى: {data.get('hospital') or '—'}", f"مدة الزيارة: {_duration(data)}", "", f"رقم الترخيص: {license_label}"]
     return "\n".join(lines)
 
 
 def _review_keyboard(data: dict):
-    rows = [[InlineKeyboardButton("✅ تأكيد إنشاء مشهد مراجعه", callback_data=_cb("confirm"))], [InlineKeyboardButton("✏️ تعديل البيانات", callback_data=_cb("edit"))], [InlineKeyboardButton("🔄 إعادة التحقق", callback_data=_cb("review"))], [InlineKeyboardButton("🔴 رقم الترخيص: معطل" if not data.get("license_enabled") else "🟢 رقم الترخيص: مفعل", callback_data=_cb("license"))], [InlineKeyboardButton("❌ إلغاء", callback_data=_cb("cancel")), InlineKeyboardButton("🏠 الرئيسية", callback_data=_cb("main"))]]
+    rows = [[InlineKeyboardButton("✅ تأكيد إنشاء النموذج", callback_data=_cb("confirm"))], [InlineKeyboardButton("✏️ تعديل البيانات", callback_data=_cb("edit"))], [InlineKeyboardButton("🔄 إعادة التحقق", callback_data=_cb("review"))], [InlineKeyboardButton("🔴 رقم الترخيص: معطل" if not data.get("license_enabled") else "🟢 رقم الترخيص: مفعل", callback_data=_cb("license"))], [InlineKeyboardButton("❌ إلغاء", callback_data=_cb("cancel")), InlineKeyboardButton("🏠 الرئيسية", callback_data=_cb("main"))]]
     return InlineKeyboardMarkup(rows)
 
 
@@ -324,8 +252,8 @@ class ReviewSceneFlow:
         if action == "edit_specialty":
             context.user_data["rs_state"] = "specialty_select"; await query.edit_message_text(f"👨‍⚕️ *الطبيب: {state.get('doctor')}*\n\n🎓 *اختر المسمى الوظيفي:*", parse_mode="Markdown", reply_markup=specialty_keyboard()); return True
         if action == "doctor_confirm":
-            context.user_data["rs_state"] = "collect"
-            await query.edit_message_text(_data_template(), parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(_back_keyboard(("👨‍⚕️ تعديل الطبيب", _cb("edit_doctor")), ("❌ إلغاء", _cb("cancel"))))); return True
+            context.user_data["rs_state"] = "collect"; state["field_index"] = 0
+            await query.edit_message_text("📋 *بيانات مشهد مراجعة*\n\nالاسم:", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(_back_keyboard(("👨‍⚕️ تعديل الطبيب", _cb("edit_doctor")), ("❌ إلغاء", _cb("cancel"))))); return True
         if action == "cancel":
             context.user_data.clear(); await query.message.reply_text("❌ تم إلغاء مشهد المراجعة."); return True
         if action == "field":
@@ -344,7 +272,7 @@ class ReviewSceneFlow:
                 self.db.log_activity(query.from_user.id, "review_scene_created", f"city={state.get('city')}; hospital={state.get('hospital')}; license={state.get('license_code', '')}")
             except Exception:
                 pass
-            context.user_data["rs_state"] = "issued"; await query.message.reply_document(open(path, "rb"), caption="✅ تم إنشاء ملف PDF: مشهد مراجعه", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📝 إنشاء نموذج جديد", callback_data=_cb("restart")), InlineKeyboardButton("📋 تعديل البيانات", callback_data=_cb("edit"))], [InlineKeyboardButton("🏠 الرئيسية", callback_data=_cb("main"))]])); return True
+            context.user_data["rs_state"] = "issued"; await query.message.reply_document(open(path, "rb"), caption="✅ تم إنشاء ملف PDF لمشهد مراجعة", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📝 إنشاء نموذج جديد", callback_data=_cb("restart")), InlineKeyboardButton("📋 تعديل البيانات", callback_data=_cb("edit"))], [InlineKeyboardButton("🏠 الرئيسية", callback_data=_cb("main"))]])); return True
         if action == "restart": await self.start(query.message, context); return True
         return True
 
@@ -362,12 +290,13 @@ class ReviewSceneFlow:
         if st == "edit_field":
             field = context.user_data.pop("rs_edit_field", None); state[field] = _clean(text); context.user_data["rs_state"] = "review"; await self._show_review(message, context); return True
         if st != "collect": return False
-        parsed = parse_single_message(text)
-        state.update(parsed)
-        if not parsed:
-            await message.reply_text(_data_template() + "\n\n⚠️ لم أتعرف على الحقول. أرسل الرسالة بنفس أسماء الحقول والقالب.", parse_mode="Markdown")
-            return True
-        await self._show_review(message, context)
+        idx = int(state.get("field_index", 0))
+        if idx >= len(FIELDS): return await self._show_review(message, context)
+        key, label = FIELDS[idx]; value = _clean(text)
+        if not value: await message.reply_text(f"⚠️ {label} لا يمكن أن يكون فارغًا. أرسله مرة أخرى:"); return True
+        state[key] = value; idx += 1; state["field_index"] = idx
+        if idx < len(FIELDS): await message.reply_text(f"✅ تم حفظ {label}\n\n{dict(FIELDS)[FIELDS[idx][0]]}:")
+        else: await self._show_review(message, context)
         return True
 
 __all__ = ["ReviewSceneFlow"]
