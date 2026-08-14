@@ -343,7 +343,7 @@ def _pdf(path: str, data: dict):
         if match:
             waiting_en = f"{match.group(1)} hours and {match.group(2)} mins"
     if not waiting_ar and waiting_raw and any("\u0600" <= ch <= "\u06ff" for ch in waiting_raw):
-        waiting_ar = waiting_raw
+        waiting_ar = re.sub(r"\d+\s*دقيقة", "-- دقيقة", waiting_raw)
 
     values = {
         "leave_id": data.get("leave_id"),
