@@ -278,11 +278,28 @@ def _pdf(path: str, data: dict):
             return value
 
     def draw_centered(c, value, x, y, width, size=9, color=colors.HexColor("#1f1f1f")):
-        value = shape(value)
-        font = ar_font if any(ord(ch) > 127 for ch in str(value)) else "Helvetica"
+        raw = str(value or "—")
+        rendered = shape(raw)
+        font = ar_font if any("\u0600" <= ch <= "\u06ff" for ch in raw) else "Helvetica"
+        while size > 6 and pdfmetrics.stringWidth(rendered, font, size) > width - 10:
+            size -= 0.5
         c.setFont(font, size)
         c.setFillColor(color)
-        c.drawCentredString(x + width / 2, y, value)
+        c.drawCentredString(x + width / 2, y, rendered)
+
+    def value_for(key, suffix=""):
+        explicit = data.get(f"{key}{suffix}")
+        if explicit not in (None, ""):
+            return explicit
+        raw = data.get(key)
+        if raw in (None, ""):
+            return ""
+        has_arabic = any("\u0600" <= ch <= "\u06ff" for ch in str(raw))
+        if suffix == "_en":
+            return "" if has_arabic else raw
+        if suffix == "_ar":
+            return raw if has_arabic else ""
+        return raw
 
     # Write values into the blank cells of the supplied template, then preserve its form fields.
     overlay = BytesIO()
@@ -291,17 +308,26 @@ def _pdf(path: str, data: dict):
 
     values = {
         "leave_id": data.get("leave_id"),
-        "admission_date": f"{data.get('entry_date', '')} {data.get('entry_time', '')}".strip(),
-        "discharge_date": f"{data.get('exit_date', '')} {data.get('exit_time', '')}".strip(),
-        "waiting_period": data.get("waiting_period"),
-        "issue_date": f"{data.get('issue_date', '')} {data.get('issue_time', '')}".strip(),
-        "name": data.get("name"),
+        "admission_date_en": data.get("entry_date_en") or f"{data.get('entry_date', '')} - {data.get('entry_time', '')}".strip(" -"),
+        "admission_date_ar": data.get("entry_date_ar") or "",
+        "discharge_date_en": data.get("exit_date_en") or f"{data.get('exit_date', '')} - {data.get('exit_time', '')}".strip(" -"),
+        "discharge_date_ar": data.get("exit_date_ar") or "",
+        "waiting_period_en": data.get("waiting_period_en") or data.get("waiting_period"),
+        "waiting_period_ar": data.get("waiting_period_ar") or "",
+        "issue_date": data.get("issue_date"),
+        "name_en": value_for("name", "_en"),
+        "name_ar": value_for("name", "_ar"),
         "national_id_iqama": data.get("id_number"),
-        "nationality": data.get("nationality"),
-        "employer": data.get("workplace"),
-        "practitioner_name": data.get("doctor"),
-        "position": data.get("specialty"),
-        "visit_type": data.get("visit_type"),
+        "nationality_en": value_for("nationality", "_en"),
+        "nationality_ar": value_for("nationality", "_ar"),
+        "employer_en": value_for("workplace", "_en"),
+        "employer_ar": value_for("workplace", "_ar"),
+        "practitioner_name_en": value_for("doctor", "_en"),
+        "practitioner_name_ar": value_for("doctor", "_ar"),
+        "position_en": value_for("specialty", "_en"),
+        "position_ar": value_for("specialty", "_ar"),
+        "visit_type_en": value_for("visit_type", "_en"),
+        "visit_type_ar": value_for("visit_type", "_ar"),
     }
     rows = {
         "leave_id": (265, 320, 884, 368),
@@ -317,10 +343,32 @@ def _pdf(path: str, data: dict):
         "position": (265, 873, 884, 922),
         "visit_type": (265, 928, 884, 979),
     }
+    split_rows = {
+        "admission_date": ("admission_date_en", "admission_date_ar"),
+        "discharge_date": ("discharge_date_en", "discharge_date_ar"),
+        "waiting_period": ("waiting_period_en", "waiting_period_ar"),
+        "name": ("name_en", "name_ar"),
+        "nationality": ("nationality_en", "nationality_ar"),
+        "employer": ("employer_en", "employer_ar"),
+        "practitioner_name": ("practitioner_name_en", "practitioner_name_ar"),
+        "position": ("position_en", "position_ar"),
+        "visit_type": ("visit_type_en", "visit_type_ar"),
+    }
     for key, (left, top, right, bottom) in rows.items():
-        value = values.get(key)
-        if value:
-            draw_centered(c, value, left * scale_x, (1654 - bottom) * scale_y + 9, (right - left) * scale_x, 9)
+        y = (1654 - bottom) * scale_y + 9
+        if key in split_rows:
+            en_key, ar_key = split_rows[key]
+            mid = (left + right) / 2
+            draw_centered(c, values.get(en_key), left * scale_x, y, (mid - left) * scale_x, 9)
+            draw_centered(c, values.get(ar_key), mid * scale_x, y, (right - mid) * scale_x, 9)
+        else:
+            draw_centered(c, values.get(key), left * scale_x, y, (right - left) * scale_x, 9)
+
+    # عناصر المرجع خارج الجدول: اسم المستشفى/المدينة ووقت وتاريخ الإصدار.
+    draw_centered(c, data.get("hospital"), 700 * scale_x, (1654 - 1240) * scale_y, 350 * scale_x, 10, colors.HexColor("#1f1f1f"))
+    draw_centered(c, data.get("city"), 700 * scale_x, (1654 - 1270) * scale_y, 350 * scale_x, 10, colors.HexColor("#1f1f1f"))
+    draw_centered(c, data.get("issue_time"), 40 * scale_x, (1654 - 1400) * scale_y, 300 * scale_x, 10, colors.black)
+    draw_centered(c, data.get("issue_date"), 40 * scale_x, (1654 - 1435) * scale_y, 300 * scale_x, 10, colors.black)
     c.save()
     overlay.seek(0)
 
