@@ -14,8 +14,16 @@ from reportlab.lib.enums import TA_CENTER, TA_RIGHT
 from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+from reportlab.pdfgen import canvas
+from pypdf import PdfReader, PdfWriter
 from telegram import ReplyKeyboardMarkup, KeyboardButton
+
+try:
+    import arabic_reshaper
+    from bidi.algorithm import get_display as bidi_display
+except ImportError:
+    arabic_reshaper = None
+    bidi_display = None
 
 BASE_DIR = Path(__file__).resolve().parent
 VACCINE_DIR = BASE_DIR / "vaccine_records"
@@ -179,25 +187,69 @@ def review_text(data: dict[str, str]) -> str:
     return "\n".join(ar)
 
 
+VACCINATION_TEMPLATE = BASE_DIR / "templates" / "vaccination_certificate_template.pdf"
+
+
+def _pdf_text(value: str) -> str:
+    value = str(value or "").strip()
+    if arabic_reshaper and bidi_display and re.search(r"[\u0600-\u06ff]", value):
+        return bidi_display(arabic_reshaper.reshape(value))
+    return value
+
+
+def _draw_centered(c, value: str, x: float, y: float, width: float, font: str, size: float, color=colors.black):
+    value = str(value or "")
+    if re.search(r"[\u0600-\u06ff]", value) and font == "Times-Roman":
+        font = AR_FONT
+    c.setFont(font, size)
+    c.setFillColor(color)
+    c.drawCentredString(x + width / 2, y, _pdf_text(value))
+
+
+def _draw_right(c, value: str, x: float, y: float, font: str, size: float, color=colors.black):
+    c.setFont(font, size)
+    c.setFillColor(color)
+    c.drawRightString(x, y, _pdf_text(value))
+
+
 def make_pdf(data: dict[str, str], record_number: str) -> Path:
+    """ينشئ الشهادة فوق القالب الرسمي الثابت مع مواضع حقول موحدة قابلة لإعادة الاستخدام."""
+    if not VACCINATION_TEMPLATE.exists():
+        raise FileNotFoundError(f"قالب شهادة التطعيم غير موجود: {VACCINATION_TEMPLATE}")
     path = VACCINE_DIR / f"{record_number}.pdf"
-    doc = SimpleDocTemplate(str(path), pagesize=A4, rightMargin=18 * mm, leftMargin=18 * mm, topMargin=16 * mm, bottomMargin=16 * mm)
-    styles = getSampleStyleSheet()
-    title = ParagraphStyle("vtitle", parent=styles["Title"], fontName=AR_BOLD, fontSize=19, leading=25, alignment=TA_CENTER, textColor=colors.HexColor("#0B4F6C"))
-    sub = ParagraphStyle("vsub", parent=styles["Normal"], fontName=AR_FONT, fontSize=11, leading=18, alignment=TA_CENTER)
-    cell = ParagraphStyle("vcell", parent=styles["Normal"], fontName=AR_FONT, fontSize=10, leading=15, alignment=TA_RIGHT)
-    story = [Paragraph("Personal Vaccination Record", title), Paragraph("سجل شهادة التطعيم", title), Spacer(1, 8), Paragraph(f"Record Number: {record_number}<br/>تاريخ الإنشاء: {datetime.now().strftime('%d/%m/%Y %H:%M')}", sub), Spacer(1, 14)]
-    rows = [[Paragraph("البيان / Field", cell), Paragraph("العربية", cell), Paragraph("English", cell)]]
-    labels_en = ["Full Name", "National ID / Iqama", "Date of Birth", "Passport Number", "Nationality", "Vaccine Type", "Vaccination Date", "Age at Vaccination", "Reason for Vaccination", "Batch / Lot Number"]
-    for (key, label, _), en in zip(FIELDS, labels_en):
-        val = data[key] or "غير متوفر / Not Provided"
-        rows.append([Paragraph(f"{label}<br/>{en}", cell), Paragraph(val, cell), Paragraph(translate(val, key), cell)])
-    table = Table(rows, colWidths=[58 * mm, 62 * mm, 62 * mm], repeatRows=1)
-    table.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#DCEFF5")), ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#9DB7C2")), ("VALIGN", (0, 0), (-1, -1), "MIDDLE"), ("LEFTPADDING", (0, 0), (-1, -1), 7), ("RIGHTPADDING", (0, 0), (-1, -1), 7), ("TOPPADDING", (0, 0), (-1, -1), 7), ("BOTTOMPADDING", (0, 0), (-1, -1), 7)]))
-    story.append(table)
-    story.append(Spacer(1, 18))
-    story.append(Paragraph("هذا السجل منشأ إلكترونيًا بناءً على البيانات المدخلة من المستخدم.", sub))
-    doc.build(story)
+    reader = PdfReader(str(VACCINATION_TEMPLATE))
+    page = reader.pages[0]
+    width = float(page.mediabox.width)
+    height = float(page.mediabox.height)
+    overlay_path = VACCINE_DIR / f".{record_number}_overlay.pdf"
+    c = canvas.Canvas(str(overlay_path), pagesize=(width, height))
+
+    # منطقة الجدول في القالب: 15.5..353.5 أفقيًا، والصفوف من 289..408 رأسيًا.
+    row_y = [401, 381, 361, 341, 321]
+    # القالب ثنائي اللغة: القيمة الإنجليزية في الخلية الوسطى اليسرى والعربية في الوسطى اليمنى.
+    en_value_x, en_value_w = 86, 122
+    ar_value_x, ar_value_w = 208, 74
+    top_keys = ["full_name", "national_id", "birth_date", "passport", "nationality"]
+    for key, y in zip(top_keys, row_y):
+        value = data.get(key) or "Not Provided"
+        _draw_centered(c, translate(value, key), en_value_x, y, en_value_w, "Times-Roman", 6.7)
+        _draw_centered(c, value, ar_value_x, y, ar_value_w, AR_FONT, 7.0)
+
+    # الشريط الأخضر السفلي في القالب يحتوي خمسة حقول متتابعة؛ تُكتب قيمها باللون الأبيض تحتهـا.
+    green_left, green_width = 15.5, 338.0 / 5
+    bottom_keys = ["batch_number", "reason", "age_at_vaccination", "vaccination_date", "vaccine_type"]
+    for index, key in enumerate(bottom_keys):
+        value = data.get(key) or "Not Provided"
+        x = green_left + index * green_width
+        _draw_centered(c, translate(value, key), x, 292.5, green_width, "Times-Roman", 4.5, colors.white)
+    c.save()
+    overlay = PdfReader(str(overlay_path))
+    page.merge_page(overlay.pages[0])
+    writer = PdfWriter()
+    writer.add_page(page)
+    with path.open("wb") as output:
+        writer.write(output)
+    overlay_path.unlink(missing_ok=True)
     return path
 
 
