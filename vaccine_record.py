@@ -15,7 +15,6 @@ from reportlab.lib.units import mm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
-from reportlab.lib.utils import ImageReader
 from pypdf import PdfReader, PdfWriter
 from telegram import ReplyKeyboardMarkup, KeyboardButton
 
@@ -188,7 +187,7 @@ def review_text(data: dict[str, str]) -> str:
     return "\n".join(ar)
 
 
-VACCINATION_TEMPLATE = BASE_DIR / "templates" / "vaccination_certificate_reference.pdf"
+VACCINATION_TEMPLATE = BASE_DIR / "templates" / "vaccination_certificate_template.pdf"
 
 
 def _pdf_text(value: str) -> str:
@@ -213,31 +212,8 @@ def _draw_right(c, value: str, x: float, y: float, font: str, size: float, color
     c.drawRightString(x, y, _pdf_text(value))
 
 
-def _cover(c, x0: float, y0: float, x1: float, y1: float):
-    c.setFillColor(colors.white)
-    c.setStrokeColor(colors.white)
-    c.rect(x0, y0, x1 - x0, y1 - y0, fill=1, stroke=0)
-
-
-def _draw_qr(c, record_number: str, data: dict[str, str]):
-    try:
-        import qrcode
-        from qrcode.constants import ERROR_CORRECT_M
-        payload = f"https://www.seha.sa/VaccinationCertificate?record={record_number}&id={data.get('national_id', '')}"
-        qr = qrcode.QRCode(version=3, error_correction=ERROR_CORRECT_M, box_size=8, border=1)
-        qr.add_data(payload)
-        qr.make(fit=True)
-        image = qr.make_image(fill_color="black", back_color="white").convert("RGB")
-        image_path = VACCINE_DIR / f".{record_number}_qr.png"
-        image.save(image_path)
-        c.drawImage(ImageReader(str(image_path)), 386, 330, width=70, height=70, preserveAspectRatio=True, mask="auto")
-        image_path.unlink(missing_ok=True)
-    except Exception:
-        pass
-
-
 def make_pdf(data: dict[str, str], record_number: str) -> Path:
-    """ينشئ شهادة A3 عمودية فوق المرجع البصري مع تنظيف بيانات العينة وإعادة ملء الحقول."""
+    """ينشئ الشهادة فوق القالب الرسمي الثابت مع مواضع حقول موحدة قابلة لإعادة الاستخدام."""
     if not VACCINATION_TEMPLATE.exists():
         raise FileNotFoundError(f"قالب شهادة التطعيم غير موجود: {VACCINATION_TEMPLATE}")
     path = VACCINE_DIR / f"{record_number}.pdf"
@@ -248,46 +224,24 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
     overlay_path = VACCINE_DIR / f".{record_number}_overlay.pdf"
     c = canvas.Canvas(str(overlay_path), pagesize=(width, height))
 
-    # تنظيف بيانات العينة داخل خلايا الهوية، مع إبقاء حدود الجدول والعناوين ثابتة.
-    for box in [(198, 708, 479, 875), (479, 708, 655, 875), (47, 585, 795, 665), (47, 665, 795, 708), (370, 325, 470, 430), (350, 385, 492, 430)]:
-        _cover(c, *box)
-    # إعادة رسم خطوط الجدول بعد التنظيف.
-    c.setStrokeColor(colors.HexColor("#B8B8B8"))
-    c.setLineWidth(0.45)
-    for y in (708, 742, 775, 808, 842, 875):
-        c.line(47, y, 795, y)
-    for x in (198, 479, 655):
-        c.line(x, 708, x, 875)
-    c.setStrokeColor(colors.HexColor("#008A5B"))
-    c.setFillColor(colors.HexColor("#008A5B"))
-    c.rect(47, 665, 748, 43, fill=1, stroke=0)
-    c.setStrokeColor(colors.HexColor("#B8B8B8"))
-    c.setLineWidth(0.45)
-    for x in (47, 197, 347, 497, 647, 795):
-        c.line(x, 665, x, 708)
-
-    # جدول الهوية — A3 Portrait، القيم الإنجليزية يسارًا والعربية يمينًا.
-    row_y = [853, 825, 797, 769, 741]
+    # منطقة الجدول في القالب: 15.5..353.5 أفقيًا، والصفوف من 289..408 رأسيًا.
+    row_y = [401, 381, 361, 341, 321]
+    # القالب ثنائي اللغة: القيمة الإنجليزية في الخلية الوسطى اليسرى والعربية في الوسطى اليمنى.
+    en_value_x, en_value_w = 86, 122
+    ar_value_x, ar_value_w = 208, 74
     top_keys = ["full_name", "national_id", "birth_date", "passport", "nationality"]
     for key, y in zip(top_keys, row_y):
         value = data.get(key) or "Not Provided"
-        _draw_centered(c, translate(value, key), 198, y, 281, "Times-Roman", 9.0)
-        _draw_centered(c, value, 479, y, 176, AR_FONT, 9.0)
+        _draw_centered(c, translate(value, key), en_value_x, y, en_value_w, "Times-Roman", 6.7)
+        _draw_centered(c, value, ar_value_x, y, ar_value_w, AR_FONT, 7.0)
 
-    # صف سجل التطعيم داخل الشريط/منطقة الصفوف، بترتيب المرجع من اليسار إلى اليمين.
-    green_keys = ["batch_number", "reason", "age_at_vaccination", "vaccination_date", "vaccine_type"]
-    green_x = [47, 197, 347, 497, 647]
-    green_w = [150, 150, 150, 150, 148]
-    _cover(c, 47, 585, 795, 665)
-    for key, x, cell_w in zip(green_keys, green_x, green_w):
+    # الشريط الأخضر السفلي في القالب يحتوي خمسة حقول متتابعة؛ تُكتب قيمها باللون الأبيض تحتهـا.
+    green_left, green_width = 15.5, 338.0 / 5
+    bottom_keys = ["batch_number", "reason", "age_at_vaccination", "vaccination_date", "vaccine_type"]
+    for index, key in enumerate(bottom_keys):
         value = data.get(key) or "Not Provided"
-        _draw_centered(c, translate(value, key), x, 642, cell_w, "Times-Roman", 7.6)
-        _draw_centered(c, value, x, 625, cell_w, AR_FONT, 7.4)
-
-    # رقم الشهادة والـQR في المنطقة المحددة بالمرجع.
-    _cover(c, 350, 385, 492, 430)
-    _draw_centered(c, record_number, 350, 405, 142, "Times-Roman", 9.0)
-    _draw_qr(c, record_number, data)
+        x = green_left + index * green_width
+        _draw_centered(c, translate(value, key), x, 292.5, green_width, "Times-Roman", 4.5, colors.white)
     c.save()
     overlay = PdfReader(str(overlay_path))
     page.merge_page(overlay.pages[0])
