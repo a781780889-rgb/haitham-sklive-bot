@@ -249,8 +249,15 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
     top_keys = ["full_name", "national_id", "birth_date", "passport", "nationality"]
     for key, y in zip(top_keys, row_y):
         value = data.get(key) or "Not Provided"
+        if key == "nationality":
+            continue
         _draw_fit_centered(c, translate(value, key), en_value_x, y, en_value_w, FONT_EN, 6.8, FONT_COLOR, min_size=4.8)
         _draw_fit_centered(c, value, ar_value_x, y, ar_value_w, FONT_AR, 7.0, FONT_COLOR, min_size=4.8)
+
+    # خلية الجنسية محددة صراحةً: مركزها الأفقي 245 نقطة والرأسي 321 نقطة.
+    nationality = data.get("nationality") or "Not Provided"
+    _draw_fit_centered(c, translate(nationality, "nationality"), en_value_x, 321, en_value_w, FONT_EN, 6.8, FONT_COLOR, min_size=4.8)
+    _draw_fit_centered(c, nationality, 208, 321, 74, FONT_AR, 7.0, FONT_COLOR, min_size=4.8)
 
     # الشريط الأخضر السفلي: خمسة أعمدة ثابتة بنفس ترتيب عناوين القالب.
     green_left, green_width = 15.5, 338.0 / 5
