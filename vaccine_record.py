@@ -254,12 +254,14 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
         _draw_fit_centered(c, translate(value, key), en_value_x, y, en_value_w, FONT_EN, 6.8, FONT_COLOR, min_size=4.8)
         _draw_fit_centered(c, value, ar_value_x, y, ar_value_w, FONT_AR, 7.0, FONT_COLOR, min_size=4.8)
 
-    # خلية الجنسية: الحدود x=208..282 وy=314..334، والمركز الهندسي (245, 324).
+    # مواصفات كلمة «سعودي»: NotoSansArabic-Regular بحجم 7 pt، داخل مركز الخلية.
     nationality = data.get("nationality") or "Not Provided"
+    nationality_font = FONT_AR
+    nationality_font_size = 7.0
     nationality_center_x = 245.0
     nationality_baseline_y = 321.0
     _draw_fit_centered(c, translate(nationality, "nationality"), 86, nationality_baseline_y, 122, FONT_EN, 6.8, FONT_COLOR, min_size=4.8)
-    _draw_fit_centered(c, nationality, nationality_center_x - 37.0, nationality_baseline_y, 74.0, FONT_AR, 7.0, FONT_COLOR, min_size=4.8)
+    _draw_fit_centered(c, nationality, nationality_center_x - 37.0, nationality_baseline_y, 74.0, nationality_font, nationality_font_size, FONT_COLOR, min_size=5.0)
 
     # الشريط الأخضر السفلي: خمسة أعمدة ثابتة بنفس ترتيب عناوين القالب.
     green_left, green_width = 15.5, 338.0 / 5
