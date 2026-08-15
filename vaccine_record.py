@@ -241,7 +241,7 @@ async def handle(update, context, text: str, db):
         parsed = parse_form(text, context.user_data.get("vaccine_data"))
         if parsed != context.user_data.get("vaccine_data"):
             context.user_data["vaccine_data"] = parsed
-            await update.message.reply_text("تم حفظ بيانات النموذج مؤقتًا. اضغط «✅ إرسال البيانات» للمتابعة.", reply_markup=form_keyboard(state == "vaccine_editing")); return True
+            return True
     if state == "vaccine_review":
         if text in ("🟡 تعديل البيانات", "✏️ تعديل البيانات"):
             context.user_data["state"] = "vaccine_editing"
