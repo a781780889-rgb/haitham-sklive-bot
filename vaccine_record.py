@@ -196,7 +196,7 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
 async def start(update, context):
     context.user_data.clear()
     context.user_data.update({"state": "vaccine_start", "vaccine_data": empty_form()})
-    await update.message.reply_text("💉 شهادة التطعيم\n\nمرحبًا بك في قسم شهادة التطعيم.\n\nسيتم طلب جميع البيانات المطلوبة منك في نموذج واحد فقط. بعد إرسال البيانات، سيقوم النظام بمراجعتها ثم يعرضها لك للمراجعة النهائية قبل إنشاء ملف PDF.", reply_markup=main_keyboard())
+    await update.message.reply_text("💉 شهادة التطعيم\n\nمرحبًا بك في قسم شهادة التطعيم.", reply_markup=main_keyboard())
 
 
 async def handle(update, context, text: str, db):
