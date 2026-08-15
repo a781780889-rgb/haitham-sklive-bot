@@ -94,8 +94,15 @@ def parse_form(text: str, old: dict[str, str] | None = None) -> dict[str, str]:
 
 
 def parse_date(value: str):
+    """يقبل DD/MM/YYYY أو YYYY مع دعم الأرقام العربية والفواصل الشائعة."""
+    if not value:
+        return None
+    normalized = str(value).strip().translate(str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789"))
+    normalized = re.sub(r"[-.]", "/", normalized)
     try:
-        return datetime.strptime(value.strip(), "%d/%m/%Y").date()
+        if re.fullmatch(r"\d{4}", normalized):
+            return datetime.strptime(normalized, "%Y").date().replace(month=1, day=1)
+        return datetime.strptime(normalized, "%d/%m/%Y").date()
     except ValueError:
         return None
 
