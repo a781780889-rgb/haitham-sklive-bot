@@ -27,6 +27,7 @@ import medical_report
 from admin_auth import parse_admin_ids
 from patient_companion import PatientCompanionFlow
 from review_scene import ReviewSceneFlow
+import vaccine_record
 from external_api import send_leave_to_external_api
 from companion_pdf_gen import generate_companion_pdf
 
@@ -1029,13 +1030,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("🔧 البوت في وضع الصيانة. يرجى المحاولة لاحقاً.")
         return
 
+    # ── قسم إصدار شهادة التطعيم ─────────────────────────────────────────
+    if await vaccine_record.handle(update, context, text, db):
+        return
+
     # ── نظام الحذف ─ معالجة نص البحث ────────────────────────────────────
     if is_admin_user(uid) and isinstance(state, str) and state.startswith("del_search_"):
         await delete_system.handle_search_input(update, context, uid, text)
         return
 
     # ── أزرار ثابتة ──
-    if text in ["🏠 القائمة الرئيسية", "/start"]:
+    if text in ["🏠 القائمة الرئيسية", "↩️ العودة للقائمة الرئيسية", "/start"]:
         context.user_data.clear()
         await update.message.reply_text(
             build_main_menu_text(uid, name), parse_mode="Markdown",

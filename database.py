@@ -168,6 +168,15 @@ def init_db():
         key TEXT PRIMARY KEY, value TEXT NOT NULL,
         updated_at TEXT DEFAULT (datetime('now')))""")
 
+    c.execute("""CREATE TABLE IF NOT EXISTS vaccine_records (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        record_number TEXT UNIQUE NOT NULL,
+        data_json TEXT NOT NULL,
+        pdf_path TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        FOREIGN KEY (user_id) REFERENCES users(user_id))""")
+
     c.execute("""CREATE TABLE IF NOT EXISTS login_attempts (
         user_id INTEGER PRIMARY KEY,
         attempts INTEGER DEFAULT 0,
@@ -1431,6 +1440,31 @@ def update_order_pdf(order_id, pdf_path):
     finally:
         conn.close()
     add_order_log(order_id, "pdf_generated", "تم إنشاء PDF")
+
+
+def save_vaccine_record(user_id, record_number, data, pdf_path):
+    import json
+    conn = get_conn()
+    try:
+        conn.execute(
+            "INSERT INTO vaccine_records (user_id, record_number, data_json, pdf_path) VALUES (?, ?, ?, ?)",
+            (user_id, record_number, json.dumps(data, ensure_ascii=False), pdf_path),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_vaccine_records(user_id):
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT record_number, pdf_path, created_at FROM vaccine_records WHERE user_id=? ORDER BY created_at DESC LIMIT 20",
+            (user_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
 
 
 def get_user_orders(user_id):

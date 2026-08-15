@@ -212,6 +212,7 @@ def main_menu_keyboard(is_admin: bool = False) -> ReplyKeyboardMarkup:
     keyboard = [
         # ─ الإجراء الرئيسي (Primary CTA) ─
         [KeyboardButton(f"{ICON['new']} إصدار إجازة جديدة")],
+        [KeyboardButton("💉 إصدار شهادة التطعيم")],
         # ─ الحساب والمالية ─
         [
             KeyboardButton(f"{ICON['list']} طلباتي"),
