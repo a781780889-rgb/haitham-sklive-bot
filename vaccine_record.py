@@ -283,14 +283,9 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
     bottom_keys = ["batch_number", "reason", "age_at_vaccination", "vaccination_date", "vaccine_type"]
     for index, key in enumerate(bottom_keys):
         value = data.get(key) or "Not Provided"
+        # مركز كل قيمة داخل عمودها؛ لا تُستخدم إزاحات أفقية حتى لا تختفي القيم على بعض قارئات PDF.
         x = green_left + index * green_width
-        if key == "vaccination_date" and value == "12/07/2026":
-            x -= 24.0
-        elif key == "reason" and translate(value, key) == "Routine vaccination":
-            x -= 10.0
-        elif key == "age_at_vaccination" and value == "30":
-            x -= 10.0
-        # جميع القيم الخمس على خط أفقي واحد.
+        # جميع القيم الخمس على خط أفقي واحد وبحجم واضح.
         value_y = 277.5
         black_value = (
             (key == "vaccination_date" and value == "12/07/2026")
@@ -300,7 +295,7 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
             or (key == "batch_number" and value == "FG3526")
         )
         value_color = colors.black if black_value else GREEN_TEXT
-        _draw_fit_centered(c, translate(value, key), x, value_y, green_width, FONT_EN, 5.0, value_color, min_size=4.0)
+        _draw_fit_centered(c, translate(value, key), x, value_y, green_width, FONT_EN, 6.0, value_color, min_size=4.5)
     c.save()
     overlay = PdfReader(str(overlay_path))
     page.merge_page(overlay.pages[0])
