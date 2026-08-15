@@ -69,21 +69,10 @@ def empty_form() -> dict[str, str]:
 
 
 def form_text(data: dict[str, str]) -> str:
-    """يعرض نموذجًا موحدًا بالترتيب والصياغة المعتمدة للمستخدم."""
-    hints = {
-        "passport": "اختياري",
-        "nationality": "مثال: سعودي",
-        "vaccine_type": "مثال: / COVID-19 / Influenza /Hepatitis B",
-        "birth_date": "DD/MM/YYYY",
-        "vaccination_date": "DD/MM/YYYY",
-        "age_at_vaccination": "مثال: 25 سنة",
-        "reason": "مثال: جرعة روتينية / سفر / وقاية / متطلب وظيفي",
-    }
+    """يعرض قالب البيانات المحدد دون أمثلة أو نصوص إضافية."""
     lines = ["💉 بيانات سجل شهادةالتطعيم", ""]
     for key, label, _ in FIELDS:
-        value = data.get(key, "")
-        suffix = f"  ({hints[key]})" if not value and key in hints else ""
-        lines.append(f"{label}: {value}{suffix}")
+        lines.append(f"{label}: {data.get(key, '')}")
     return "\n".join(lines)
 
 
