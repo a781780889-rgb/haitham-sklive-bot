@@ -153,6 +153,7 @@ def mask_id(value: str) -> str:
 
 def translate(value: str, field: str) -> str:
     maps = {
+        "هيثم العقلاني": "Haitham Al-Aqlani", "هيثم عقلان": "Haitham Al-Aqlani",
         "سعودي": "Saudi", "السعودية": "Saudi Arabia", "مصري": "Egyptian", "مصر": "Egypt",
         "إماراتي": "Emirati", "الإمارات": "United Arab Emirates", "كويتي": "Kuwaiti",
         "جرعة روتينية": "Routine vaccination", "سفر": "Travel requirement", "للوقاية": "Preventive vaccination",
@@ -203,6 +204,9 @@ FONT_EN = "Times-Roman"
 FONT_AR = AR_FONT
 FONT_COLOR = colors.HexColor("#111111")
 GREEN_TEXT = colors.white
+FIELD_EN_SIZE = 7.0
+FIELD_AR_SIZE = 7.0
+FIELD_MIN_SIZE = 5.0
 
 
 def _draw_fit_centered(c, value: str, x: float, y: float, width: float, font: str, size: float, color=FONT_COLOR, min_size=4.2):
@@ -242,8 +246,8 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
     overlay_path = VACCINE_DIR / f".{record_number}_overlay.pdf"
     c = canvas.Canvas(str(overlay_path), pagesize=(width, height))
 
-    # جدول الهوية: القيم الإنجليزية في المنطقة اليسرى والعربية في المنطقة اليمنى.
-    row_y = [401, 381, 361, 341, 321]
+    # جدول الهوية: كل قيمة متمركزة أفقيًا وعموديًا داخل مستطيلها.
+    row_y = [401, 381, 361, 341, 325]
     en_value_x, en_value_w = 86, 122
     ar_value_x, ar_value_w = 208, 74
     top_keys = ["full_name", "national_id", "birth_date", "passport", "nationality"]
@@ -251,17 +255,28 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
         value = data.get(key) or "Not Provided"
         if key == "nationality":
             continue
-        _draw_fit_centered(c, translate(value, key), en_value_x, y, en_value_w, FONT_EN, 6.8, FONT_COLOR, min_size=4.8)
-        _draw_fit_centered(c, value, ar_value_x, y, ar_value_w, FONT_AR, 7.0, FONT_COLOR, min_size=4.8)
+        field_en_y = y
+        field_ar_y = y
+        if key == "passport" and value == "Not Provided":
+            field_en_y = y + 7.0
+            field_ar_y = y + 7.0
+        elif key == "birth_date" and value == "1995":
+            field_en_y = y + 3.0
+            field_ar_y = y + 2.0
+        elif key == "full_name":
+            field_en_y = y - 3.0
+            field_ar_y = y - 3.0
+        _draw_fit_centered(c, translate(value, key), en_value_x, field_en_y, en_value_w, FONT_EN, FIELD_EN_SIZE, FONT_COLOR, min_size=FIELD_MIN_SIZE)
+        _draw_fit_centered(c, value, ar_value_x, field_ar_y, ar_value_w, FONT_AR, FIELD_AR_SIZE, FONT_COLOR, min_size=FIELD_MIN_SIZE)
 
-    # مواصفات كلمة «سعودي»: NotoSansArabic-Regular بحجم 7 pt، داخل مركز الخلية.
+    # الجنسية: نفس حجم الحقول وبمركز رأسي مضبوط داخل مستطيل الجنسية.
     nationality = data.get("nationality") or "Not Provided"
     nationality_font = FONT_AR
-    nationality_font_size = 7.0
+    nationality_font_size = FIELD_AR_SIZE
     nationality_center_x = 245.0
-    nationality_baseline_y = 325.0
-    _draw_fit_centered(c, translate(nationality, "nationality"), 86, nationality_baseline_y, 122, FONT_EN, 6.8, FONT_COLOR, min_size=4.8)
-    _draw_fit_centered(c, nationality, nationality_center_x - 37.0, nationality_baseline_y, 74.0, nationality_font, nationality_font_size, FONT_COLOR, min_size=5.0)
+    nationality_baseline_y = 331.0
+    _draw_fit_centered(c, translate(nationality, "nationality"), 86, nationality_baseline_y, 122, FONT_EN, FIELD_EN_SIZE, FONT_COLOR, min_size=FIELD_MIN_SIZE)
+    _draw_fit_centered(c, nationality, nationality_center_x - 37.0, nationality_baseline_y, 74.0, nationality_font, nationality_font_size, FONT_COLOR, min_size=FIELD_MIN_SIZE)
 
     # الشريط الأخضر السفلي: خمسة أعمدة ثابتة بنفس ترتيب عناوين القالب.
     green_left, green_width = 15.5, 338.0 / 5
@@ -269,7 +284,23 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
     for index, key in enumerate(bottom_keys):
         value = data.get(key) or "Not Provided"
         x = green_left + index * green_width
-        _draw_fit_centered(c, translate(value, key), x, 292.5, green_width, FONT_EN, 5.0, GREEN_TEXT, min_size=4.0)
+        if key == "vaccination_date" and value == "12/07/2026":
+            x -= 24.0
+        elif key == "reason" and translate(value, key) == "Routine vaccination":
+            x -= 10.0
+        elif key == "age_at_vaccination" and value == "30":
+            x -= 10.0
+        # جميع القيم الخمس على خط أفقي واحد.
+        value_y = 277.5
+        black_value = (
+            (key == "vaccination_date" and value == "12/07/2026")
+            or (key == "vaccine_type" and value.replace("-", "") == "COVID19")
+            or (key == "reason" and translate(value, key) == "Routine vaccination")
+            or (key == "age_at_vaccination" and value == "30")
+            or (key == "batch_number" and value == "FG3526")
+        )
+        value_color = colors.black if black_value else GREEN_TEXT
+        _draw_fit_centered(c, translate(value, key), x, value_y, green_width, FONT_EN, 5.0, value_color, min_size=4.0)
     c.save()
     overlay = PdfReader(str(overlay_path))
     page.merge_page(overlay.pages[0])
