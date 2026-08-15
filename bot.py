@@ -580,6 +580,7 @@ def main_menu_keyboard(is_admin: bool = False):
     keyboard = [
         [KeyboardButton("📝 إرسال طلب جديد /go"), KeyboardButton("🏥 مرافق مريض")],
         [KeyboardButton("📋 طلباتي"),         KeyboardButton("مشهد مراجعه")],
+        [KeyboardButton("إصدار شهادة التطعيم")],
         [KeyboardButton("التقارير الطبيه")],
         [KeyboardButton("🌐 نظام المواقع"),   KeyboardButton("🏥 نظام المستشفيات")],
         [KeyboardButton("➕ إضافة مستشفى"),   KeyboardButton("➕ إضافة طبيب")],
