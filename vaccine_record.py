@@ -254,10 +254,12 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
         _draw_fit_centered(c, translate(value, key), en_value_x, y, en_value_w, FONT_EN, 6.8, FONT_COLOR, min_size=4.8)
         _draw_fit_centered(c, value, ar_value_x, y, ar_value_w, FONT_AR, 7.0, FONT_COLOR, min_size=4.8)
 
-    # خلية الجنسية محددة صراحةً: مركزها الأفقي 245 نقطة والرأسي 321 نقطة.
+    # خلية الجنسية: الحدود x=208..282 وy=314..334، والمركز الهندسي (245, 324).
     nationality = data.get("nationality") or "Not Provided"
-    _draw_fit_centered(c, translate(nationality, "nationality"), en_value_x, 321, en_value_w, FONT_EN, 6.8, FONT_COLOR, min_size=4.8)
-    _draw_fit_centered(c, nationality, 208, 321, 74, FONT_AR, 7.0, FONT_COLOR, min_size=4.8)
+    nationality_center_x = 245.0
+    nationality_baseline_y = 321.0
+    _draw_fit_centered(c, translate(nationality, "nationality"), 86, nationality_baseline_y, 122, FONT_EN, 6.8, FONT_COLOR, min_size=4.8)
+    _draw_fit_centered(c, nationality, nationality_center_x - 37.0, nationality_baseline_y, 74.0, FONT_AR, 7.0, FONT_COLOR, min_size=4.8)
 
     # الشريط الأخضر السفلي: خمسة أعمدة ثابتة بنفس ترتيب عناوين القالب.
     green_left, green_width = 15.5, 338.0 / 5
