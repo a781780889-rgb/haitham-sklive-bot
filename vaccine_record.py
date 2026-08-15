@@ -197,13 +197,32 @@ def _pdf_text(value: str) -> str:
     return value
 
 
-def _draw_centered(c, value: str, x: float, y: float, width: float, font: str, size: float, color=colors.black):
-    value = str(value or "")
-    if re.search(r"[\u0600-\u06ff]", value) and font == "Times-Roman":
-        font = AR_FONT
-    c.setFont(font, size)
+# مواصفات تنسيق القالب العام: الصفحة الأصلية 368.64×552.96 نقطة، عمودية.
+PDF_WIDTH, PDF_HEIGHT = 368.64, 552.96
+FONT_EN = "Times-Roman"
+FONT_AR = AR_FONT
+FONT_COLOR = colors.HexColor("#111111")
+GREEN_TEXT = colors.white
+
+
+def _draw_fit_centered(c, value: str, x: float, y: float, width: float, font: str, size: float, color=FONT_COLOR, min_size=4.2):
+    """يرسم النص في منتصف الخلية ويصغّره تلقائيًا عند تجاوز عرضها دون قص البيانات."""
+    value = str(value or "").strip()
+    if not value:
+        return
+    if re.search(r"[\u0600-\u06ff]", value) and font == FONT_EN:
+        font = FONT_AR
+    rendered = _pdf_text(value)
+    fitted = float(size)
+    while fitted > min_size and pdfmetrics.stringWidth(rendered, font, fitted) > width - 4:
+        fitted -= 0.25
+    c.setFont(font, fitted)
     c.setFillColor(color)
-    c.drawCentredString(x + width / 2, y, _pdf_text(value))
+    c.drawCentredString(x + width / 2, y, rendered)
+
+
+def _draw_centered(c, value: str, x: float, y: float, width: float, font: str, size: float, color=FONT_COLOR):
+    _draw_fit_centered(c, value, x, y, width, font, size, color)
 
 
 def _draw_right(c, value: str, x: float, y: float, font: str, size: float, color=colors.black):
@@ -219,29 +238,27 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
     path = VACCINE_DIR / f"{record_number}.pdf"
     reader = PdfReader(str(VACCINATION_TEMPLATE))
     page = reader.pages[0]
-    width = float(page.mediabox.width)
-    height = float(page.mediabox.height)
+    width, height = PDF_WIDTH, PDF_HEIGHT
     overlay_path = VACCINE_DIR / f".{record_number}_overlay.pdf"
     c = canvas.Canvas(str(overlay_path), pagesize=(width, height))
 
-    # منطقة الجدول في القالب: 15.5..353.5 أفقيًا، والصفوف من 289..408 رأسيًا.
+    # جدول الهوية: القيم الإنجليزية في المنطقة اليسرى والعربية في المنطقة اليمنى.
     row_y = [401, 381, 361, 341, 321]
-    # القالب ثنائي اللغة: القيمة الإنجليزية في الخلية الوسطى اليسرى والعربية في الوسطى اليمنى.
     en_value_x, en_value_w = 86, 122
     ar_value_x, ar_value_w = 208, 74
     top_keys = ["full_name", "national_id", "birth_date", "passport", "nationality"]
     for key, y in zip(top_keys, row_y):
         value = data.get(key) or "Not Provided"
-        _draw_centered(c, translate(value, key), en_value_x, y, en_value_w, "Times-Roman", 6.7)
-        _draw_centered(c, value, ar_value_x, y, ar_value_w, AR_FONT, 7.0)
+        _draw_fit_centered(c, translate(value, key), en_value_x, y, en_value_w, FONT_EN, 6.8, FONT_COLOR, min_size=4.8)
+        _draw_fit_centered(c, value, ar_value_x, y, ar_value_w, FONT_AR, 7.0, FONT_COLOR, min_size=4.8)
 
-    # الشريط الأخضر السفلي في القالب يحتوي خمسة حقول متتابعة؛ تُكتب قيمها باللون الأبيض تحتهـا.
+    # الشريط الأخضر السفلي: خمسة أعمدة ثابتة بنفس ترتيب عناوين القالب.
     green_left, green_width = 15.5, 338.0 / 5
     bottom_keys = ["batch_number", "reason", "age_at_vaccination", "vaccination_date", "vaccine_type"]
     for index, key in enumerate(bottom_keys):
         value = data.get(key) or "Not Provided"
         x = green_left + index * green_width
-        _draw_centered(c, translate(value, key), x, 292.5, green_width, "Times-Roman", 4.5, colors.white)
+        _draw_fit_centered(c, translate(value, key), x, 292.5, green_width, FONT_EN, 5.0, GREEN_TEXT, min_size=4.0)
     c.save()
     overlay = PdfReader(str(overlay_path))
     page.merge_page(overlay.pages[0])
