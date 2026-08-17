@@ -1592,6 +1592,15 @@ def _get_page_size(template_path):
 # إنشاء طبقة النصوص والصور
 # ══════════════════════════════════════════════════════════════
 
+def _open_logo_image(logo_source):
+    """يفتح الشعار من مسار ملف أو bytes أو كائن مسار."""
+    from PIL import Image as _PIL
+
+    if isinstance(logo_source, (bytes, bytearray, memoryview)):
+        return _PIL.open(io.BytesIO(bytes(logo_source)))
+    return _PIL.open(logo_source)
+
+
 def process_logo_for_pdf(logo_path):
     """
     معالجة شاملة وموحّدة للشعارات قبل إدراجها في PDF:
@@ -1616,7 +1625,7 @@ def process_logo_for_pdf(logo_path):
         from PIL import Image as _PIL
         import numpy as _np
 
-        orig = _PIL.open(logo_path).convert('RGBA')
+        orig = _open_logo_image(logo_path).convert('RGBA')
 
         # ── Upscale الصور الصغيرة لتحسين جودة الكشف ──────────────────────
         MIN_PROCESS_SIZE = 500
@@ -1713,11 +1722,18 @@ def process_logo_for_pdf(logo_path):
         # ── خطوة 5: بناء الصورة الناتجة مع Alpha شفاف للخلفية ───────────
         out_arr = _np.array(orig).astype(_np.uint8)
         out_arr[background_mask, 3] = 0   # الخلفية شفافة تماماً
+
+        # حماية مهمة: بعض الشعارات تكون صورة ملونة كاملة أو تلامس الحواف.
+        # في هذه الحالة قد يعتبر كشف الخلفية الصورة كلها خلفية، فينتج PNG شفافاً
+        # ويختفي الشعار من PDF. نعود للصورة الأصلية إذا لم يبقَ أي محتوى مرئي.
+        alpha = out_arr[:, :, 3]
+        is_content = (alpha > 15)
+        if not is_content.any():
+            return orig.copy()
+
         result = _PIL.fromarray(out_arr, 'RGBA')
 
         # ── خطوة 6: Autocrop — يعتمد على Alpha فقط ──────────────────────
-        alpha = out_arr[:, :, 3]
-        is_content = (alpha > 15)
 
         if is_content.any():
             row_idx = _np.where(is_content.any(axis=1))[0]
@@ -1738,7 +1754,7 @@ def process_logo_for_pdf(logo_path):
     except Exception:
         try:
             from PIL import Image as _PIL
-            return _PIL.open(logo_path).convert('RGBA')
+            return _open_logo_image(logo_path).convert('RGBA')
         except Exception:
             return None
 
@@ -1946,7 +1962,12 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
                 c.drawCentredString(x, rl_y, text_str)
 
     # ─── شعار المستشفى — معالجة موحّدة مع إزالة الخلفية (v2) ─────────────
-    if logo_path and os.path.exists(logo_path):
+    # يدعم المسار القديم وبيانات الصورة المباشرة القادمة من التخزين.
+    logo_available = bool(logo_path) and (
+        isinstance(logo_path, (bytes, bytearray, memoryview))
+        or os.path.exists(os.fspath(logo_path))
+    )
+    if logo_available:
         try:
             from PIL import Image as PILImage
             from reportlab.lib.utils import ImageReader as _IR
@@ -2011,7 +2032,7 @@ def _create_overlay(page_w, page_h, field_values, qr_img, logo_path, overlay_pat
                 lw = _ls['width']  * x_scale
                 lh = _ls['height'] * y_scale
                 c.drawImage(
-                    logo_path,
+                    _open_logo_image(logo_path),
                     lx, ly,
                     width=lw,
                     height=lh,

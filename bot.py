@@ -2276,6 +2276,9 @@ async def generate_and_send_pdf(update, context, uid):
 
     try:
         logo_path = db.get_hospital_logo(hospital)
+        # المسار القديم قد يشير إلى ملف مؤقت انتهت صلاحيته؛ استخدم البيانات المباشرة كبديل موثوق.
+        if not logo_path or (isinstance(logo_path, (str, os.PathLike)) and not os.path.exists(logo_path)):
+            logo_path = db.get_hospital_logo_data(hospital)
         website_url = get_website_url()
         pdf_path_temp = os.path.join(tempfile.gettempdir(), f"excuse_{uid}_{int(datetime.now().timestamp())}.pdf")
         pdf_path = pdf_path_temp
@@ -2545,6 +2548,9 @@ async def generate_and_send_companion_pdf(update, context, uid, pc_data):
     try:
         hospital_record = db.get_hospital_by_name(hospital) or {}
         logo_path = db.get_hospital_logo(hospital)
+        # المسار القديم قد يشير إلى ملف مؤقت انتهت صلاحيته؛ استخدم البيانات المباشرة كبديل موثوق.
+        if not logo_path or (isinstance(logo_path, (str, os.PathLike)) and not os.path.exists(logo_path)):
+            logo_path = db.get_hospital_logo_data(hospital)
         hospital_name_en = str(hospital_record.get("name_en") or "").strip()
         website_url = get_website_url()
 
