@@ -250,7 +250,8 @@ def translate(value: str, field: str) -> str:
         "إماراتي": "Emirati", "الإمارات": "United Arab Emirates", "كويتي": "Kuwaiti",
         "جرعة روتينية": "Routine vaccination", "سفر": "Travel requirement", "للوقاية": "Preventive vaccination",
         "وقاية": "Preventive vaccination", "متطلب وظيفي": "Occupational requirement",
-        "كوفيد": "COVID-19", "الإنفلونزا": "Influenza", "التهاب الكبد ب": "Hepatitis B",
+        "كوفيد": "COVID-19", "كوفيد 19": "COVID-19", "الإنفلونزا": "Influenza", "التهاب الكبد ب": "Hepatitis B",
+        "فايزر": "Pfizer", "لقاح فايزر": "Pfizer", "لقاح فايستونتك بيزر": "Pfizer-BioNTech",
     }
     return maps.get(value.strip(), value)
 
@@ -281,6 +282,34 @@ def review_text(data: dict[str, str]) -> str:
 
 
 VACCINATION_TEMPLATE = BASE_DIR / "templates" / "vaccination_certificate_template.pdf"
+
+
+ARABIC_MONTHS_DISPLAY = {
+    1: "يناير", 2: "فبراير", 3: "مارس", 4: "أبريل", 5: "مايو", 6: "يونيو",
+    7: "يوليو", 8: "أغسطس", 9: "سبتمبر", 10: "أكتوبر", 11: "نوفمبر", 12: "ديسمبر",
+}
+ENGLISH_MONTHS_DISPLAY = {1: "Jan", 2: "Feb", 3: "Mar", 4: "Apr", 5: "May", 6: "Jun", 7: "Jul", 8: "Aug", 9: "Sep", 10: "Oct", 11: "Nov", 12: "Dec"}
+
+
+def _pdf_display_value(value: str, field: str, language: str) -> str:
+    """يعرض كل لغة داخل خليتها، ولا يكرر نصًا عربيًا داخل الخلية الإنجليزية."""
+    value = str(value or "").strip()
+    if not value:
+        return ""
+    if field in {"birth_date", "vaccination_date"}:
+        parsed = parse_date(value)
+        if parsed:
+            if language == "en":
+                return f"{parsed.day:02d} {ENGLISH_MONTHS_DISPLAY[parsed.month]} {parsed.year}"
+            return f"{parsed.day:02d} {ARABIC_MONTHS_DISPLAY[parsed.month]} {parsed.year}"
+    if language == "en":
+        translated = translate(value, field)
+        if field == "full_name" and re.search(r"[\u0600-\u06ff]", translated) and translated == value:
+            return ""
+        if re.search(r"[\u0600-\u06ff]", translated) and translated == value:
+            return ""
+        return translated
+    return value
 
 
 def _pdf_text(value: str) -> str:
@@ -334,7 +363,12 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
     path = VACCINE_DIR / f"{record_number}.pdf"
     reader = PdfReader(str(VACCINATION_TEMPLATE))
     page = reader.pages[0]
-    width, height = PDF_WIDTH, PDF_HEIGHT
+    source_width, source_height = PDF_WIDTH, PDF_HEIGHT
+    # المرجع المرفق A3 عمودي؛ نوسّع طبقة القالب والإحداثيات معًا حتى لا تتغير النسب.
+    target_width, target_height = 842.0, 1190.0
+    scale_x, scale_y = target_width / source_width, target_height / source_height
+    page.scale(scale_x, scale_y)
+    width, height = source_width, source_height
     overlay_path = VACCINE_DIR / f".{record_number}_overlay.pdf"
     c = canvas.Canvas(str(overlay_path), pagesize=(width, height))
 
@@ -344,9 +378,11 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
     ar_value_x, ar_value_w = 208, 74
     top_keys = ["full_name", "national_id", "birth_date", "passport", "nationality"]
     for key, y in zip(top_keys, row_y):
-        value = data.get(key) or "Not Provided"
+        value = data.get(key) or ""
         if key == "nationality":
             continue
+        field_en_value = _pdf_display_value(value, key, "en")
+        field_ar_value = _pdf_display_value(value, key, "ar")
         field_en_y = y
         field_ar_y = y
         if key == "passport" and value == "Not Provided":
@@ -358,17 +394,17 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
         elif key == "full_name":
             field_en_y = y - 3.0
             field_ar_y = y - 3.0
-        _draw_fit_centered(c, translate(value, key), en_value_x, field_en_y, en_value_w, FONT_EN, FIELD_EN_SIZE, FONT_COLOR, min_size=FIELD_MIN_SIZE)
-        _draw_fit_centered(c, value, ar_value_x, field_ar_y, ar_value_w, FONT_AR, FIELD_AR_SIZE, FONT_COLOR, min_size=FIELD_MIN_SIZE)
+        _draw_fit_centered(c, field_en_value, en_value_x, field_en_y, en_value_w, FONT_EN, FIELD_EN_SIZE, FONT_COLOR, min_size=FIELD_MIN_SIZE)
+        _draw_fit_centered(c, field_ar_value, ar_value_x, field_ar_y, ar_value_w, FONT_AR, FIELD_AR_SIZE, FONT_COLOR, min_size=FIELD_MIN_SIZE)
 
     # الجنسية: نفس حجم الحقول وبمركز رأسي مضبوط داخل مستطيل الجنسية.
-    nationality = data.get("nationality") or "Not Provided"
+    nationality = data.get("nationality") or ""
     nationality_font = FONT_AR
     nationality_font_size = FIELD_AR_SIZE
     nationality_center_x = 245.0
     nationality_baseline_y = 331.0
-    _draw_fit_centered(c, translate(nationality, "nationality"), 86, nationality_baseline_y, 122, FONT_EN, FIELD_EN_SIZE, FONT_COLOR, min_size=FIELD_MIN_SIZE)
-    _draw_fit_centered(c, nationality, nationality_center_x - 37.0, nationality_baseline_y, 74.0, nationality_font, nationality_font_size, FONT_COLOR, min_size=FIELD_MIN_SIZE)
+    _draw_fit_centered(c, _pdf_display_value(nationality, "nationality", "en"), 86, nationality_baseline_y, 122, FONT_EN, FIELD_EN_SIZE, FONT_COLOR, min_size=FIELD_MIN_SIZE)
+    _draw_fit_centered(c, _pdf_display_value(nationality, "nationality", "ar"), nationality_center_x - 37.0, nationality_baseline_y, 74.0, nationality_font, nationality_font_size, FONT_COLOR, min_size=FIELD_MIN_SIZE)
 
     # الشريط الأخضر السفلي: خمسة أعمدة ثابتة بنفس ترتيب عناوين القالب.
     green_left, green_width = 15.5, 338.0 / 5
@@ -377,20 +413,20 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
         value = data.get(key) or "Not Provided"
         # مركز كل قيمة داخل عمودها؛ لا تُستخدم إزاحات أفقية حتى لا تختفي القيم على بعض قارئات PDF.
         x = green_left + index * green_width
-        # جميع القيم الخمس على خط أفقي واحد وبحجم واضح.
-        value_y = 277.5
-        black_value = (
-            (key == "vaccination_date" and value == "12/07/2026")
-            or (key == "vaccine_type" and value.replace("-", "") == "COVID19")
-            or (key == "reason" and translate(value, key) == "Routine vaccination")
-            or (key == "age_at_vaccination" and value == "30")
-            or (key == "batch_number" and value == "FG3526")
-        )
-        value_color = colors.black if black_value else GREEN_TEXT
-        _draw_fit_centered(c, translate(value, key), x, value_y, green_width, FONT_EN, 6.0, value_color, min_size=4.5)
+        # صف البيانات أبيض أسفل رأس الجدول؛ القيم داكنة وواضحة.
+        value_color = FONT_COLOR
+        english_value = _pdf_display_value(value, key, "en")
+        arabic_value = _pdf_display_value(value, key, "ar")
+        if key in {"vaccine_type", "reason"} and arabic_value and english_value and arabic_value != english_value:
+            _draw_fit_centered(c, english_value, x, 281.5, green_width, FONT_EN, 5.8, value_color, min_size=4.3)
+            _draw_fit_centered(c, arabic_value, x, 273.5, green_width, FONT_AR, 5.8, value_color, min_size=4.3)
+        else:
+            _draw_fit_centered(c, english_value or arabic_value, x, 277.5, green_width, FONT_EN, 6.0, value_color, min_size=4.5)
     c.save()
     overlay = PdfReader(str(overlay_path))
-    page.merge_page(overlay.pages[0])
+    overlay_page = overlay.pages[0]
+    overlay_page.scale(scale_x, scale_y)
+    page.merge_page(overlay_page)
     writer = PdfWriter()
     writer.add_page(page)
     with path.open("wb") as output:
