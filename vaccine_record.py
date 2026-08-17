@@ -87,11 +87,12 @@ def form_text(data: dict[str, str]) -> str:
 def parse_form(text: str, old: dict[str, str] | None = None) -> dict[str, str]:
     data = dict(old or empty_form())
     for line in text.splitlines():
-        if ":" not in line:
+        # يدعم النص المنسوخ من الهاتف سواء استخدم ":" أو "："، مع إزالة الرموز الخفية.
+        line = line.replace("\u200b", "").replace("\ufeff", "").strip()
+        parts = re.split(r"[:：]", line, maxsplit=1)
+        if len(parts) != 2:
             continue
-        label, value = line.split(":", 1)
-        label = label.strip()
-        value = value.strip()
+        label, value = (part.strip() for part in parts)
         for ar_label, key in LABEL_TO_KEY.items():
             if label == ar_label:
                 if "(" in value and value.endswith(")"):

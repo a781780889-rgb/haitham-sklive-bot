@@ -1,6 +1,7 @@
+import asyncio
 from datetime import date, timedelta
 
-from vaccine_record import empty_form, parse_date, parse_form, validate
+from vaccine_record import empty_form, handle, parse_date, parse_form, validate
 
 
 def valid_data():
@@ -30,6 +31,12 @@ def test_parse_date_accepts_numeric_forms_and_month_text():
     assert parse_date("March 1991 12") == date(1991, 3, 12)
     assert parse_date("12 March 1991") == date(1991, 3, 12)
     assert parse_date("12 مارس 1991") == date(1991, 3, 12)
+
+
+def test_parse_form_accepts_arabic_colon_and_hidden_mobile_characters():
+    parsed = parse_form("\ufeffتاريخ الميلاد： March 1991 12\nتاريخ التطعيم： 26‑09‑2021")
+    assert parsed["birth_date"] == "12/03/1991"
+    assert parsed["vaccination_date"] == "26/09/2021"
 
 
 def test_parse_form_normalizes_dates_before_validation():
@@ -79,3 +86,49 @@ def test_parse_form_keeps_unrecognized_date_for_validation_feedback():
     data = parse_form("تاريخ الميلاد: تاريخ غير معروف")
     assert data["birth_date"] == "تاريخ غير معروف"
     assert parse_date(data["birth_date"]) is None
+
+
+class FakeMessage:
+    def __init__(self):
+        self.replies = []
+
+    async def reply_text(self, text, **kwargs):
+        self.replies.append(text)
+
+
+class FakeUpdate:
+    def __init__(self):
+        self.message = FakeMessage()
+        self.effective_user = type("User", (), {"id": 1})()
+
+
+class FakeContext:
+    def __init__(self, data):
+        self.user_data = data
+
+
+def test_handle_send_button_accepts_image_data_end_to_end():
+    form = parse_form(
+        "\n".join(
+            [
+                "الاسم الكامل： رائد فراحان غالب الحارثي",
+                "رقم الهوية / الإقامة： 1074820224",
+                "تاريخ الميلاد： March 1991 12",
+                "الجنسية： السعوديه",
+                "نوع التطعيم： لقاح فايبوتك يزر",
+                "تاريخ التطعيم： 26‑09‑2021",
+                "العمر عند التطعيم： 30",
+                "سبب التطعيم： كوفيد 19",
+                "رقم التشغيلة： FG3526",
+            ]
+        )
+    )
+    context = FakeContext({"state": "vaccine_form", "vaccine_data": form})
+    update = FakeUpdate()
+
+    handled = asyncio.run(handle(update, context, "✅ إرسال البيانات", db=None))
+
+    assert handled is True
+    assert context.user_data["state"] == "vaccine_review"
+    assert "تاريخ التطعيم غير صحيح أو مستقبلي." not in update.message.replies[0]
+    assert "✅ تمت مراجعة البيانات بنجاح" in update.message.replies[0]
