@@ -488,7 +488,7 @@ def _pdf(path: str, data: dict):
     split_x_offsets = {}
     x_center_offsets_xml = {
         "admission_date": (0, 23), "discharge_date": (0, 23), "waiting_period": (16, 37),
-        "name": (23, 48), "nationality": (23, 48), "employer": (0, 48),
+        "name": (23, 48), "nationality": (23, 48), "employer": (23, 48),
         "practitioner_name": (23, 48), "position": (23, 48), "visit_type": (23, 48),
     }
     for key, (left, top, right, bottom) in rows.items():
