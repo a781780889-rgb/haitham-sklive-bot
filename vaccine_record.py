@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import logging
 import os
 import re
 import uuid
 import unicodedata
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from typing import Any
 
@@ -25,6 +27,9 @@ try:
 except ImportError:
     arabic_reshaper = None
     bidi_display = None
+
+logger = logging.getLogger(__name__)
+BUSINESS_TIMEZONE = ZoneInfo("Asia/Riyadh")
 
 BASE_DIR = Path(__file__).resolve().parent
 VACCINE_DIR = BASE_DIR / "vaccine_records"
@@ -176,6 +181,21 @@ def parse_date(value: str):
     return None
 
 
+def local_calendar_date() -> date:
+    """يعيد تاريخ اليوم كتاريخ تقويمي محلي، دون وقت أو تحويل UTC."""
+    return datetime.now(BUSINESS_TIMEZONE).date()
+
+
+def normalize_form_dates(data: dict[str, str]) -> dict[str, str]:
+    """يطبّع حقول التاريخ المقبولة إلى DD/MM/YYYY دون تغيير معناها."""
+    normalized = dict(data)
+    for key in ("birth_date", "vaccination_date"):
+        parsed = parse_date(normalized.get(key, ""))
+        if parsed:
+            normalized[key] = parsed.strftime("%d/%m/%Y")
+    return normalized
+
+
 def validate(data: dict[str, str]) -> list[str]:
     errors = []
     if not data["full_name"] or not re.search(r"[A-Za-zأ-يء-ئ]{2,}.*[A-Za-zأ-يء-ئ]", data["full_name"]):
@@ -184,11 +204,16 @@ def validate(data: dict[str, str]) -> list[str]:
         errors.append("رقم الهوية / الإقامة يجب أن يكون رقميًا.")
     birth = parse_date(data["birth_date"])
     vaccination = parse_date(data["vaccination_date"])
-    today = date.today()
+    today = local_calendar_date()
     if not birth or birth > today:
         errors.append("تاريخ الميلاد غير صحيح أو مستقبلي.")
     if not vaccination or vaccination > today:
         errors.append("تاريخ التطعيم غير صحيح أو مستقبلي.")
+    if vaccination:
+        logger.info(
+            "[VaccinationDate] detectedFormat=DD-MM-YYYY normalizedDate=%s today=%s isValid=%s isFuture=%s",
+            vaccination.isoformat(), today.isoformat(), True, vaccination > today,
+        )
     if birth and vaccination and vaccination < birth:
         errors.append("تاريخ التطعيم لا يمكن أن يسبق تاريخ الميلاد.")
     if not data["nationality"]:
@@ -405,7 +430,8 @@ async def handle(update, context, text: str, db):
             context.user_data["vaccine_data"] = empty_form()
             await update.message.reply_text(form_text(context.user_data["vaccine_data"]), reply_markup=form_keyboard(state == "vaccine_editing")); return True
         if text in ("✅ إرسال البيانات", "✅ حفظ التعديلات"):
-            data = context.user_data.get("vaccine_data", empty_form())
+            data = normalize_form_dates(context.user_data.get("vaccine_data", empty_form()))
+            context.user_data["vaccine_data"] = data
             errors = validate(data)
             if errors:
                 context.user_data["state"] = "vaccine_editing"

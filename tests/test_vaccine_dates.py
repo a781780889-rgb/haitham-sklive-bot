@@ -1,7 +1,7 @@
 import asyncio
 from datetime import date, timedelta
 
-from vaccine_record import empty_form, handle, parse_date, parse_form, validate
+from vaccine_record import empty_form, handle, local_calendar_date, normalize_form_dates, parse_date, parse_form, validate
 
 
 def valid_data():
@@ -20,6 +20,15 @@ def valid_data():
         }
     )
     return data
+
+
+def test_parse_date_accepts_required_numeric_forms_and_leap_years():
+    for raw in ("26-09-2021", "26/09/2021", "26.09.2021", "26 09 2021", "٢٦-٠٩-٢٠٢١"):
+        assert parse_date(raw) == date(2021, 9, 26)
+    assert parse_date("29-02-2024") == date(2024, 2, 29)
+    assert parse_date("29-02-2020") == date(2020, 2, 29)
+    for raw in ("32-09-2021", "26-13-2021", "31-02-2021", "29-02-2023", "abc", "26-09"):
+        assert parse_date(raw) is None
 
 
 def test_parse_date_accepts_numeric_forms_and_month_text():
@@ -44,6 +53,15 @@ def test_parse_form_accepts_arabic_colon_and_hidden_mobile_characters():
     assert parsed["vaccination_date"] == "26/09/2021"
 
 
+def test_normalize_form_dates_preserves_calendar_meaning():
+    data = valid_data()
+    data["birth_date"] = "March 1991 12"
+    data["vaccination_date"] = "26-09-2021"
+    normalized = normalize_form_dates(data)
+    assert normalized["birth_date"] == "12/03/1991"
+    assert normalized["vaccination_date"] == "26/09/2021"
+
+
 def test_parse_form_normalizes_dates_before_validation():
     text = "\n".join(
         [
@@ -66,7 +84,7 @@ def test_parse_form_normalizes_dates_before_validation():
 
 def test_future_dates_are_still_rejected():
     data = valid_data()
-    future = (date.today() + timedelta(days=1)).strftime("%d/%m/%Y")
+    future = (local_calendar_date() + timedelta(days=1)).strftime("%d/%m/%Y")
     data["birth_date"] = future
     data["vaccination_date"] = future
     errors = validate(data)
