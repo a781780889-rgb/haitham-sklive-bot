@@ -482,6 +482,7 @@ def _pdf(path: str, data: dict):
     }
     row_y_offsets = {"leave_id": -11.3, "name": -21.7, "admission_date": -12.3, "discharge_date": -15.6, "waiting_period": -18, "issue_date": -22, "nationality": -27.3, "employer": -37.4, "national_id_iqama": -24, "practitioner_name": -31.7, "position": -34.9, "visit_type": -35.7}
     arabic_y_adjust = {"admission_date": 2, "discharge_date": 2.3, "waiting_period": 2, "name": 3.3, "nationality": 2, "employer": 10, "practitioner_name": 1.7, "position": 1.7, "visit_type": 1.7}
+    english_y_adjust = {"employer": 2}
     row_x_offsets = {"leave_id": 24, "admission_date": 16, "discharge_date": 16, "issue_date": 24, "national_id_iqama": 24}
     # المراكز المستخرجة من المرجع بعد تحويل إحداثيات XML (1263px) إلى نقاط A3.
     # القيم الإنجليزية تتمركز عند 477px والعربية عند 835px في تمثيل المرجع.
@@ -506,7 +507,7 @@ def _pdf(path: str, data: dict):
             en_mid = mid + en_shift / scale_x
             ar_mid = mid + ar_shift / scale_x
             ar_right = right + ar_shift / scale_x
-            draw_centered(c, values.get(en_key), en_left * scale_x, y, (en_mid - en_left) * scale_x, 13)
+            draw_centered(c, values.get(en_key), en_left * scale_x, y + english_y_adjust.get(key, 0), (en_mid - en_left) * scale_x, 13)
             draw_centered(c, values.get(ar_key), ar_mid * scale_x, y + arabic_y_adjust.get(key, 0), (ar_right - ar_mid) * scale_x, 13)
         else:
             draw_centered(c, values.get(key), left * scale_x, y, (right - left) * scale_x, 13)
