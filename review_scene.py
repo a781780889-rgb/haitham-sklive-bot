@@ -220,6 +220,7 @@ _EN_LABELS = {
 _SEMANTIC_ENGLISH = {
     "استشاري": "Consultant", "أخصائي": "Specialist", "ممارس عام": "General Practitioner",
     "طبيب عام": "General Practitioner", "مقيم": "Resident", "مراجعة": "General Practitioner", "مراجعه": "General Practitioner", "عودة": "Follow-up", "عوده": "Follow-up",
+    "الرياض": "Riyadh", "جدة": "Jeddah", "مكة": "Makkah", "المدينة المنورة": "Madinah", "الدمام": "Dammam",
 }
 
 
@@ -306,6 +307,9 @@ def _valid(data: dict) -> list[str]:
     errors = [f"الحقل ناقص: {label}" for key, label in FIELDS if not _clean(data.get(key))]
     if data.get("id_number") and not re.fullmatch(r"[0-9٠-٩]{4,20}", _clean(data["id_number"])):
         errors.append("الهوية/رقم الاختبار يجب أن يكون أرقامًا فقط")
+    for key, label in (("doctor", "اسم الممارس"), ("specialty", "المسمى الوظيفي")):
+        if not _clean(data.get(key)):
+            errors.append(f"الحقل ناقص: {label}")
     for key, label in (("entry_date", "تاريخ الدخول"), ("exit_date", "تاريخ الخروج")):
         if data.get(key):
             try:
@@ -337,6 +341,13 @@ def _pdf(path: str, data: dict):
         raise FileNotFoundError(f"PDF template not found: {template_path}")
 
     data = dict(data)
+    # توحيد أسماء الحقول القادمة من مسارات البوت المختلفة قبل الرسم.
+    if not _clean(data.get("doctor")):
+        data["doctor"] = data.get("practitioner_name") or data.get("practitioner") or data.get("doctor_name") or ""
+    if not _clean(data.get("specialty")):
+        data["specialty"] = data.get("position") or data.get("job_title") or data.get("specialty_name") or ""
+    if not _clean(data.get("workplace")):
+        data["workplace"] = data.get("employer") or data.get("employer_name") or ""
     data.setdefault("leave_id", data.get("gsl_code") or f"GSL{datetime.now():%y%m%d%H%M%S}")
     data.setdefault("waiting_period", _duration(data))
     data.setdefault("issue_date", datetime.now().strftime("%d-%m-%Y"))
@@ -384,7 +395,7 @@ def _pdf(path: str, data: dict):
         if suffix == "_en":
             if has_arabic and key in {"name", "doctor"}:
                 return _transliterate_name(raw)
-            if has_arabic and key in {"specialty", "visit_type"}:
+            if has_arabic and key in {"workplace", "specialty", "visit_type"}:
                 cleaned = _clean(raw)
                 if cleaned in _SEMANTIC_ENGLISH:
                     return _SEMANTIC_ENGLISH[cleaned]
@@ -396,6 +407,8 @@ def _pdf(path: str, data: dict):
                     return "General Practitioner"
                 if key == "visit_type" and cleaned in {"عودة", "عوده"}:
                     return "Follow-up"
+                if key == "workplace":
+                    return _SEMANTIC_ENGLISH.get(cleaned, _transliterate_name(raw))
                 return ""
             return "" if has_arabic else raw
         if suffix == "_ar":

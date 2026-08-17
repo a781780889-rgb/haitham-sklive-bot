@@ -16,8 +16,8 @@ DATA = {
     "leave_id": "GSL260817201725", "entry_date": "12-07-2026", "entry_time": "10:00",
     "exit_date": "14-07-2026", "exit_time": "08:00", "waiting_period": "46 ساعة و0 دقيقة",
     "issue_date": "17-08-2026", "issue_time": "11:00", "name": "هيثم عبده عقلان",
-    "id_number": "2324245678", "nationality": "سعودي", "workplace": "الرياض",
-    "doctor": "عبدالله", "specialty": "طبيب عام", "visit_type": "عوده",
+    "id_number": "2324245678", "nationality": "سعودي",     "workplace": "الرياض", "doctor": "", "specialty": "", "practitioner_name": "عبدالله", "position": "طبيب عام", "visit_type": "عوده",
+
 }
 if __name__ == "__main__":
     out = Path(__file__).resolve().parent.parent / "artifacts" / "review_scene_attached_case_fixed.pdf"
