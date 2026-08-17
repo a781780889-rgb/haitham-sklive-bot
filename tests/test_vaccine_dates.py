@@ -28,6 +28,8 @@ def test_parse_date_accepts_numeric_forms_and_month_text():
     assert parse_date("26‑09‑2021") == date(2021, 9, 26)
     assert parse_date("26 / 09 / 2021") == date(2021, 9, 26)
     assert parse_date("26 ـ 09 ـ 2021") == date(2021, 9, 26)
+    assert parse_date("\u200f26-09-2021\u200f") == date(2021, 9, 26)
+    assert parse_date("\u061c26-09-2021\u061c") == date(2021, 9, 26)
     assert parse_date("٢٦/٠٩/٢٠٢١") == date(2021, 9, 26)
     assert parse_date("March 1991 12") == date(1991, 3, 12)
     assert parse_date("12 March 1991") == date(1991, 3, 12)
