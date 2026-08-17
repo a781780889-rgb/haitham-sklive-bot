@@ -482,7 +482,7 @@ def _pdf(path: str, data: dict):
     }
     row_y_offsets = {"leave_id": -11.3, "name": -21.7, "admission_date": -12.3, "discharge_date": -15.6, "waiting_period": -18, "issue_date": -22, "nationality": -27.3, "employer": -37.4, "national_id_iqama": -24, "practitioner_name": -31.7, "position": -34.9, "visit_type": -35.7}
     arabic_y_adjust = {"admission_date": 2, "discharge_date": 2.3, "waiting_period": 2, "name": 3.3, "nationality": 2, "employer": 10, "practitioner_name": 1.7, "position": 1.7, "visit_type": 1.7}
-    english_y_adjust = {"employer": 9}
+    english_y_adjust = {"employer": 7}
     row_x_offsets = {"leave_id": 24, "admission_date": 16, "discharge_date": 16, "issue_date": 24, "national_id_iqama": 24}
     # المراكز المستخرجة من المرجع بعد تحويل إحداثيات XML (1263px) إلى نقاط A3.
     # القيم الإنجليزية تتمركز عند 477px والعربية عند 835px في تمثيل المرجع.
