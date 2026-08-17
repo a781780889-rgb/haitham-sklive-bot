@@ -127,7 +127,10 @@ def parse_date(value: str):
         return None
     normalized = str(value).strip().translate(str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789"))
     normalized = re.sub(r"[,،]", " ", normalized)
-    normalized = re.sub(r"[-.]", "/", normalized)
+    # تطبيقات الهاتف قد ترسل شرطة Unicode مختلفة عن الشرطة العادية، أو مسافات حول الفاصل.
+    normalized = re.sub(r"[-.\u2010\u2011\u2012\u2013\u2014\u2212\ufe58\ufe63\uff0d]", "/", normalized)
+    normalized = re.sub(r"\s*/\s*", "/", normalized)
+    normalized = re.sub(r"\s+", " ", normalized)
     try:
         if re.fullmatch(r"\d{4}", normalized):
             return datetime.strptime(normalized, "%Y").date().replace(month=1, day=1)
