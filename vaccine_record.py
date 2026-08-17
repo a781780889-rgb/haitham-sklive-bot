@@ -96,23 +96,61 @@ def parse_form(text: str, old: dict[str, str] | None = None) -> dict[str, str]:
             if label == ar_label:
                 if "(" in value and value.endswith(")"):
                     value = value[:value.rfind("(")].strip()
+                if key in ("birth_date", "vaccination_date"):
+                    parsed = parse_date(value)
+                    if parsed:
+                        value = parsed.strftime("%d/%m/%Y")
                 data[key] = value
                 break
     return data
 
 
+_MONTH_NAMES = {
+    "january": 1, "jan": 1, "يناير": 1,
+    "february": 2, "feb": 2, "فبراير": 2,
+    "march": 3, "mar": 3, "مارس": 3,
+    "april": 4, "apr": 4, "أبريل": 4,
+    "may": 5, "مايو": 5,
+    "june": 6, "jun": 6, "يونيو": 6,
+    "july": 7, "jul": 7, "يوليو": 7,
+    "august": 8, "aug": 8, "أغسطس": 8,
+    "september": 9, "sep": 9, "sept": 9, "سبتمبر": 9,
+    "october": 10, "oct": 10, "أكتوبر": 10,
+    "november": 11, "nov": 11, "نوفمبر": 11,
+    "december": 12, "dec": 12, "ديسمبر": 12,
+}
+
+
 def parse_date(value: str):
-    """يقبل DD/MM/YYYY أو YYYY مع دعم الأرقام العربية والفواصل الشائعة."""
+    """يحلل التاريخ الميلادي بصيغ رقمية أو نصية ويعيد date."""
     if not value:
         return None
     normalized = str(value).strip().translate(str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789"))
+    normalized = re.sub(r"[,،]", " ", normalized)
     normalized = re.sub(r"[-.]", "/", normalized)
     try:
         if re.fullmatch(r"\d{4}", normalized):
             return datetime.strptime(normalized, "%Y").date().replace(month=1, day=1)
-        return datetime.strptime(normalized, "%d/%m/%Y").date()
+        if re.fullmatch(r"\d{1,2}/\d{1,2}/\d{4}", normalized):
+            return datetime.strptime(normalized, "%d/%m/%Y").date()
     except ValueError:
         return None
+
+    # يدعم الصيغ المنسوخة مثل March 1991 12 و12 March 1991.
+    parts = normalized.split()
+    if len(parts) == 3:
+        month_indexes = [i for i, part in enumerate(parts) if part.casefold() in _MONTH_NAMES]
+        if month_indexes:
+            month_index = month_indexes[0]
+            try:
+                month = _MONTH_NAMES[parts[month_index].casefold()]
+                numbers = [int(part) for i, part in enumerate(parts) if i != month_index]
+                year = next(number for number in numbers if 1000 <= number <= 9999)
+                day = next(number for number in numbers if number != year)
+                return date(year, month, day)
+            except (StopIteration, ValueError):
+                return None
+    return None
 
 
 def validate(data: dict[str, str]) -> list[str]:
