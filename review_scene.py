@@ -315,7 +315,7 @@ def _pdf(path: str, data: dict):
     except Exception:
         ar_font = "Helvetica"
     try:
-        pdfmetrics.registerFont(TTFont(en_font, str(base / "fonts/TimesRoman-Regular.ttf")))
+        pdfmetrics.registerFont(TTFont(en_font, str(base / "times.ttf")))
     except Exception:
         en_font = "Times-Roman"
 
@@ -419,9 +419,17 @@ def _pdf(path: str, data: dict):
         "position": ("position_en", "position_ar"),
         "visit_type": ("visit_type_en", "visit_type_ar"),
     }
-    row_y_offsets = {"name": -19, "admission_date": -10, "discharge_date": -13, "waiting_period": -11, "issue_date": -19, "nationality": -21, "employer": -22, "national_id_iqama": -22, "practitioner_name": -32, "position": -32, "visit_type": -32}
-    row_x_offsets = {"admission_date": 16, "discharge_date": 16, "issue_date": 24, "national_id_iqama": 24}
-    split_x_offsets = {"waiting_period": (16, 55)}
+    row_y_offsets = {"leave_id": -11.3, "name": -21.7, "admission_date": -12.3, "discharge_date": -15.6, "waiting_period": -18, "issue_date": -22, "nationality": -27.3, "employer": -37.4, "national_id_iqama": -24, "practitioner_name": -31.7, "position": -34.9, "visit_type": -35.7}
+    arabic_y_adjust = {"admission_date": 2, "discharge_date": 2.3, "waiting_period": 2, "name": 3.3, "nationality": 2, "employer": 10, "practitioner_name": 1.7, "position": 1.7, "visit_type": 1.7}
+    row_x_offsets = {"leave_id": 24, "admission_date": 16, "discharge_date": 16, "issue_date": 24, "national_id_iqama": 24}
+    # المراكز المستخرجة من المرجع بعد تحويل إحداثيات XML (1263px) إلى نقاط A3.
+    # القيم الإنجليزية تتمركز عند 477px والعربية عند 835px في تمثيل المرجع.
+    split_x_offsets = {}
+    x_center_offsets_xml = {
+        "admission_date": (0, 23), "discharge_date": (0, 23), "waiting_period": (16, 37),
+        "name": (23, 48), "nationality": (23, 48), "employer": (0, 48),
+        "practitioner_name": (23, 48), "position": (23, 48), "visit_type": (23, 48),
+    }
     for key, (left, top, right, bottom) in rows.items():
         left += row_x_offsets.get(key, 0) / scale_x
         right += row_x_offsets.get(key, 0) / scale_x
@@ -429,21 +437,24 @@ def _pdf(path: str, data: dict):
         if key in split_rows:
             en_key, ar_key = split_rows[key]
             mid = (left + right) / 2
-            en_shift, ar_shift = split_x_offsets.get(key, (0, 0))
+            en_shift, ar_shift = split_x_offsets.get(key, x_center_offsets_xml.get(key, (0, 0)))
+            # x_center_offsets_xml هي فروقات في تمثيل pdftohtml، لا في نقاط ReportLab.
+            en_shift /= 1.5
+            ar_shift /= 1.5
             en_left = left + en_shift / scale_x
             en_mid = mid + en_shift / scale_x
             ar_mid = mid + ar_shift / scale_x
             ar_right = right + ar_shift / scale_x
-            draw_centered(c, values.get(en_key), en_left * scale_x, y, (en_mid - en_left) * scale_x, 11)
-            draw_centered(c, values.get(ar_key), ar_mid * scale_x, y, (ar_right - ar_mid) * scale_x, 11)
+            draw_centered(c, values.get(en_key), en_left * scale_x, y, (en_mid - en_left) * scale_x, 13)
+            draw_centered(c, values.get(ar_key), ar_mid * scale_x, y + arabic_y_adjust.get(key, 0), (ar_right - ar_mid) * scale_x, 13)
         else:
-            draw_centered(c, values.get(key), left * scale_x, y, (right - left) * scale_x, 11)
+            draw_centered(c, values.get(key), left * scale_x, y, (right - left) * scale_x, 13)
 
     # عناصر المرجع خارج الجدول: وقت وتاريخ إصدار التقرير بصيغة إنجليزية كاملة.
     issue_time = data.get("issue_time_en") or _display_time(data.get("issue_time"))
     issue_date = data.get("issue_date_en") or _format_english_issue_date(data.get("issue_date"))
-    draw_centered(c, issue_time, 40 * scale_x, (1654 - 1400) * scale_y, 300 * scale_x, 10, colors.black)
-    draw_centered(c, issue_date, 40 * scale_x, (1654 - 1435) * scale_y, 300 * scale_x, 10, colors.black)
+    draw_centered(c, issue_time, -53.5 * scale_x, (1654 - 1400) * scale_y - 3.5, 300 * scale_x, 13, colors.black)
+    draw_centered(c, issue_date, -6.5 * scale_x, (1654 - 1435) * scale_y - 9, 300 * scale_x, 13, colors.black)
     c.save()
     overlay.seek(0)
 
