@@ -167,10 +167,10 @@ def _arabic_hijri_date(gregorian: str, time_value: str) -> str:
         return date
     hour = int(match.group(1))
     minute = match.group(2)
-    # These supplied review-scene values are evening times; preserve the requested Arabic display.
+    marker = "مساءً" if hour >= 12 else "صباحًا"
     if hour > 12:
         hour = hour - 12
-    return f"{date} - {hour:02d}:{minute} مساءً"
+    return f"{date} - {hour:02d}:{minute} {marker}"
 
 
 def _display_time(value: Any, suffix: str = "") -> str:
@@ -219,12 +219,13 @@ _EN_LABELS = {
 
 _SEMANTIC_ENGLISH = {
     "استشاري": "Consultant", "أخصائي": "Specialist", "ممارس عام": "General Practitioner",
-    "طبيب عام": "General Doctor", "مقيم": "Resident", "مراجعة": "General Practitioner", "مراجعه": "General Practitioner",
+    "طبيب عام": "General Practitioner", "مقيم": "Resident", "مراجعة": "General Practitioner", "مراجعه": "General Practitioner", "عودة": "Follow-up", "عوده": "Follow-up",
 }
 
 
 _NAME_TRANSLITERATIONS = {
     "ناصر": "NASSER", "اليامي": "AL-YAMI", "آلاء": "ALAA", "ألاء": "ALAA",
+    "هيثم": "HAITHAM", "عبده": "ABDU", "عقلان": "AQLAN", "عودة": "FOLLOW-UP",
     "محمد": "MOHAMMED", "باعمره": "BA ARMAH", "عبدالله": "ABDULLAH",
     "أحمد": "AHMED", "خالد": "KHALID", "سعد": "SAAD", "فهد": "FAHAD",
     "علي": "ALI", "حسين": "HUSSEIN", "القحطاني": "AL-QAHTANI",
@@ -393,6 +394,8 @@ def _pdf(path: str, data: dict):
                     return "Specialist"
                 if key == "visit_type" and cleaned.startswith("مراجع"):
                     return "General Practitioner"
+                if key == "visit_type" and cleaned in {"عودة", "عوده"}:
+                    return "Follow-up"
                 return ""
             return "" if has_arabic else raw
         if suffix == "_ar":
