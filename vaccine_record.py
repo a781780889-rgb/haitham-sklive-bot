@@ -140,6 +140,14 @@ def parse_date(value: str):
     except ValueError:
         return None
 
+    # fallback للصيغ التي تحتوي على فاصل غير قياسي أو مسافات داخلية، مثل 26 ـ 09 ـ 2021.
+    numeric_parts = re.fullmatch(r"\D*(\d{1,2})\D+(\d{1,2})\D+(\d{4})\D*", normalized)
+    if numeric_parts:
+        try:
+            return date(int(numeric_parts.group(3)), int(numeric_parts.group(2)), int(numeric_parts.group(1)))
+        except ValueError:
+            return None
+
     # يدعم الصيغ المنسوخة مثل March 1991 12 و12 March 1991.
     parts = normalized.split()
     if len(parts) == 3:
