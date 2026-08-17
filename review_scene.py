@@ -173,6 +173,30 @@ def _arabic_hijri_date(gregorian: str, time_value: str) -> str:
     return f"{date} - {hour:02d}:{minute} مساءً"
 
 
+def _display_time(value: Any, suffix: str = "") -> str:
+    """إظهار الوقت بصيغة المرجع: HH:MM AM/PM أو بصيغة عربية مسائية."""
+    raw = _clean(value)
+    if not raw:
+        return ""
+    match = re.fullmatch(r"(\d{1,2}):(\d{2})", _western(raw))
+    if not match:
+        return raw
+    hour, minute = int(match.group(1)), match.group(2)
+    marker = "AM" if hour < 12 else "PM"
+    display_hour = hour % 12 or 12
+    if suffix == "_ar":
+        return f"{display_hour:02d}:{minute} {'صباحًا' if marker == 'AM' else 'مساءً'}"
+    return f"{display_hour:02d}:{minute} {marker}"
+
+
+def _format_english_issue_date(value: Any) -> str:
+    raw = _normalize_date(_clean(value))
+    try:
+        return datetime.strptime(raw, "%d-%m-%Y").strftime("%A, %-d %B %Y")
+    except ValueError:
+        return _clean(value)
+
+
 def _duration(data: dict) -> str:
     try:
         start = datetime.strptime(f"{data['entry_date']} {data['entry_time']}", "%d-%m-%Y %H:%M")
@@ -344,15 +368,17 @@ def _pdf(path: str, data: dict):
             waiting_en = f"{match.group(1)} hours and {match.group(2)} mins"
     if not waiting_ar and waiting_raw and any("\u0600" <= ch <= "\u06ff" for ch in waiting_raw):
         waiting_ar = re.sub(r"\d+\s*دقيقة", "-- دقيقة", waiting_raw)
+    if waiting_en:
+        waiting_en = re.sub(r"\b0\s+mins?\b", "-- mins", str(waiting_en))
 
     values = {
         "leave_id": data.get("leave_id"),
-        "admission_date_en": data.get("entry_date_en") or f"{data.get('entry_date', '')} - {data.get('entry_time', '')}".strip(" -"),
+        "admission_date_en": data.get("entry_date_en") or f"{data.get('entry_date', '')} - {_display_time(data.get('entry_time'))}".strip(" -"),
         "admission_date_ar": data.get("entry_date_ar") or _arabic_hijri_date(data.get("entry_date"), data.get("entry_time")),
-        "discharge_date_en": data.get("exit_date_en") or f"{data.get('exit_date', '')} - {data.get('exit_time', '')}".strip(" -"),
+        "discharge_date_en": data.get("exit_date_en") or f"{data.get('exit_date', '')} - {_display_time(data.get('exit_time'))}".strip(" -"),
         "discharge_date_ar": data.get("exit_date_ar") or _arabic_hijri_date(data.get("exit_date"), data.get("exit_time")),
-        "waiting_period_en": waiting_en or (waiting_raw if waiting_raw and not any("\u0600" <= ch <= "\u06ff" for ch in waiting_raw) else ""),
-        "waiting_period_ar": waiting_ar or "",
+        "waiting_period_en": waiting_en or (re.sub(r"\b0\s+mins?\b", "-- mins", waiting_raw) if waiting_raw and not any("\u0600" <= ch <= "\u06ff" for ch in waiting_raw) else ""),
+        "waiting_period_ar": waiting_ar or (re.sub(r"0\s*دقيقة", "-- دقيقة", waiting_raw) if any("\u0600" <= ch <= "\u06ff" for ch in waiting_raw) else ""),
         "issue_date": data.get("issue_date"),
         "name_en": value_for("name", "_en"),
         "name_ar": value_for("name", "_ar"),
@@ -408,14 +434,16 @@ def _pdf(path: str, data: dict):
             en_mid = mid + en_shift / scale_x
             ar_mid = mid + ar_shift / scale_x
             ar_right = right + ar_shift / scale_x
-            draw_centered(c, values.get(en_key), en_left * scale_x, y, (en_mid - en_left) * scale_x, 9)
-            draw_centered(c, values.get(ar_key), ar_mid * scale_x, y, (ar_right - ar_mid) * scale_x, 9)
+            draw_centered(c, values.get(en_key), en_left * scale_x, y, (en_mid - en_left) * scale_x, 11)
+            draw_centered(c, values.get(ar_key), ar_mid * scale_x, y, (ar_right - ar_mid) * scale_x, 11)
         else:
-            draw_centered(c, values.get(key), left * scale_x, y, (right - left) * scale_x, 9)
+            draw_centered(c, values.get(key), left * scale_x, y, (right - left) * scale_x, 11)
 
-    # عناصر المرجع خارج الجدول: اسم المستشفى/المدينة ووقت وتاريخ الإصدار.
-    draw_centered(c, data.get("issue_time"), 40 * scale_x, (1654 - 1400) * scale_y, 300 * scale_x, 10, colors.black)
-    draw_centered(c, data.get("issue_date"), 40 * scale_x, (1654 - 1435) * scale_y, 300 * scale_x, 10, colors.black)
+    # عناصر المرجع خارج الجدول: وقت وتاريخ إصدار التقرير بصيغة إنجليزية كاملة.
+    issue_time = data.get("issue_time_en") or _display_time(data.get("issue_time"))
+    issue_date = data.get("issue_date_en") or _format_english_issue_date(data.get("issue_date"))
+    draw_centered(c, issue_time, 40 * scale_x, (1654 - 1400) * scale_y, 300 * scale_x, 10, colors.black)
+    draw_centered(c, issue_date, 40 * scale_x, (1654 - 1435) * scale_y, 300 * scale_x, 10, colors.black)
     c.save()
     overlay.seek(0)
 
