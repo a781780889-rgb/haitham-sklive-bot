@@ -213,6 +213,11 @@ def _remove_logo_background(img):
         new_alpha[near_edge] = new_alpha[near_edge] * ratio
 
     out_arr[..., 3] = _np.clip(new_alpha, 0, 255).astype(_np.uint8)
+    # إذا أزالت الخوارزمية كل البكسلات المرئية، لا تحفظ نسخة شفافة بالكامل.
+    # هذا هو سبب ظهور ✅ في لوحة الإدارة مع اختفاء الشعار من PDF.
+    if not (out_arr[..., 3] > 15).any():
+        return img_rgba.copy()
+
     result = _PIL.fromarray(out_arr, "RGBA")
 
     # ── خطوة 5: Autocrop — Alpha فقط (لا يقطع الأجزاء الفاتحة) ──────
@@ -298,22 +303,26 @@ from hospitals_data import (
 # ══════════════════════════════════════════════
 
 def has_logo(hospital: dict) -> bool:
-    """
-    يتحقق من وجود شعار للمستشفى — يدعم المسارات على القرص وكذلك
-    الشعارات المخزّنة في قاعدة البيانات (logo_path يبدأ بـ db:).
-    """
+    """يتحقق من وجود شعار صالح وقابل للظهور، لا مجرد وجود سجل تخزين."""
     lp = hospital.get("logo_path", "") or ""
     if not lp:
         return False
-    # شعار مخزّن في DB
-    if lp.startswith("db:"):
-        try:
-            from file_storage import file_exists
-            return file_exists(lp[3:])
-        except Exception:
-            return True  # نفترض الوجود إن تعذّر التحقق
-    # شعار على القرص
-    return os.path.exists(lp)
+    try:
+        from PIL import Image
+        if lp.startswith("db:"):
+            from file_storage import get_file
+            data = get_file(lp[3:])
+            if not data:
+                return False
+            with Image.open(io.BytesIO(data)) as image:
+                return image.convert("RGBA").getbbox() is not None
+        if not os.path.exists(lp):
+            return False
+        with Image.open(lp) as image:
+            return image.convert("RGBA").getbbox() is not None
+    except Exception as exc:
+        logger.warning("تعذر التحقق من محتوى شعار المستشفى: %s", exc)
+        return False
 
 
 def md_escape(text: str) -> str:
