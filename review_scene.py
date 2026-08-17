@@ -217,6 +217,38 @@ _EN_LABELS = {
 }
 
 
+_SEMANTIC_ENGLISH = {
+    "استشاري": "Consultant", "أخصائي": "Specialist", "ممارس عام": "General Practitioner",
+    "طبيب عام": "General Doctor", "مقيم": "Resident", "مراجعة": "General Practitioner", "مراجعه": "General Practitioner",
+}
+
+
+_NAME_TRANSLITERATIONS = {
+    "ناصر": "NASSER", "اليامي": "AL-YAMI", "آلاء": "ALAA", "ألاء": "ALAA",
+    "محمد": "MOHAMMED", "باعمره": "BA ARMAH", "عبدالله": "ABDULLAH",
+    "أحمد": "AHMED", "خالد": "KHALID", "سعد": "SAAD", "فهد": "FAHAD",
+    "علي": "ALI", "حسين": "HUSSEIN", "القحطاني": "AL-QAHTANI",
+    "الحربي": "AL-HARBI", "الشهري": "AL-SHAHRI", "الزهراني": "AL-ZAHRANI",
+    "الغامدي": "AL-GHAMDI", "الدوسري": "AL-DOSARI", "العتيبي": "AL-OTAIBI",
+}
+
+
+def _transliterate_name(value: Any) -> str:
+    raw = _clean(value)
+    if not raw or not any("\u0600" <= ch <= "\u06ff" for ch in raw):
+        return raw
+    words = []
+    for word in raw.split():
+        translated = _NAME_TRANSLITERATIONS.get(word)
+        if translated:
+            words.append(translated)
+            continue
+        # محافظاً على قابلية القراءة عند ورود اسم غير موجود في القاموس.
+        letters = {"ا":"A", "أ":"A", "إ":"I", "آ":"AA", "ب":"B", "ت":"T", "ث":"TH", "ج":"J", "ح":"H", "خ":"KH", "د":"D", "ذ":"TH", "ر":"R", "ز":"Z", "س":"S", "ش":"SH", "ص":"S", "ض":"D", "ط":"T", "ظ":"Z", "ع":"A", "غ":"GH", "ف":"F", "ق":"Q", "ك":"K", "ل":"L", "م":"M", "ن":"N", "ه":"H", "و":"W", "ي":"Y", "ى":"A", "ة":"H"}
+        words.append("".join(letters.get(ch, "") for ch in word) or word)
+    return " ".join(words).upper()
+
+
 def _english_value(value: Any) -> str:
     known = {"سعودي": "Saudi", "مراجعة": "Review", "مراجعه": "Review", "استشاري": "Consultant", "أخصائي": "Specialist", "ممارس عام": "General practitioner", "طبيب عام": "General doctor", "مقيم": "Resident"}
     return known.get(_clean(value), _clean(value)) or "—"
@@ -349,6 +381,19 @@ def _pdf(path: str, data: dict):
             return ""
         has_arabic = any("\u0600" <= ch <= "\u06ff" for ch in str(raw))
         if suffix == "_en":
+            if has_arabic and key in {"name", "doctor"}:
+                return _transliterate_name(raw)
+            if has_arabic and key in {"specialty", "visit_type"}:
+                cleaned = _clean(raw)
+                if cleaned in _SEMANTIC_ENGLISH:
+                    return _SEMANTIC_ENGLISH[cleaned]
+                if key == "specialty" and cleaned.startswith("استشاري"):
+                    return "Consultant"
+                if key == "specialty" and cleaned.startswith("أخصائي"):
+                    return "Specialist"
+                if key == "visit_type" and cleaned.startswith("مراجع"):
+                    return "General Practitioner"
+                return ""
             return "" if has_arabic else raw
         if suffix == "_ar":
             return raw if has_arabic else ""
