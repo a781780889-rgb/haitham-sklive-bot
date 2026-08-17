@@ -243,6 +243,17 @@ def mask_id(value: str) -> str:
     return "*" * max(0, len(value) - 4) + value[-4:]
 
 
+def transliterate_arabic_name(value: str) -> str:
+    """تحويل حتمي مبسط للاسم العربي إلى حروف لاتينية دون تغيير الأرقام أو بقية الحقول."""
+    mapping = {
+        "ا": "a", "أ": "a", "إ": "i", "آ": "a", "ب": "b", "ت": "t", "ث": "th", "ج": "j", "ح": "h", "خ": "kh",
+        "د": "d", "ذ": "dh", "ر": "r", "ز": "z", "س": "s", "ش": "sh", "ص": "s", "ض": "d", "ط": "t", "ظ": "z",
+        "ع": "a", "غ": "gh", "ف": "f", "ق": "q", "ك": "k", "ل": "l", "م": "m", "ن": "n", "ه": "h", "و": "w", "ي": "y", "ى": "a", "ة": "h", "ء": "a",
+    }
+    words = ["".join(mapping.get(ch, ch) for ch in word) for word in str(value or "").split()]
+    return " ".join(words).title()
+
+
 def translate(value: str, field: str) -> str:
     maps = {
         "هيثم العقلاني": "Haitham Al-Aqlani", "هيثم عقلان": "Haitham Al-Aqlani",
@@ -304,9 +315,9 @@ def _pdf_display_value(value: str, field: str, language: str) -> str:
             return f"{parsed.day:02d} {ARABIC_MONTHS_DISPLAY[parsed.month]} {parsed.year}"
     if language == "en":
         translated = translate(value, field)
-        if field == "full_name" and re.search(r"[\u0600-\u06ff]", translated) and translated == value:
-            return ""
-        if re.search(r"[\u0600-\u06ff]", translated) and translated == value:
+        if field == "full_name" and re.search(r"[\u0600-\u06ff]", translated):
+            return transliterate_arabic_name(value)
+        if re.search(r"[\u0600-\u06ff]", translated):
             return ""
         return translated
     return value
