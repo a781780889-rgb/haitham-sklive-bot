@@ -52,6 +52,14 @@ FIELDS = [
 LABEL_TO_KEY = {label: key for key, label, _ in FIELDS}
 
 
+def _normalize_label(value: str) -> str:
+    """يوحّد اسم الحقل بعد النسخ من Telegram مع إزالة مسافات وعلامات RTL الخفية."""
+    return re.sub(r"[\s\u200b\ufeff\u200e\u200f\u202a-\u202e]", "", str(value or ""))
+
+
+NORMALIZED_LABEL_TO_KEY = {_normalize_label(label): key for label, key in LABEL_TO_KEY.items()}
+
+
 def keyboard(*rows: list[str]) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup([[KeyboardButton(x) for x in row] for row in rows], resize_keyboard=True)
 
@@ -93,16 +101,15 @@ def parse_form(text: str, old: dict[str, str] | None = None) -> dict[str, str]:
         if len(parts) != 2:
             continue
         label, value = (part.strip() for part in parts)
-        for ar_label, key in LABEL_TO_KEY.items():
-            if label == ar_label:
-                if "(" in value and value.endswith(")"):
-                    value = value[:value.rfind("(")].strip()
-                if key in ("birth_date", "vaccination_date"):
-                    parsed = parse_date(value)
-                    if parsed:
-                        value = parsed.strftime("%d/%m/%Y")
-                data[key] = value
-                break
+        key = NORMALIZED_LABEL_TO_KEY.get(_normalize_label(label))
+        if key:
+            if "(" in value and value.endswith(")"):
+                value = value[:value.rfind("(")].strip()
+            if key in ("birth_date", "vaccination_date"):
+                parsed = parse_date(value)
+                if parsed:
+                    value = parsed.strftime("%d/%m/%Y")
+            data[key] = value
     return data
 
 
