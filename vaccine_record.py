@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import uuid
+import unicodedata
 from datetime import date, datetime
 from pathlib import Path
 from typing import Any
@@ -134,8 +135,9 @@ def parse_date(value: str):
     if not value:
         return None
     normalized = str(value).strip().translate(str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789"))
-    # قيم التاريخ المنسوخة من نص عربي قد تحتوي على RLM/LRM أو علامات bidi غير مرئية.
-    normalized = re.sub(r"[\u061c\u200b\ufeff\u200e\u200f\u202a-\u202e]", "", normalized).strip()
+    # قيم التاريخ المنسوخة من نص عربي قد تحتوي على RLM/LRM أو RLI/LRI/FSI/PDI.
+    # فئة Unicode Format (Cf) تغطي جميع رموز التحكم الاتجاهية غير المرئية مستقبلًا.
+    normalized = "".join(ch for ch in normalized if unicodedata.category(ch) != "Cf").strip()
     normalized = re.sub(r"[,،]", " ", normalized)
     # تطبيقات الهاتف قد ترسل شرطة Unicode مختلفة عن الشرطة العادية، أو مسافات حول الفاصل.
     normalized = re.sub(r"[-.\u2010\u2011\u2012\u2013\u2014\u2212\ufe58\ufe63\uff0d]", "/", normalized)
