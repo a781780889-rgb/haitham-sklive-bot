@@ -20,6 +20,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 from pypdf import PdfReader, PdfWriter
 from telegram import ReplyKeyboardMarkup, KeyboardButton
+from vaccine_intelligence import resolve_vaccine_text
 
 try:
     import arabic_reshaper
@@ -100,6 +101,11 @@ def form_text(data: dict[str, str]) -> str:
 
 def parse_form(text: str, old: dict[str, str] | None = None) -> dict[str, str]:
     data = dict(old or empty_form())
+    # المحرك الدلالي هو المسار الأساسي؛ ثم نترك القراءة القديمة كـ fallback للتوافق.
+    resolved = resolve_vaccine_text(text)
+    for key, evidence in resolved["fields"].items():
+        if evidence.get("rawValue"):
+            data[key] = evidence["rawValue"]
     for line in text.splitlines():
         # يدعم النص المنسوخ من الهاتف سواء استخدم ":" أو "："، مع إزالة الرموز الخفية.
         line = line.replace("\u200b", "").replace("\ufeff", "").strip()
