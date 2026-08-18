@@ -563,7 +563,7 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
         logger.warning("تعذر إنشاء QR لشهادة التطعيم: %s", qr_error)
 
     # رقم السجل المتغير يظهر في سطر مستقل فوق QR، مثل VCC26092162302.
-    _draw_fit_centered(c, record_number, 401.0 / scale_x, 328.0 / scale_y, 145.0 / scale_x, FONT_EN, FIELD_EN_SIZE, FONT_COLOR, min_size=FIELD_MIN_SIZE)
+    _draw_fit_centered(c, record_number, 391.0 / scale_x, 328.0 / scale_y, 145.0 / scale_x, FONT_EN, FIELD_EN_SIZE, FONT_COLOR, min_size=FIELD_MIN_SIZE)
 
     # تعليمات التحقق والرابط أسفل QR مع تباعد منتظم.
     c.setFont(FONT_AR, FIELD_AR_SIZE)
