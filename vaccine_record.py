@@ -465,7 +465,7 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
     nationality_font = FONT_AR
     nationality_font_size = FIELD_AR_SIZE
     nationality_center_x = 245.0
-    nationality_baseline_y = 331.0
+    nationality_baseline_y = 333.0
     _draw_fit_centered(c, _pdf_display_value(nationality, "nationality", "en"), 86, nationality_baseline_y, 122, FONT_EN, FIELD_EN_SIZE, FONT_COLOR, min_size=FIELD_MIN_SIZE)
     _draw_fit_centered(c, _pdf_display_value(nationality, "nationality", "ar"), nationality_center_x - 37.0, nationality_baseline_y, 74.0, nationality_font, nationality_font_size, FONT_COLOR, min_size=FIELD_MIN_SIZE)
 
