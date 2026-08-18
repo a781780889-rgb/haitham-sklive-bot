@@ -20,7 +20,11 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 from pypdf import PdfReader, PdfWriter
-from telegram import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, CopyTextButton
+from telegram import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton
+try:
+    from telegram import CopyTextButton
+except ImportError:  # إصدارات Railway الأقدم لا تحتوي على زر النسخ الجديد.
+    CopyTextButton = None
 from vaccine_intelligence import resolve_vaccine_text
 
 try:
@@ -720,11 +724,18 @@ async def handle(update, context, text: str, db):
                     f"تاريخ الإنشاء: {created_at}\n"
                     "نوع الملف: PDF"
                 )
-                success_actions = InlineKeyboardMarkup([
-                    [InlineKeyboardButton("📋 نسخ رقم السجل", copy_text=CopyTextButton(record_number))],
-                    [InlineKeyboardButton("🆔 نسخ رقم الهوية", copy_text=CopyTextButton(str(context.user_data.get('vaccine_data', {}).get('national_id', ''))))],
-                    [InlineKeyboardButton("🌐 فتح موقع شهادة التطعيم", url=vaccination_portal_url)],
-                ])
+                national_id_value = str(context.user_data.get('vaccine_data', {}).get('national_id', ''))
+                if CopyTextButton is not None:
+                    success_actions = InlineKeyboardMarkup([
+                        [InlineKeyboardButton("📋 نسخ رقم السجل", copy_text=CopyTextButton(record_number))],
+                        [InlineKeyboardButton("🆔 نسخ رقم الهوية", copy_text=CopyTextButton(national_id_value))],
+                        [InlineKeyboardButton("🌐 فتح موقع شهادة التطعيم", url=vaccination_portal_url)],
+                    ])
+                else:
+                    # fallback متوافق: القيم داخل الرسالة قابلة للنسخ يدويًا، والرابط يبقى زرًا مباشرًا.
+                    success_actions = InlineKeyboardMarkup([
+                        [InlineKeyboardButton("🌐 فتح موقع شهادة التطعيم", url=vaccination_portal_url)],
+                    ])
                 await update.message.reply_text(success_message, reply_markup=success_actions)
                 await update.message.reply_text("اختر الإجراء التالي:", reply_markup=completed_keyboard())
                 await update.message.reply_document(document=open(path, "rb"), filename=path.name, caption="📄 سجل شهادة التطعيم PDF")

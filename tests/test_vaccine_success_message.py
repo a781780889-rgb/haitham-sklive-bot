@@ -8,6 +8,7 @@ def test_vaccine_success_message_contains_copy_and_portal_actions():
     assert 'رابط الموقع:' in source
     assert 'عدد التطعيمات:' in source
     assert 'CopyTextButton(record_number)' in source
-    assert 'CopyTextButton(str(context.user_data.get(\'vaccine_data\', {}).get(\'national_id\', \'\')))' in source
+    assert 'CopyTextButton(national_id_value)' in source
+    assert 'fallback متوافق' in source
     assert 'InlineKeyboardButton("🌐 فتح موقع شهادة التطعيم", url=vaccination_portal_url)' in source
     assert 'https://sehasa.online/vaccination' in source
