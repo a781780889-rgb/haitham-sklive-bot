@@ -505,11 +505,11 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
 
     # رفع نص إصدار الوثيقة فوق QR بفاصل صغير؛ التغطية تتم قبل إعادة رسم QR.
     issue_center_x = 421.00 / scale_x
-    # موضع QR السابق: هنا يوضع نص إصدار الوثيقة على سطرين.
+    # تنظيف المنطقة السفلية وإعادة بنائها بترتيب المرجع ومسافات رأسية ثابتة.
     issue_ar_y = 430.0 / scale_y
     issue_en_y = 416.5 / scale_y
     c.setFillColor(colors.white)
-    c.rect(100.0 / scale_x, 270.0 / scale_y, 642.0 / scale_x, 160.0 / scale_y, stroke=0, fill=1)
+    c.rect(45.0 / scale_x, 120.0 / scale_y, 752.0 / scale_x, 350.0 / scale_y, stroke=0, fill=1)
     c.setFillColor(FONT_COLOR)
     c.setFont(FONT_AR, FIELD_AR_SIZE)
     c.drawCentredString(issue_center_x, issue_ar_y, _pdf_text("تم إصدار هذه الوثيقة من قبل وزارة الصحة، المملكة العربية السعودية"))
@@ -525,7 +525,7 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
     # تُحوّل الإحداثيات عكسيًا إلى طبقة القالب الداخلية قبل تكبيرها مع الصفحة.
     qr_url = "https://sehasa.online/#/inquiries/slenquiry"
     qr_x = 383.50 / scale_x
-    # موضع Certificate No السابق: QR متمركز فوق هذا الموضع وبمقاس 75×75 نقطة.
+    # موضع Certificate No السابق: QR متمركز أسفل رقم الشهادة وبمقاس 75×75 نقطة.
     qr_y = 238.0 / scale_y
     qr_size_x = 75.0 / scale_x
     qr_size_y = 75.0 / scale_y
@@ -555,6 +555,23 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
         )
     except Exception as qr_error:
         logger.warning("تعذر إنشاء QR لشهادة التطعيم: %s", qr_error)
+
+    # رقم الشهادة والرقم الفعلي بين نص الإصدار وQR.
+    c.setFillColor(FONT_COLOR)
+    c.setFont(FONT_EN, FIELD_EN_SIZE)
+    c.drawCentredString(issue_center_x, 370.0 / scale_y, "Certificate No.")
+    c.setFont(FONT_AR, FIELD_AR_SIZE)
+    c.drawCentredString(issue_center_x, 356.0 / scale_y, _pdf_text("رقم الشهادة"))
+    _draw_fit_centered(c, record_number, 421.0 / scale_x, 340.0 / scale_y, 145.0 / scale_x, FONT_EN, FIELD_EN_SIZE, FONT_COLOR, min_size=FIELD_MIN_SIZE)
+
+    # تعليمات التحقق والرابط أسفل QR مع تباعد منتظم.
+    c.setFont(FONT_AR, FIELD_AR_SIZE)
+    c.drawCentredString(issue_center_x, 210.0 / scale_y, _pdf_text("قم بمسح الباركود للتحقق من هذه الوثيقة الكترونيا، او عن طريق زيارة الرابط:"))
+    c.setFont(FONT_EN, FIELD_EN_SIZE)
+    c.drawCentredString(issue_center_x, 195.0 / scale_y, "Scan the QR code to electronically validate this document or visit the following URL:")
+    c.setFont(FONT_EN, 4.4)
+    c.setFillColor(colors.HexColor("#111111"))
+    c.drawCentredString(issue_center_x, 180.0 / scale_y, "https://sehasa.online/#/inquiries/slenquiry")
     c.save()
     overlay = PdfReader(str(overlay_path))
     overlay_page = overlay.pages[0]
