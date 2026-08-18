@@ -268,7 +268,7 @@ def translate(value: str, field: str) -> str:
         "جرعة روتينية": "Routine vaccination", "سفر": "Travel requirement", "للوقاية": "Preventive vaccination",
         "وقاية": "Preventive vaccination", "متطلب وظيفي": "Occupational requirement",
         "كوفيد": "COVID-19", "كوفيد 19": "COVID-19", "الإنفلونزا": "Influenza", "التهاب الكبد ب": "Hepatitis B",
-        "فايزر": "Pfizer", "لقاح فايزر": "Pfizer", "لقاح فايستونتك بيزر": "Pfizer-BioNTech",
+        "فايزر": "Pfizer", "لقاح فايزر": "Pfizer", "لقاح فابيونتك يزر": "Pfizer-BioNTech", "لقاح فايستونتك بيزر": "Pfizer-BioNTech", "لقاح فايبوتك يزر": "Pfizer-BioNTech",
     }
     return maps.get(value.strip(), value)
 
@@ -442,6 +442,7 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
         english_value = _pdf_display_value(value, key, "en")
         arabic_value = _pdf_display_value(value, key, "ar")
         if key in {"vaccine_type", "reason"} and arabic_value and english_value and arabic_value != english_value:
+            # السطران لهما مركز X واحد؛ العربية أسفل الإنجليزية داخل العمود نفسه.
             _draw_fit_centered(c, english_value, x, 281.5, green_width, FONT_EN, 4.875, value_color, min_size=3.25)
             _draw_fit_centered(c, arabic_value, x, 273.5, green_width, FONT_AR, 4.875, value_color, min_size=3.25)
         else:
