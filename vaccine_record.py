@@ -515,11 +515,17 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
     c.drawCentredString(issue_center_x, issue_ar_y, _pdf_text("تم إصدار هذه الوثيقة من قبل وزارة الصحة، المملكة العربية السعودية"))
     c.setFont(FONT_EN, FIELD_EN_SIZE)
     c.drawCentredString(issue_center_x, issue_en_y, "This Document has been issued by the Ministry of Health, Kingdom of Saudi Arabia")
-    # نقل عبارة رقم الشهادة إلى موضع QR السابق، مع فصلها عن نص الإصدار.
+    # عبارة رقم الشهادة في سطر واحد ومتمركزة حول مركز الصفحة.
+    label_y = 366.0 / scale_y
+    label_ar = _pdf_text("رقم الشهادة")
+    label_gap = 5.0 / scale_x
+    en_width = pdfmetrics.stringWidth("Certificate No.", FONT_EN, FIELD_EN_SIZE)
+    ar_width = pdfmetrics.stringWidth(label_ar, FONT_AR, FIELD_AR_SIZE)
+    label_left = issue_center_x - ((en_width + label_gap + ar_width) / 2.0)
     c.setFont(FONT_EN, FIELD_EN_SIZE)
-    c.drawCentredString(issue_center_x, 370.0 / scale_y, "Certificate No.")
+    c.drawString(label_left, label_y, "Certificate No.")
     c.setFont(FONT_AR, FIELD_AR_SIZE)
-    c.drawCentredString(issue_center_x, 356.0 / scale_y, _pdf_text("رقم الشهادة"))
+    c.drawString(label_left + en_width + label_gap, label_y, label_ar)
 
     # QR المرجعي: على صفحة A3 النهائية x=383.50، y=324.84، بمقاس 75×75 نقطة.
     # تُحوّل الإحداثيات عكسيًا إلى طبقة القالب الداخلية قبل تكبيرها مع الصفحة.
@@ -556,13 +562,8 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
     except Exception as qr_error:
         logger.warning("تعذر إنشاء QR لشهادة التطعيم: %s", qr_error)
 
-    # رقم الشهادة والرقم الفعلي بين نص الإصدار وQR.
-    c.setFillColor(FONT_COLOR)
-    c.setFont(FONT_EN, FIELD_EN_SIZE)
-    c.drawCentredString(issue_center_x, 370.0 / scale_y, "Certificate No.")
-    c.setFont(FONT_AR, FIELD_AR_SIZE)
-    c.drawCentredString(issue_center_x, 356.0 / scale_y, _pdf_text("رقم الشهادة"))
-    _draw_fit_centered(c, record_number, 421.0 / scale_x, 340.0 / scale_y, 145.0 / scale_x, FONT_EN, FIELD_EN_SIZE, FONT_COLOR, min_size=FIELD_MIN_SIZE)
+    # رقم السجل المتغير يظهر في سطر مستقل فوق QR، مثل VCC26092162302.
+    _draw_fit_centered(c, record_number, issue_center_x, 328.0 / scale_y, 145.0 / scale_x, FONT_EN, FIELD_EN_SIZE, FONT_COLOR, min_size=FIELD_MIN_SIZE)
 
     # تعليمات التحقق والرابط أسفل QR مع تباعد منتظم.
     c.setFont(FONT_AR, FIELD_AR_SIZE)
@@ -675,7 +676,8 @@ async def handle(update, context, text: str, db):
         if text in ("🟢 تأكيد إصدار سجل التطعيم", "🔄 إعادة المحاولة"):
             if context.user_data.get("pdf_issued"):
                 await update.message.reply_text("✅ تم إنشاء السجل مسبقًا. يمكنك تحميل الملف من الزر أدناه.", reply_markup=completed_keyboard()); return True
-            record_number = f"VR-{datetime.now().year}-{uuid.uuid4().hex[:8].upper()}"
+            record_number = f"VCC{datetime.now().strftime('%y%m%d')}{uuid.uuid4().hex[:5].upper()}"
+
             try:
                 path = make_pdf(context.user_data["vaccine_data"], record_number)
                 db.save_vaccine_record(update.effective_user.id, record_number, context.user_data["vaccine_data"], str(path))
