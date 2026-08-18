@@ -424,8 +424,8 @@ def create_template_pdf(data, output_path, template_path):
     # صف تاريخ الدخول واحد فعلياً للتاريخين الميلادي والهجري.
     admission_row_center_y = admission_date_center_y
     fit_center(admission, admission_date_center_x, admission_row_center_y, english_font)
-    # إنزال 27-01-1448 فعلياً 4 نقاط PDF إلى الأسفل ليقابل تاريخ الدخول بصرياً.
-    admission_hijri_x, admission_hijri_y = x_ar, admission_row_center_y - 4.0
+    # إنزال 27-01-1448 فعلياً 6 نقاط PDF إلى الأسفل ليقابل تاريخ الدخول بصرياً.
+    admission_hijri_x, admission_hijri_y = x_ar, admission_row_center_y - 6.0
     fit_center(hijri_value(admission), admission_hijri_x, admission_hijri_y, english_font)
     fit_center(discharge, x_en, sy(650) + data_vertical_lift_pt, english_font)
     # مركز تاريخ الخروج الهجري مقابل صف «تاريخ الخروج» بدقة.
