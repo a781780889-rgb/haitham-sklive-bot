@@ -100,3 +100,52 @@ def test_two_vaccinations_render_as_two_rows_with_pdf_separator(tmp_path):
         assert path.exists()
     finally:
         Path(path).unlink(missing_ok=True)
+
+
+def third_form_text():
+    return "\n".join([
+        "نوع التطعيم: Influenza",
+        "تاريخ التطعيم: 12/07/2026",
+        "العمر عند التطعيم: 35",
+        "سبب التطعيم: وقاية",
+        "رقم التشغيلة: FLU-003",
+    ])
+
+
+def test_add_third_vaccine_keeps_person_and_previous_vaccinations():
+    update = FakeUpdate()
+    first = parse_form(first_form_text())
+    first["vaccinations"] = [dict((key, first.get(key, "")) for key in ("vaccine_type", "vaccination_date", "age_at_vaccination", "reason", "batch_number"))]
+    second = parse_form(second_form_text(), first)
+    first["vaccinations"].append(dict((key, second.get(key, "")) for key in ("vaccine_type", "vaccination_date", "age_at_vaccination", "reason", "batch_number")))
+    context = FakeContext({"state": "vaccine_review", "vaccine_data": first})
+
+    asyncio.run(handle(update, context, "➕ إضافة بيانات التطعيم الثالث", db=None))
+    assert context.user_data["state"] == "vaccine_third_form"
+    asyncio.run(handle(update, context, third_form_text(), db=None))
+    asyncio.run(handle(update, context, "✅ إرسال بيانات التطعيم الثالث", db=None))
+
+    data = context.user_data["vaccine_data"]
+    assert context.user_data["state"] == "vaccine_review"
+    assert len(data["vaccinations"]) == 3
+    assert data["full_name"] == "أحمد محمد علي"
+    assert data["vaccinations"][0]["batch_number"] == "FG3526"
+    assert data["vaccinations"][1]["batch_number"] == "15462223"
+    assert data["vaccinations"][2]["batch_number"] == "FLU-003"
+    assert "التطعيم الثالثة" in update.message.replies[-1]
+    assert "Third Vaccination" in update.message.replies[-1]
+    assert "➕ إضافة بيانات التطعيم الثالث" not in update.message.replies[-1]
+
+
+def test_review_text_supports_three_vaccinations():
+    from vaccine_record import review_text
+    data = parse_form(first_form_text())
+    data["vaccinations"] = [
+        {"vaccine_type": "لقاح فايزر", "vaccination_date": "17/08/2021", "age_at_vaccination": "30", "reason": "كوفيد 19", "batch_number": "FG3526"},
+        {"vaccine_type": "MCV4", "vaccination_date": "26/04/2026", "age_at_vaccination": "35", "reason": "حج", "batch_number": "15462223"},
+        {"vaccine_type": "Influenza", "vaccination_date": "12/07/2026", "age_at_vaccination": "30", "reason": "وقاية", "batch_number": "FLU-003"},
+    ]
+    text = review_text(data)
+    assert "التطعيم الثالثة" in text
+    assert "Third Vaccination" in text
+    assert text.count("━━━━━━━━━━━━━━━━━━") >= 6

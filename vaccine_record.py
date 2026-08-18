@@ -80,10 +80,16 @@ def form_keyboard(edit=False) -> ReplyKeyboardMarkup:
     return keyboard(["✅ حفظ التعديلات" if edit else "✅ إرسال البيانات"], ["🗑️ مسح النموذج", "❌ إلغاء"])
 
 
-def review_keyboard(has_second=False) -> ReplyKeyboardMarkup:
+def review_keyboard(vaccination_count=1) -> ReplyKeyboardMarkup:
+    """لوحة مراجعة متدرجة؛ تسمح بالتوسع حتى ثلاث جرعات دون إعادة البيانات الشخصية."""
+    # التوافق مع الاستدعاءات القديمة التي كانت تمرر True بعد الجرعة الثانية.
+    if isinstance(vaccination_count, bool):
+        vaccination_count = 2 if vaccination_count else 1
     rows = []
-    if not has_second:
+    if vaccination_count == 1:
         rows.append(["➕ إضافة نوع لقاح آخر لنفس الشخص"])
+    elif vaccination_count == 2:
+        rows.append(["➕ إضافة بيانات التطعيم الثالث"])
     rows.extend([["🟢 تأكيد إصدار سجل التطعيم"], ["🟡 تعديل البيانات"], ["🔴 إلغاء"]])
     return keyboard(*rows)
 
@@ -95,14 +101,18 @@ def empty_vaccination() -> dict[str, str]:
     return {key: "" for key in VACCINATION_KEYS}
 
 
-def second_vaccination_keyboard() -> ReplyKeyboardMarkup:
-    return keyboard(["✅ إرسال بيانات التطعيم الثاني"], ["🗑️ مسح النموذج", "❌ إلغاء"])
+def second_vaccination_keyboard(number: int = 2) -> ReplyKeyboardMarkup:
+    return keyboard([f"✅ إرسال بيانات التطعيم {'الثاني' if number == 2 else 'الثالث'}"], ["🗑️ مسح النموذج", "❌ إلغاء"])
 
 
-def second_vaccination_text(data: dict[str, str]) -> str:
+def second_vaccination_text(data: dict[str, str], number: int = 2) -> str:
     labels = dict((key, label) for key, label, _ in FIELDS)
+    ordinal = 'الثانية' if number == 2 else 'الثالثة'
     return "\n".join([
-        "💉 بيانات التطعيم الثانية", "",
+        f"💉 بيانات التطعيم {ordinal}",
+        "",
+        "يرجى إدخال بيانات الجرعة فقط؛ بيانات صاحب الشهادة محفوظة من السجل الأول.",
+        "",
         *[f"{labels[key]}: {data.get(key, '')}" for key in VACCINATION_KEYS],
     ])
 
@@ -298,7 +308,7 @@ def translate(value: str, field: str) -> str:
 
 
 def review_text(data: dict[str, str]) -> str:
-    ar = ["✅ تمت مراجعة البيانات بنجاح", "", "🇸🇦 البيانات بالعربية"]
+    ar = ["✅ تمت مراجعة البيانات بنجاح", "💉 مراجعة شهادة التطعيم", "", "🇸🇦 بيانات صاحب الشهادة"]
     personal_keys = ("full_name", "national_id", "birth_date", "passport", "nationality")
     labels = dict((key, label) for key, label, _ in FIELDS)
     for key in personal_keys:
@@ -307,6 +317,8 @@ def review_text(data: dict[str, str]) -> str:
             value = mask_id(value)
         ar.append(f"{labels[key]}: {value}")
     vaccinations = data.get("vaccinations") or [dict((key, data.get(key, "")) for key in VACCINATION_KEYS)]
+    ordinal_ar = {1: "الأولى", 2: "الثانية", 3: "الثالثة"}
+    ordinal_en = {1: "First", 2: "Second", 3: "Third"}
     en_labels = {
         "full_name": "Full Name", "national_id": "National ID / Iqama", "birth_date": "Date of Birth",
         "passport": "Passport Number", "nationality": "Nationality", "vaccine_type": "Vaccine Type",
@@ -314,10 +326,10 @@ def review_text(data: dict[str, str]) -> str:
         "reason": "Reason for Vaccination", "batch_number": "Batch / Lot Number",
     }
     for index, vaccination in enumerate(vaccinations, 1):
-        ar.extend(["", f"بيانات التطعيم {('الأولى' if index == 1 else 'الثانية')}"])
+        ar.extend(["", "━━━━━━━━━━━━━━━━━━", f"💉 بيانات التطعيم {ordinal_ar.get(index, str(index))}"])
         for key in VACCINATION_KEYS:
             ar.append(f"{labels[key]}: {vaccination.get(key) or 'غير متوفر'}")
-    ar += ["", "🇬🇧 English Information"]
+    ar += ["", "🇬🇧 Certificate Holder Information"]
     for key in personal_keys:
         value = data.get(key) or "Not Provided"
         if key == "national_id":
@@ -328,13 +340,13 @@ def review_text(data: dict[str, str]) -> str:
             value = transliterate_arabic_name(value) if re.search(r"[\u0600-\u06ff]", value) else value
         ar.append(f"{en_labels[key]}: {value}")
     for index, vaccination in enumerate(vaccinations, 1):
-        ar.extend(["", f"{'First' if index == 1 else 'Second'} Vaccination"])
+        ar.extend(["", "━━━━━━━━━━━━━━━━━━", f"💉 {ordinal_en.get(index, str(index))} Vaccination"])
         for key in VACCINATION_KEYS:
             value = vaccination.get(key) or "Not Provided"
             if key in ("vaccine_type", "reason"):
                 value = translate(value, key)
             ar.append(f"{en_labels[key]}: {value}")
-    ar += ["", "🔎 يرجى مراجعة جميع البيانات أعلاه قبل إنشاء سجل شهادة التطعيم بصيغة PDF."]
+    ar += ["", "━━━━━━━━━━━━━━━━━━", "🔎 يرجى مراجعة جميع البيانات أعلاه قبل إنشاء سجل شهادة التطعيم بصيغة PDF."]
     return "\n".join(ar)
 
 
@@ -637,38 +649,53 @@ async def handle(update, context, text: str, db):
         if parsed != context.user_data.get("vaccine_data"):
             context.user_data["vaccine_data"] = parsed
             return True
-    if state == "vaccine_second_form":
+    if state in ("vaccine_second_form", "vaccine_third_form"):
+        number = 2 if state == "vaccine_second_form" else 3
+        data_key = "second_vaccine_data" if number == 2 else "third_vaccine_data"
+        submit_text = "✅ إرسال بيانات التطعيم الثاني" if number == 2 else "✅ إرسال بيانات التطعيم الثالث"
         if text == "🗑️ مسح النموذج":
-            context.user_data["second_vaccine_data"] = empty_vaccination()
-            await update.message.reply_text(second_vaccination_text(context.user_data["second_vaccine_data"]), reply_markup=second_vaccination_keyboard())
+            context.user_data[data_key] = empty_vaccination()
+            await update.message.reply_text(second_vaccination_text(context.user_data[data_key], number), reply_markup=second_vaccination_keyboard(number))
             return True
-        if text == "✅ إرسال بيانات التطعيم الثاني":
-            second = context.user_data.get("second_vaccine_data", empty_vaccination())
+        if text == submit_text:
+            vaccination_input = context.user_data.get(data_key, empty_vaccination())
             candidate = dict(context.user_data.get("vaccine_data", {}))
-            candidate.update(second)
+            candidate.update(vaccination_input)
             errors = validate(candidate)
             errors = [error for error in errors if not any(label in error for label in ("الاسم", "الهوية", "الجنسية"))]
             if errors:
-                await update.message.reply_text("⚠️ توجد بيانات ناقصة أو غير صحيحة في التطعيم الثاني:\n\n" + "\n".join(f"❌ {e}" for e in errors) + "\n\nأرسل البيانات بعد تصحيحها.", reply_markup=second_vaccination_keyboard())
+                await update.message.reply_text(
+                    f"⚠️ توجد بيانات ناقصة أو غير صحيحة في التطعيم {('الثاني' if number == 2 else 'الثالث')}:\n\n"
+                    + "\n".join(f"❌ {e}" for e in errors)
+                    + "\n\nأرسل البيانات بعد تصحيحها.",
+                    reply_markup=second_vaccination_keyboard(number),
+                )
                 return True
             data = context.user_data["vaccine_data"]
             vaccinations = list(data.get("vaccinations") or [dict((key, data.get(key, "")) for key in VACCINATION_KEYS)])
-            vaccinations.append(dict((key, second.get(key, "")) for key in VACCINATION_KEYS))
-            data["vaccinations"] = vaccinations[:2]
+            vaccinations.append(dict((key, vaccination_input.get(key, "")) for key in VACCINATION_KEYS))
+            data["vaccinations"] = vaccinations[:3]
             context.user_data["vaccine_data"] = data
             context.user_data["adding_second_vaccine"] = False
-            context.user_data.pop("second_vaccine_data", None)
+            context.user_data.pop(data_key, None)
             context.user_data["state"] = "vaccine_review"
-            await update.message.reply_text(review_text(data), reply_markup=review_keyboard(True)); return True
-        parsed_second = parse_form(text, context.user_data.get("second_vaccine_data", empty_vaccination()))
-        context.user_data["second_vaccine_data"] = dict((key, parsed_second.get(key, "")) for key in VACCINATION_KEYS)
+            await update.message.reply_text(review_text(data), reply_markup=review_keyboard(len(data["vaccinations"])))
+            return True
+        parsed_vaccination = parse_form(text, context.user_data.get(data_key, empty_vaccination()))
+        context.user_data[data_key] = dict((key, parsed_vaccination.get(key, "")) for key in VACCINATION_KEYS)
         return True
     if state == "vaccine_review":
-        if text == "➕ إضافة نوع لقاح آخر لنفس الشخص":
-            context.user_data["adding_second_vaccine"] = True
-            context.user_data["second_vaccine_data"] = empty_vaccination()
-            context.user_data["state"] = "vaccine_second_form"
-            await update.message.reply_text(second_vaccination_text(context.user_data["second_vaccine_data"]), reply_markup=second_vaccination_keyboard())
+        if text in ("➕ إضافة نوع لقاح آخر لنفس الشخص", "➕ إضافة بيانات التطعيم الثالث"):
+            current_count = len(context.user_data.get("vaccine_data", {}).get("vaccinations") or [1])
+            if current_count >= 3:
+                await update.message.reply_text("ℹ️ تم الوصول إلى الحد الحالي وهو ثلاثة تطعيمات في الشهادة.", reply_markup=review_keyboard(current_count))
+                return True
+            next_number = current_count + 1
+            context.user_data["adding_second_vaccine"] = next_number == 2
+            data_key = "second_vaccine_data" if next_number == 2 else "third_vaccine_data"
+            context.user_data[data_key] = empty_vaccination()
+            context.user_data["state"] = "vaccine_second_form" if next_number == 2 else "vaccine_third_form"
+            await update.message.reply_text(second_vaccination_text(context.user_data[data_key], next_number), reply_markup=second_vaccination_keyboard(next_number))
             return True
         if text in ("🟡 تعديل البيانات", "✏️ تعديل البيانات"):
             context.user_data["state"] = "vaccine_editing"
@@ -688,6 +715,7 @@ async def handle(update, context, text: str, db):
                     "✅ تم إنشاء سجل شهادة التطعيم بنجاح.\n\n"
                     f"رقم السجل: {record_number}\n"
                     f"رقم الهوية: {context.user_data.get('vaccine_data', {}).get('national_id', '—')}\n"
+                    f"💉 عدد التطعيمات: {len(context.user_data.get('vaccine_data', {}).get('vaccinations') or [1])}\n"
                     f"رابط الموقع: {vaccination_portal_url}\n"
                     f"تاريخ الإنشاء: {created_at}\n"
                     "نوع الملف: PDF"
