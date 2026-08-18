@@ -149,3 +149,30 @@ def test_review_text_supports_three_vaccinations():
     assert "التطعيم الثالثة" in text
     assert "Third Vaccination" in text
     assert text.count("━━━━━━━━━━━━━━━━━━") >= 6
+
+
+def test_three_vaccinations_render_as_three_rows_with_two_matching_separators():
+    from pypdf import PdfReader
+    from vaccine_record import make_pdf
+    data = {
+        "full_name": "أحمد محمد علي",
+        "national_id": "123456789",
+        "birth_date": "1991",
+        "passport": "",
+        "nationality": "السعودية",
+        "vaccinations": [
+            {"vaccine_type": "لقاح فايزر", "vaccination_date": "17/08/2021", "age_at_vaccination": "30", "reason": "كوفيد 19", "batch_number": "FG3526"},
+            {"vaccine_type": "MCV4", "vaccination_date": "26/04/2026", "age_at_vaccination": "35", "reason": "حج", "batch_number": "15462223"},
+            {"vaccine_type": "Influenza", "vaccination_date": "12/07/2026", "age_at_vaccination": "35", "reason": "وقاية", "batch_number": "FLU-003"},
+        ],
+    }
+    path = make_pdf(data, "TEST-THREE-VACCINES")
+    try:
+        page = PdfReader(str(path)).pages[0]
+        text = page.extract_text() or ""
+        for value in ("FLU-003", "Influenza", "12 Jul 2026"):
+            assert value in text
+        content = page.get_contents().get_data().decode("latin-1", errors="ignore")
+        assert content.count("0.717647 0.717647 0.717647 RG") >= 2
+    finally:
+        Path(path).unlink(missing_ok=True)

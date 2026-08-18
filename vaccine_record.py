@@ -486,13 +486,14 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
     _draw_fit_centered(c, _pdf_display_value(nationality, "nationality", "en"), 86, nationality_baseline_y, 122, FONT_EN, FIELD_EN_SIZE, FONT_COLOR, min_size=FIELD_MIN_SIZE)
     _draw_fit_centered(c, _pdf_display_value(nationality, "nationality", "ar"), nationality_center_x - 37.0, nationality_baseline_y, 74.0, nationality_font, nationality_font_size, FONT_COLOR, min_size=FIELD_MIN_SIZE)
 
-    # جدول التطعيمات: صف واحد افتراضيًا، وصفان مع فاصل مرسوم عند وجود لقاح ثانٍ.
+    # جدول التطعيمات: يدعم حتى ثلاث جرعات، مع فاصل رمادي موحد بين كل صفين.
     green_left, green_width = 15.5, 338.0 / 5
     bottom_keys = ["batch_number", "reason", "age_at_vaccination", "vaccination_date", "vaccine_type"]
     vaccinations = data.get("vaccinations") or [dict((key, data.get(key, "")) for key in VACCINATION_KEYS)]
-    for row_index, vaccination in enumerate(vaccinations[:2]):
+    for row_index, vaccination in enumerate(vaccinations[:3]):
         row_y = 277.5 - (row_index * 16.0)
         if row_index > 0:
+            # نفس الفاصل المستخدم بين الجرعة الأولى والثانية: اللون والسُمك والامتداد ثابتة.
             c.setStrokeColor(colors.HexColor("#B7B7B7"))
             c.setLineWidth(0.45)
             c.line(green_left, row_y + 8.0, green_left + 338.0, row_y + 8.0)
