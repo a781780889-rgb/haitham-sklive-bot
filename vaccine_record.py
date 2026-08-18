@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import logging
 import os
 import re
@@ -499,8 +500,42 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
             else:
                 _draw_fit_centered(c, english_value or arabic_value, x, row_y, green_width, FONT_EN, 4.875, value_color, min_size=3.25)
 
-    # رقم السجل الداخلي أسفل عنوان رقم الشهادة في القالب؛ لا يُنشأ QR أو رقم تحقق رسمي.
+    # رقم السجل الداخلي أسفل عنوان رقم الشهادة في القالب.
     _draw_fit_centered(c, record_number, 112.0, 180.0, 145.0, FONT_EN, 4.875, FONT_COLOR, min_size=3.25)
+
+    # QR المرجعي: على صفحة A3 النهائية x=383.50، y=324.84، بمقاس 75×75 نقطة.
+    # تُحوّل الإحداثيات عكسيًا إلى طبقة القالب الداخلية قبل تكبيرها مع الصفحة.
+    qr_url = "https://sehasa.online/#/inquiries/slenquiry"
+    qr_x = 383.50 / scale_x
+    qr_y = 324.84 / scale_y
+    qr_size_x = 75.0 / scale_x
+    qr_size_y = 75.0 / scale_y
+    try:
+        import qrcode
+        from reportlab.lib.utils import ImageReader
+        qr = qrcode.QRCode(
+            version=2,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=10,
+            border=1,
+        )
+        qr.add_data(qr_url)
+        qr.make(fit=True)
+        qr_image = qr.make_image(fill_color="black", back_color="white").convert("RGB")
+        qr_buffer = io.BytesIO()
+        qr_image.save(qr_buffer, format="PNG", optimize=False)
+        qr_buffer.seek(0)
+        c.drawImage(
+            ImageReader(qr_buffer),
+            qr_x,
+            qr_y,
+            width=qr_size_x,
+            height=qr_size_y,
+            preserveAspectRatio=False,
+            mask="auto",
+        )
+    except Exception as qr_error:
+        logger.warning("تعذر إنشاء QR لشهادة التطعيم: %s", qr_error)
     c.save()
     overlay = PdfReader(str(overlay_path))
     overlay_page = overlay.pages[0]
