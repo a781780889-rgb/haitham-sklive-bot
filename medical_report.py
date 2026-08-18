@@ -418,7 +418,7 @@ def create_template_pdf(data, output_path, template_path):
     fit_center(_medical_leave_code(data), leave_code_center_x, leave_code_center_y, english_font)
     # توسيط تاريخ الدخول الميلادي أمام Admission Date في مركز خانته.
     # مطابق للصورة المرجعية: مركز النص عند 314.6 نقطة أفقياً.
-    admission_date_vertical_shift_pt = -4.6
+    admission_date_vertical_shift_pt = -8.6
     admission_date_center_x = x_en
     admission_date_center_y = sy(678) + admission_date_vertical_shift_pt + data_vertical_lift_pt
     # صف تاريخ الدخول واحد فعلياً للتاريخين الميلادي والهجري.
