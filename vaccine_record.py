@@ -421,7 +421,7 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
     green_left, green_width = 15.5, 338.0 / 5
     bottom_keys = ["batch_number", "reason", "age_at_vaccination", "vaccination_date", "vaccine_type"]
     for index, key in enumerate(bottom_keys):
-        value = data.get(key) or "Not Provided"
+        value = data.get(key) or ""
         # مركز كل قيمة داخل عمودها؛ لا تُستخدم إزاحات أفقية حتى لا تختفي القيم على بعض قارئات PDF.
         x = green_left + index * green_width
         # صف البيانات أبيض أسفل رأس الجدول؛ القيم داكنة وواضحة.
@@ -433,6 +433,9 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
             _draw_fit_centered(c, arabic_value, x, 273.5, green_width, FONT_AR, 5.8, value_color, min_size=4.3)
         else:
             _draw_fit_centered(c, english_value or arabic_value, x, 277.5, green_width, FONT_EN, 6.0, value_color, min_size=4.5)
+
+    # رقم السجل الداخلي أسفل عنوان رقم الشهادة في القالب؛ لا يُنشأ QR أو رقم تحقق رسمي.
+    _draw_fit_centered(c, record_number, 112.0, 145.0, 145.0, FONT_EN, 6.0, FONT_COLOR, min_size=4.5)
     c.save()
     overlay = PdfReader(str(overlay_path))
     overlay_page = overlay.pages[0]

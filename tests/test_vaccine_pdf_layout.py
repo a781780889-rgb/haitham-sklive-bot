@@ -25,7 +25,7 @@ def test_vaccine_pdf_is_a3_and_contains_all_demo_values():
         height = float(page.mediabox.height)
         assert (round(width), round(height)) == (842, 1190)
         text = "\n".join(page.extract_text().splitlines())
-        for expected in ("Ahmd Mhmd Aly", "123456789", "12 Mar 1991", "Saudi Arabia", "Pfizer", "26 Sep 2021", "30", "COVID-19", "DEMO-001"):
+        for expected in ("Ahmd Mhmd Aly", "123456789", "12 Mar 1991", "Saudi Arabia", "Pfizer", "26 Sep 2021", "30", "COVID-19", "DEMO-001", "TEST-VACCINE-LAYOUT"):
             assert expected in text
     finally:
         Path(path).unlink(missing_ok=True)
