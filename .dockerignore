@@ -1,0 +1,13 @@
+.git
+.github
+__pycache__
+*.py[cod]
+*.log
+.env
+.env.*
+!.env.example
+!.env.basic.example
+!.env.vip.example
+bot_data.db
+tests
+docs
