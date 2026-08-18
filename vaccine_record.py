@@ -20,7 +20,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 from pypdf import PdfReader, PdfWriter
-from telegram import ReplyKeyboardMarkup, KeyboardButton
+from telegram import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardMarkup, InlineKeyboardButton, CopyTextButton
 from vaccine_intelligence import resolve_vaccine_text
 
 try:
@@ -682,7 +682,23 @@ async def handle(update, context, text: str, db):
                 path = make_pdf(context.user_data["vaccine_data"], record_number)
                 db.save_vaccine_record(update.effective_user.id, record_number, context.user_data["vaccine_data"], str(path))
                 context.user_data.update({"state": "vaccine_pdf_generated", "pdf_issued": True, "vaccine_record_number": record_number, "vaccine_pdf_path": str(path)})
-                await update.message.reply_text(f"✅ تم إنشاء سجل شهادة التطعيم بنجاح.\n\nرقم السجل: {record_number}\nتاريخ الإنشاء: {datetime.now().strftime('%d/%m/%Y %H:%M')}\nنوع الملف: PDF", reply_markup=completed_keyboard())
+                created_at = datetime.now(BUSINESS_TIMEZONE).strftime('%d/%m/%Y %H:%M')
+                vaccination_portal_url = "https://sehasa.online/vaccination"
+                success_message = (
+                    "✅ تم إنشاء سجل شهادة التطعيم بنجاح.\n\n"
+                    f"رقم السجل: {record_number}\n"
+                    f"رقم الهوية: {context.user_data.get('vaccine_data', {}).get('national_id', '—')}\n"
+                    f"رابط الموقع: {vaccination_portal_url}\n"
+                    f"تاريخ الإنشاء: {created_at}\n"
+                    "نوع الملف: PDF"
+                )
+                success_actions = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("📋 نسخ رقم السجل", copy_text=CopyTextButton(record_number))],
+                    [InlineKeyboardButton("🆔 نسخ رقم الهوية", copy_text=CopyTextButton(str(context.user_data.get('vaccine_data', {}).get('national_id', ''))))],
+                    [InlineKeyboardButton("🌐 فتح موقع شهادة التطعيم", url=vaccination_portal_url)],
+                ])
+                await update.message.reply_text(success_message, reply_markup=success_actions)
+                await update.message.reply_text("اختر الإجراء التالي:", reply_markup=completed_keyboard())
                 await update.message.reply_document(document=open(path, "rb"), filename=path.name, caption="📄 سجل شهادة التطعيم PDF")
             except Exception:
                 await update.message.reply_text("⚠️ تعذر إنشاء ملف PDF حاليًا.\n\nلم يتم فقدان بياناتك، ويمكنك المحاولة مرة أخرى.", reply_markup=keyboard(["🔄 إعادة المحاولة"], ["✏️ تعديل البيانات"], ["❌ إلغاء"]))

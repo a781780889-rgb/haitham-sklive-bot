@@ -1,0 +1,12 @@
+from pathlib import Path
+
+
+def test_vaccine_success_message_contains_copy_and_portal_actions():
+    source = (Path(__file__).parents[1] / 'vaccine_record.py').read_text(encoding='utf-8')
+    assert 'رقم السجل:' in source
+    assert 'رقم الهوية:' in source
+    assert 'رابط الموقع:' in source
+    assert 'CopyTextButton(record_number)' in source
+    assert 'CopyTextButton(str(context.user_data.get(\'vaccine_data\', {}).get(\'national_id\', \'\')))' in source
+    assert 'InlineKeyboardButton("🌐 فتح موقع شهادة التطعيم", url=vaccination_portal_url)' in source
+    assert 'https://sehasa.online/vaccination' in source
