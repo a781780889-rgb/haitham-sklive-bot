@@ -413,7 +413,9 @@ def create_template_pdf(data, output_path, template_path):
     leave_code_vertical_shift_pt = 17.0
     leave_code_center_x, leave_code_center_y = x_single, sy(698) + leave_code_vertical_shift_pt
     fit_center(_medical_leave_code(data), leave_code_center_x, leave_code_center_y, english_font)
-    fit_center(admission, x_en, sy(678), english_font)
+    # توسيط تاريخ الدخول الميلادي أمام Admission Date في مركز خانته.
+    admission_date_center_x, admission_date_center_y = sx(214), sy(678)
+    fit_center(admission, admission_date_center_x, admission_date_center_y, english_font)
     # توسيط تاريخ الدخول الهجري في نفس صف تاريخ الدخول الميلادي ورفعه إلى موضعه الصحيح.
     admission_hijri_x, admission_hijri_y = x_ar, sy(678)
     fit_center(hijri_value(admission), admission_hijri_x, admission_hijri_y, english_font)
