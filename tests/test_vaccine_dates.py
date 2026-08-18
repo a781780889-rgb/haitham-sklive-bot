@@ -105,6 +105,13 @@ def test_invalid_date_is_rejected():
     assert "تاريخ الميلاد غير صحيح أو مستقبلي." in validate(data)
 
 
+def test_year_only_birth_date_is_preserved_without_fake_day_or_month():
+    parsed = parse_form("تاريخ الميلاد: 1996")
+    assert parsed["birth_date"] == "1996"
+    normalized = normalize_form_dates({"birth_date": "1996", "vaccination_date": "26-09-2021"})
+    assert normalized["birth_date"] == "1996"
+
+
 def test_parse_form_keeps_unrecognized_date_for_validation_feedback():
     data = parse_form("تاريخ الميلاد: تاريخ غير معروف")
     assert data["birth_date"] == "تاريخ غير معروف"

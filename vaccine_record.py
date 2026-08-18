@@ -118,9 +118,12 @@ def parse_form(text: str, old: dict[str, str] | None = None) -> dict[str, str]:
             if "(" in value and value.endswith(")"):
                 value = value[:value.rfind("(")].strip()
             if key in ("birth_date", "vaccination_date"):
-                parsed = parse_date(value)
-                if parsed:
+                clean_value = str(value).strip().translate(str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789"))
+                parsed = parse_date(clean_value)
+                if parsed and not re.fullmatch(r"\d{4}", clean_value):
                     value = parsed.strftime("%d/%m/%Y")
+                else:
+                    value = clean_value
             data[key] = value
     return data
 
@@ -196,9 +199,12 @@ def normalize_form_dates(data: dict[str, str]) -> dict[str, str]:
     """يطبّع حقول التاريخ المقبولة إلى DD/MM/YYYY دون تغيير معناها."""
     normalized = dict(data)
     for key in ("birth_date", "vaccination_date"):
-        parsed = parse_date(normalized.get(key, ""))
-        if parsed:
+        raw_value = str(normalized.get(key, "")).strip().translate(str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789"))
+        parsed = parse_date(raw_value)
+        if parsed and not re.fullmatch(r"\d{4}", raw_value):
             normalized[key] = parsed.strftime("%d/%m/%Y")
+        elif re.fullmatch(r"\d{4}", raw_value):
+            normalized[key] = raw_value
     return normalized
 
 
@@ -308,7 +314,10 @@ def _pdf_display_value(value: str, field: str, language: str) -> str:
     if not value:
         return ""
     if field in {"birth_date", "vaccination_date"}:
-        parsed = parse_date(value)
+        clean_value = value.translate(str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹", "01234567890123456789"))
+        if re.fullmatch(r"\d{4}", clean_value):
+            return clean_value
+        parsed = parse_date(clean_value)
         if parsed:
             if language == "en":
                 return f"{parsed.day:02d} {ENGLISH_MONTHS_DISPLAY[parsed.month]} {parsed.year}"
