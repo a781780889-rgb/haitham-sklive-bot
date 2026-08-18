@@ -487,7 +487,7 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
             elif key == "age_at_vaccination":
                 x -= 21.0
             elif key == "vaccination_date":
-                x -= 11.0
+                x -= 22.0
             value_color = FONT_COLOR
             english_value = _pdf_display_value(value, key, "en")
             arabic_value = _pdf_display_value(value, key, "ar")
