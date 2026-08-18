@@ -561,6 +561,16 @@ def create_template_pdf(data, output_path, template_path):
 
 
 def create_pdf(data, output_path):
+    # هذا هو مسار «التقارير الطبية» المستقل عن generate_excuse_pdf في bot.py.
+    # نولّد الرمز هنا قبل تعبئة القالب حتى يظهر فعلياً داخل ملف PDF الناتج.
+    data = dict(data or {})
+    try:
+        hospital_info = db.get_hospital_by_name(data.get("hospital", "")) or {}
+        hospital_type = hospital_info.get("hospital_type") or "حكومي"
+    except Exception:
+        hospital_type = "حكومي"
+    data["leave_id"] = db.generate_medical_report_code(hospital_type=hospital_type)
+
     template_path = os.path.join(os.path.dirname(__file__), "templates", "medical_report_reference_a3.pdf")
     if os.path.exists(template_path):
         create_template_pdf(data, output_path, template_path)
@@ -589,6 +599,7 @@ def create_pdf(data, output_path):
              Paragraph("Medical Report", ltr), Spacer(1, 8 * mm)]
     rows = [[Paragraph(_arabic("البيان"), body), Paragraph(_arabic("القيمة / Value"), body)]]
     values = [
+        ("رمز الإجازة / Leave Code", data.get("leave_id")),
         ("اسم المريض / Patient Name", data.get("patient_name")),
         ("رقم الهوية / ID Number", data.get("id_number")),
         ("الجنسية / Nationality", data.get("nationality")),
