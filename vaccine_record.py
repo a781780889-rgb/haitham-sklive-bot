@@ -505,10 +505,11 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
 
     # رفع نص إصدار الوثيقة فوق QR بفاصل صغير؛ التغطية تتم قبل إعادة رسم QR.
     issue_center_x = 421.00 / scale_x
-    issue_ar_y = 414.0 / scale_y
-    issue_en_y = 400.5 / scale_y
+    # موضع QR السابق: هنا يوضع نص إصدار الوثيقة على سطرين.
+    issue_ar_y = 375.0 / scale_y
+    issue_en_y = 361.5 / scale_y
     c.setFillColor(colors.white)
-    c.rect(100.0 / scale_x, 280.0 / scale_y, 642.0 / scale_x, 150.0 / scale_y, stroke=0, fill=1)
+    c.rect(100.0 / scale_x, 270.0 / scale_y, 642.0 / scale_x, 160.0 / scale_y, stroke=0, fill=1)
     c.setFillColor(FONT_COLOR)
     c.setFont(FONT_AR, FIELD_AR_SIZE)
     c.drawCentredString(issue_center_x, issue_ar_y, _pdf_text("تم إصدار هذه الوثيقة من قبل وزارة الصحة، المملكة العربية السعودية"))
@@ -519,7 +520,8 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
     # تُحوّل الإحداثيات عكسيًا إلى طبقة القالب الداخلية قبل تكبيرها مع الصفحة.
     qr_url = "https://sehasa.online/#/inquiries/slenquiry"
     qr_x = 383.50 / scale_x
-    qr_y = 324.84 / scale_y
+    # موضع Certificate No السابق: QR متمركز فوق هذا الموضع وبمقاس 75×75 نقطة.
+    qr_y = 238.0 / scale_y
     qr_size_x = 75.0 / scale_x
     qr_size_y = 75.0 / scale_y
     try:
