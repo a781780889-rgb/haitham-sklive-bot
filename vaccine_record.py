@@ -728,13 +728,15 @@ async def handle(update, context, text: str, db):
                 national_id_value = str(context.user_data.get('vaccine_data', {}).get('national_id', ''))
                 if CopyTextButton is not None:
                     success_actions = InlineKeyboardMarkup([
-                        [InlineKeyboardButton("📋 نسخ رقم السجل", copy_text=CopyTextButton(record_number))],
-                        [InlineKeyboardButton("🆔 نسخ رقم الهوية", copy_text=CopyTextButton(national_id_value))],
+                        [InlineKeyboardButton(record_number, copy_text=CopyTextButton(record_number))],
+                        [InlineKeyboardButton(national_id_value, copy_text=CopyTextButton(national_id_value))],
                         [InlineKeyboardButton("🌐 فتح موقع شهادة التطعيم", url=vaccination_portal_url)],
                     ])
                 else:
                     # fallback متوافق: القيم داخل الرسالة قابلة للنسخ يدويًا، والرابط يبقى زرًا مباشرًا.
                     success_actions = InlineKeyboardMarkup([
+                        [InlineKeyboardButton(f"📋 {record_number} — اضغط مطولًا للنسخ", callback_data="vaccine_record_copy_hint")],
+                        [InlineKeyboardButton(f"🆔 {national_id_value} — اضغط مطولًا للنسخ", callback_data="vaccine_id_copy_hint")],
                         [InlineKeyboardButton("🌐 فتح موقع شهادة التطعيم", url=vaccination_portal_url)],
                     ])
                 await update.message.reply_text(success_message, reply_markup=success_actions)
