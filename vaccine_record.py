@@ -345,9 +345,11 @@ FONT_EN = "Times-Roman"
 FONT_AR = AR_FONT
 FONT_COLOR = colors.HexColor("#111111")
 GREEN_TEXT = colors.white
-FIELD_EN_SIZE = 7.0
-FIELD_AR_SIZE = 7.0
-FIELD_MIN_SIZE = 5.0
+# مواصفات بيانات المستطيلات حسب القياس المرجعي: Regular، أسود، 10.5 pt.
+# القيم تُرسم على طبقة القالب الأصلية ثم تُكبّر إلى A3؛ 4.875 pt داخليًا ≈ 10.5 pt على الصفحة النهائية.
+FIELD_EN_SIZE = 4.875
+FIELD_AR_SIZE = 4.875
+FIELD_MIN_SIZE = 3.25
 
 
 def _draw_fit_centered(c, value: str, x: float, y: float, width: float, font: str, size: float, color=FONT_COLOR, min_size=4.2):
@@ -438,13 +440,13 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
         english_value = _pdf_display_value(value, key, "en")
         arabic_value = _pdf_display_value(value, key, "ar")
         if key in {"vaccine_type", "reason"} and arabic_value and english_value and arabic_value != english_value:
-            _draw_fit_centered(c, english_value, x, 281.5, green_width, FONT_EN, 5.8, value_color, min_size=4.3)
-            _draw_fit_centered(c, arabic_value, x, 273.5, green_width, FONT_AR, 5.8, value_color, min_size=4.3)
+            _draw_fit_centered(c, english_value, x, 281.5, green_width, FONT_EN, 4.875, value_color, min_size=3.25)
+            _draw_fit_centered(c, arabic_value, x, 273.5, green_width, FONT_AR, 4.875, value_color, min_size=3.25)
         else:
-            _draw_fit_centered(c, english_value or arabic_value, x, 277.5, green_width, FONT_EN, 6.0, value_color, min_size=4.5)
+            _draw_fit_centered(c, english_value or arabic_value, x, 277.5, green_width, FONT_EN, 4.875, value_color, min_size=3.25)
 
     # رقم السجل الداخلي أسفل عنوان رقم الشهادة في القالب؛ لا يُنشأ QR أو رقم تحقق رسمي.
-    _draw_fit_centered(c, record_number, 112.0, 145.0, 145.0, FONT_EN, 6.0, FONT_COLOR, min_size=4.5)
+    _draw_fit_centered(c, record_number, 112.0, 180.0, 145.0, FONT_EN, 4.875, FONT_COLOR, min_size=3.25)
     c.save()
     overlay = PdfReader(str(overlay_path))
     overlay_page = overlay.pages[0]
