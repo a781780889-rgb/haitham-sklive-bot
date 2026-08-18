@@ -482,7 +482,9 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
         for index, key in enumerate(bottom_keys):
             value = vaccination.get(key) or ""
             x = green_left + index * green_width
-            if key == "reason":
+            if key == "vaccine_type":
+                x -= 8.0
+            elif key == "reason":
                 x -= 11.0
             elif key == "age_at_vaccination":
                 x -= 21.0
