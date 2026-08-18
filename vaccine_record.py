@@ -257,7 +257,7 @@ def transliterate_arabic_name(value: str) -> str:
         "ع": "a", "غ": "gh", "ف": "f", "ق": "q", "ك": "k", "ل": "l", "م": "m", "ن": "n", "ه": "h", "و": "w", "ي": "y", "ى": "a", "ة": "h", "ء": "a",
     }
     words = ["".join(mapping.get(ch, ch) for ch in word) for word in str(value or "").split()]
-    return " ".join(words).title()
+    return " ".join(words).upper()
 
 
 def translate(value: str, field: str) -> str:
@@ -329,6 +329,8 @@ def _pdf_display_value(value: str, field: str, language: str) -> str:
         if re.search(r"[\u0600-\u06ff]", translated):
             return ""
         return translated
+    if field == "full_name" and language == "ar" and not re.search(r"[\u0600-\u06ff]", value):
+        return ""
     return value
 
 
