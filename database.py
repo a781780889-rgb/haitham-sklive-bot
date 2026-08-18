@@ -1395,6 +1395,16 @@ def generate_gsl_code(hospital_type: str = "حكومي"):
         conn.close()
 
 
+def generate_medical_report_code(hospital_type: str = "حكومي"):
+    """توليد رمز الإجازة الخاص بقسم التقارير الطبية فقط.
+
+    الصيغة: PSL/GSL + YY + MM + DD + خمسة أرقام إنجليزية متغيرة.
+    تستخدم المستشفيات الخاصة بادئة PSL، بينما تستخدم الحكومية بادئة GSL.
+    """
+    normalized_type = str(hospital_type or "حكومي").strip()
+    return generate_gsl_code(hospital_type="خاص" if normalized_type == "خاص" else "حكومي")
+
+
 def save_order(user_id, data, preset_gsl_code=None):
     conn = get_conn()
     try:
