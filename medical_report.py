@@ -301,6 +301,19 @@ def _arabic(value):
     return text
 
 
+def _medical_leave_code(data):
+    """يعيد رمزاً صالحاً للتقرير الطبي، ويمنع أي قيمة قديمة مثل MR- من الوصول إلى PDF."""
+    existing = str((data or {}).get("leave_id") or "").strip().upper()
+    if re.fullmatch(r"(?:PSL|GSL)\d{11}", existing):
+        return existing
+    try:
+        hospital_info = db.get_hospital_by_name(str((data or {}).get("hospital") or "")) or {}
+        hospital_type = hospital_info.get("hospital_type") or "حكومي"
+    except Exception:
+        hospital_type = "حكومي"
+    return db.generate_medical_report_code(hospital_type=hospital_type)
+
+
 def create_template_pdf(data, output_path, template_path):
     """يعبئ قالب التقرير الطبي العام الجديد ويحافظ على تصميمه الأصلي."""
     from reportlab.pdfgen import canvas
@@ -396,7 +409,7 @@ def create_template_pdf(data, output_path, template_path):
 
     # مركز رقم التقرير مقابل صف «رمز الإجازة» بدقة.
     leave_code_center_x, leave_code_center_y = x_single, sy(698)
-    fit_center(value("leave_id", f"MR-{datetime.now().strftime('%Y%m%d%H%M%S')}"), leave_code_center_x, leave_code_center_y, english_font)
+    fit_center(_medical_leave_code(data), leave_code_center_x, leave_code_center_y, english_font)
     fit_center(admission, x_en, sy(678), english_font)
     # مركز تاريخ الدخول الهجري مقابل صف «تاريخ الدخول» بدقة.
     admission_hijri_x, admission_hijri_y = x_ar, sy(662)
@@ -564,12 +577,7 @@ def create_pdf(data, output_path):
     # هذا هو مسار «التقارير الطبية» المستقل عن generate_excuse_pdf في bot.py.
     # نولّد الرمز هنا قبل تعبئة القالب حتى يظهر فعلياً داخل ملف PDF الناتج.
     data = dict(data or {})
-    try:
-        hospital_info = db.get_hospital_by_name(data.get("hospital", "")) or {}
-        hospital_type = hospital_info.get("hospital_type") or "حكومي"
-    except Exception:
-        hospital_type = "حكومي"
-    data["leave_id"] = db.generate_medical_report_code(hospital_type=hospital_type)
+    data["leave_id"] = _medical_leave_code(data)
 
     template_path = os.path.join(os.path.dirname(__file__), "templates", "medical_report_reference_a3.pdf")
     if os.path.exists(template_path):

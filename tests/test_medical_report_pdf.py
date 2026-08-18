@@ -42,6 +42,32 @@ class MedicalReportPdfTests(unittest.TestCase):
         self.assertTrue(codes, f"لم يُعثر على رمز PSL/GSL داخل PDF. النص المستخرج: {text!r}")
         self.assertTrue(any(code.startswith("PSL") for code in codes))
 
+    def test_template_replaces_legacy_mr_code(self):
+        data = {
+            "hospital": "مستشفى السلام",
+            "doctor": "طبيب الاختبار",
+            "specialty": "استشاري",
+            "patient_name": "مريض الاختبار",
+            "id_number": "1072727288",
+            "nationality": "سعودي",
+            "workplace": "جهة الاختبار",
+            "admission_date": "15/08/2026",
+            "discharge_date": "16/08/2026",
+            "diagnosis": "تشخيص الاختبار",
+            "leave_id": "MR-20260818215102",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "legacy-code-replaced.pdf"
+            medical_report.create_template_pdf(
+                data,
+                output,
+                Path("templates/medical_report_reference_a3.pdf"),
+            )
+            text = "\\n".join((page.extract_text() or "") for page in PdfReader(str(output)).pages)
+
+        self.assertNotIn("MR-20260818215102", text)
+        self.assertRegex(text, r"(?:PSL|GSL)\d{11}")
+
 
 if __name__ == "__main__":
     unittest.main()
