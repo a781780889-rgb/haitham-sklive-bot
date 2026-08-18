@@ -427,8 +427,8 @@ def create_template_pdf(data, output_path, template_path):
     fit_center(hijri_value(admission), ref_x(404.804), ref_y_top(165.098), english_font)
 
     # صف الخروج: الميلادي والهجري مقابل Discharge Date / تاريخ الخروج.
-    # إنزال تاريخ الخروج الميلادي 13/07/2026 أربع نقاط PDF فعلية.
-    fit_center(discharge, ref_x(214.270), ref_y_top(182.606) - 4.0, english_font)
+    # إنزال تاريخ الخروج الميلادي 13/07/2026 ثماني نقاط PDF فعلية إجمالاً.
+    fit_center(discharge, ref_x(214.270), ref_y_top(182.606) - 8.0, english_font)
     fit_center(hijri_value(discharge), ref_x(404.804), ref_y_top(188.976), english_font)
 
     # تاريخ الإصدار في مركز صف Issue Date / تاريخ إصدار التقرير.
