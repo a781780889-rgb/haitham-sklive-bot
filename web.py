@@ -128,28 +128,6 @@ def api_verify():
     id_number = (request.args.get("id")  or "").strip()
     if not gsl_code or not id_number:
         return jsonify({"success": False, "message": "يجب إرسال gsl و id"}), 400
-    # شهادات التطعيم تستخدم جدول vaccine_records، بينما تبقى أكواد الإجازات
-    # الطبية (GSL) على مسار orders القديم دون تغيير.
-    if gsl_code.startswith("VCC"):
-        try:
-            vaccine_record = db.get_vaccine_record_for_inquiry(gsl_code, id_number)
-            if not vaccine_record:
-                return jsonify({"success": False, "message": "لم يُعثر على شهادة التطعيم أو أن رقم الهوية غير مطابق"}), 404
-            vaccine_data = vaccine_record.get("data") or {}
-            return jsonify({"success": True, "record_type": "vaccination", "data": {
-                "record_type": "vaccination",
-                "gsl_code": vaccine_record.get("record_number", gsl_code),
-                "record_number": vaccine_record.get("record_number", gsl_code),
-                "national_id": vaccine_data.get("national_id", id_number),
-                "full_name": vaccine_data.get("full_name", ""),
-                "birth_date": vaccine_data.get("birth_date", ""),
-                "passport": vaccine_data.get("passport", ""),
-                "nationality": vaccine_data.get("nationality", ""),
-                "vaccinations": vaccine_data.get("vaccinations") or [],
-                "created_at": vaccine_record.get("created_at", ""),
-            }})
-        except Exception as ex:
-            return jsonify({"success": False, "message": f"تعذر قراءة شهادة التطعيم: {str(ex)}"}), 500
     try:
         conn = db.get_conn()
         row = conn.execute(

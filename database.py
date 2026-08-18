@@ -1467,32 +1467,6 @@ def get_vaccine_records(user_id):
         conn.close()
 
 
-def get_vaccine_record_for_inquiry(record_number, national_id):
-    """إرجاع سجل التطعيم بعد مطابقة رمز VCC ورقم الهوية داخل JSON المحفوظ."""
-    import json
-    conn = get_conn()
-    try:
-        row = conn.execute(
-            "SELECT record_number, data_json, pdf_path, created_at FROM vaccine_records "
-            "WHERE UPPER(TRIM(record_number))=? LIMIT 1",
-            ((record_number or "").strip().upper(),),
-        ).fetchone()
-        if not row:
-            return None
-        record = dict(row)
-        try:
-            data = json.loads(record.get("data_json") or "{}")
-        except (TypeError, ValueError):
-            return None
-        stored_id = str(data.get("national_id") or "").strip()
-        if stored_id != str(national_id or "").strip():
-            return None
-        record["data"] = data
-        return record
-    finally:
-        conn.close()
-
-
 def get_user_orders(user_id):
     conn = get_conn()
     try:
