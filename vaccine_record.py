@@ -483,7 +483,7 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
             value = vaccination.get(key) or ""
             x = green_left + index * green_width
             if key == "reason":
-                x -= 9.0
+                x -= 11.0
             value_color = FONT_COLOR
             english_value = _pdf_display_value(value, key, "en")
             arabic_value = _pdf_display_value(value, key, "ar")
