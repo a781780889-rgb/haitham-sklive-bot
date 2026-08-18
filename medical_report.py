@@ -390,8 +390,9 @@ def create_template_pdf(data, output_path, template_path):
     c.roundRect(sx(27), sy(265), sx(541), sy(145), sx(7), stroke=1, fill=0)
     c.line(sx(297.5), sy(265), sx(297.5), sy(410))
     c.restoreState()
-    # القالب يقسم منطقة القيم إلى عمود إنجليزي يسارًا وعمود عربي يمينًا.
-    x_en, x_ar, x_single = sx(214), sx(374), sx(294)
+    # مراكز الأعمدة مستخرجة من الصورة المرجعية بعد تحويلها إلى نقاط A3.
+    # العمود الإنجليزي: 314.6pt، العمود العربي: 550.0pt، والقيم المفردة: 432.0pt.
+    x_en, x_ar, x_single = 314.6, 550.0, 432.0
     admission = date_display(value("admission_date"))
     discharge = date_display(value("discharge_date", data.get("discharge_or_days", "—")))
     issue_date = date_display(value("issue_date", datetime.now().strftime("%d/%m/%Y")))
@@ -414,9 +415,9 @@ def create_template_pdf(data, output_path, template_path):
     leave_code_center_x, leave_code_center_y = x_single, sy(698) + leave_code_vertical_shift_pt
     fit_center(_medical_leave_code(data), leave_code_center_x, leave_code_center_y, english_font)
     # توسيط تاريخ الدخول الميلادي أمام Admission Date في مركز خانته.
-    # مطابق للصورة المرجعية: مركز النص عند 314.1 نقطة أفقياً، وأسفل الموضع الأصلي 4.6 نقاط.
+    # مطابق للصورة المرجعية: مركز النص عند 314.6 نقطة أفقياً.
     admission_date_vertical_shift_pt = -4.6
-    admission_date_center_x = 314.1
+    admission_date_center_x = x_en
     admission_date_center_y = sy(678) + admission_date_vertical_shift_pt
     fit_center(admission, admission_date_center_x, admission_date_center_y, english_font)
     # توسيط تاريخ الدخول الهجري في نفس صف تاريخ الدخول الميلادي ورفعه إلى موضعه الصحيح.
