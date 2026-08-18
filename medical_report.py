@@ -423,7 +423,8 @@ def create_template_pdf(data, output_path, template_path):
     admission_date_center_y = sy(678) + admission_date_vertical_shift_pt + data_vertical_lift_pt
     fit_center(admission, admission_date_center_x, admission_date_center_y, english_font)
     # توسيط تاريخ الدخول الهجري في نفس صف تاريخ الدخول الميلادي ورفعه إلى موضعه الصحيح.
-    admission_hijri_x, admission_hijri_y = x_ar, sy(678) + data_vertical_lift_pt
+    # إنزال التاريخ الهجري إلى نفس خط أساس التاريخ الميلادي تماماً.
+    admission_hijri_x, admission_hijri_y = x_ar, admission_date_center_y
     fit_center(hijri_value(admission), admission_hijri_x, admission_hijri_y, english_font)
     fit_center(discharge, x_en, sy(650) + data_vertical_lift_pt, english_font)
     # مركز تاريخ الخروج الهجري مقابل صف «تاريخ الخروج» بدقة.
