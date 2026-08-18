@@ -860,43 +860,70 @@ body { margin: 0; overflow-x: hidden; }
   const clearErrors = () => { show(emptyAlert, ''); show(queryError, ''); };
 
   function renderResult(data, gsl, id) {
+    const container = document.getElementById('results-container');
     const date = (value) => {
       const m = String(value ?? '').match(/^(\d{4})-(\d{2})-(\d{2})/);
       return m ? `${m[3]}/${m[2]}/${m[1]}` : (value || '—');
     };
+    if (data.record_type === 'vaccination') {
+      const vaccinations = Array.isArray(data.vaccinations) ? data.vaccinations : [];
+      const rows = vaccinations.map((vaccine, index) => `
+        <tr>
+          <td>${index + 1}</td>
+          <td>${esc(vaccine.vaccine_type || vaccine.vaccine || '—')}</td>
+          <td>${esc(date(vaccine.vaccination_date))}</td>
+          <td>${esc(vaccine.age_at_vaccination || '—')}</td>
+          <td>${esc(vaccine.reason || '—')}</td>
+          <td>${esc(vaccine.batch_number || '—')}</td>
+        </tr>`).join('');
+      container.innerHTML = `
+        <section class="vaccine-inquiry-result" dir="rtl" aria-live="polite" style="background:#fff;border:1px solid #dbe4ee;border-radius:14px;padding:20px;margin-top:18px;box-shadow:0 8px 24px rgba(24,65,110,.08);font-family:Tahoma,Arial,sans-serif;color:#243447">
+          <style>.vaccine-inquiry-result .vaccine-result-heading{text-align:center;border-bottom:3px solid #1687c9;padding-bottom:12px;margin-bottom:16px}.vaccine-inquiry-result .vaccine-result-heading h2{margin:0;color:#1675b5;font-size:28px}.vaccine-inquiry-result .vaccine-result-heading p{margin:5px 0 0;color:#1675b5;font-size:18px;font-weight:700}.vaccine-inquiry-result .vaccine-result-meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:16px}.vaccine-inquiry-result .vaccine-result-meta div{border:1px solid #e2e8f0;border-radius:8px;padding:9px;background:#f8fbfe}.vaccine-inquiry-result .vaccine-result-meta strong,.vaccine-inquiry-result .vaccine-result-meta span{display:block}.vaccine-inquiry-result .vaccine-result-meta strong{color:#587089;font-size:12px;margin-bottom:4px}.vaccine-inquiry-result .vaccine-result-meta span{font-size:14px;word-break:break-word}.vaccine-result-table-wrap{overflow-x:auto}.vaccine-result-table{width:100%;border-collapse:collapse;min-width:640px;font-size:12px}.vaccine-result-table th{background:#087f62;color:#fff;padding:9px 6px;line-height:1.35}.vaccine-result-table td{border-bottom:1px solid #dfe6ec;padding:9px 6px;text-align:center;vertical-align:middle}.vaccine-result-table tr:nth-child(even) td{background:#f8fafc}.vaccine-result-table small{font-size:10px;font-weight:400}.vaccine-result-note{text-align:center;color:#617589;font-size:12px;margin:16px 0 0}.query-error-result{text-align:center;background:#fff4f4;border:1px solid #f0b7b7;border-radius:12px;padding:22px;color:#8b1a2a}.query-error-result h2{margin-top:0}.legacy-inquiry-result{background:#fff;border:1px solid #dbe4ee;border-radius:14px;padding:20px;margin-top:18px}.legacy-inquiry-result h2{text-align:center;color:#1675b5}.legacy-inquiry-result p{margin:8px 0;border-bottom:1px solid #edf1f5;padding-bottom:8px}</style>
+          <div class="vaccine-result-heading"><h2>شهادة التطعيم</h2><p>Vaccination Certificate</p></div>
+          <div class="vaccine-result-meta">
+            <div><strong>الاسم الكامل</strong><span>${esc(data.full_name)}</span></div>
+            <div><strong>رقم الهوية / الإقامة</strong><span>${esc(id)}</span></div>
+            <div><strong>تاريخ الميلاد</strong><span>${esc(data.birth_date)}</span></div>
+            <div><strong>الجنسية</strong><span>${esc(data.nationality)}</span></div>
+            <div><strong>رقم الشهادة</strong><span>${esc(data.record_number || gsl)}</span></div>
+          </div>
+          <div class="vaccine-result-table-wrap"><table class="vaccine-result-table">
+            <thead><tr><th>#</th><th>نوع التطعيم<br><small>Vaccine Type</small></th><th>تاريخ التطعيم<br><small>Vaccination Date</small></th><th>العمر<br><small>Age</small></th><th>سبب التطعيم<br><small>Reason</small></th><th>رقم التشغيلة<br><small>Batch Number</small></th></tr></thead>
+            <tbody>${rows || '<tr><td colspan="6">لا توجد جرعات مسجلة</td></tr>'}</tbody>
+          </table></div>
+          <p class="vaccine-result-note">تم التحقق من بيانات شهادة التطعيم باستخدام رمز الخدمة ورقم الهوية / الإقامة.</p>
+        </section>`;
+      container.style.display = 'block';
+      form.style.display = 'none';
+      if (inputBack) inputBack.style.display = 'inline-block';
+      return;
+    }
     const days = Number.parseInt(data.days_count, 10);
     const daysText = Number.isFinite(days) ? String(days) : '—';
-    document.getElementById('res-gsl-display').textContent = gsl;
-    document.getElementById('res-id-display').textContent = id;
-    document.getElementById('v-name').textContent = data.full_name || '—';
-    document.getElementById('v-issue').textContent = date(data.issued_at || data.issue_date_input);
-    document.getElementById('v-from').textContent = date(data.excuse_date);
-    document.getElementById('v-to').textContent = date(data.end_date);
-    document.getElementById('v-days').textContent = daysText;
-    document.getElementById('v-doctor').textContent = data.doctor || '—';
-    document.getElementById('v-job').textContent = data.specialty || '—';
-    document.getElementById('successSection').style.display = 'block';
-    document.getElementById('errorSection').style.display = 'none';
-    document.getElementById('resultPage').classList.add('active');
-    document.body.style.overflow = 'hidden';
+    const legacy = [
+      ['رمز الخدمة', gsl], ['رقم الهوية / الإقامة', id], ['الاسم', data.full_name],
+      ['تاريخ الإصدار', date(data.issued_at || data.issue_date_input)], ['تاريخ البداية', date(data.excuse_date)],
+      ['تاريخ النهاية', date(data.end_date)], ['المدة بالأيام', daysText], ['الطبيب', data.doctor], ['المسمى الوظيفي', data.specialty]
+    ];
+    container.innerHTML = `<section class="legacy-inquiry-result" dir="rtl"><h2>نتيجة الاستعلام</h2>${legacy.map(([label, value]) => `<p><strong>${esc(label)}:</strong> ${esc(value)}</p>`).join('')}</section>`;
+    container.style.display = 'block';
+    form.style.display = 'none';
   }
 
   function showLegacyError(message) {
-    document.getElementById('successSection').style.display = 'none';
-    document.getElementById('errorSection').style.display = 'block';
-    document.getElementById('errSub').textContent = message || 'تأكد من رمز الخدمة ورقم الهوية وحاول مجدداً.';
-    document.getElementById('resultPage').classList.add('active');
-    document.body.style.overflow = 'hidden';
+    const container = document.getElementById('results-container');
+    if (container) {
+      container.innerHTML = `<section class="query-error-result" dir="rtl"><h2>تعذر الاستعلام</h2><p>${esc(message || 'تأكد من رمز الخدمة ورقم الهوية وحاول مجدداً.')}</p></section>`;
+      container.style.display = 'block';
+    }
+    form.style.display = 'none';
   }
 
   function doReset() {
-    document.getElementById('resultPage').classList.remove('active');
-    document.getElementById('successSection').style.display = 'none';
-    document.getElementById('errorSection').style.display = 'none';
-    ['res-gsl-display','res-id-display','v-name','v-issue','v-from','v-to','v-days','v-doctor','v-job'].forEach((id) => {
-      const node = document.getElementById(id);
-      if (node) node.textContent = '';
-    });
+    const container = document.getElementById('results-container');
+    if (container) { container.innerHTML = ''; container.style.display = 'none'; }
+    form.style.display = '';
+    if (inputBack) inputBack.style.display = '';
     form.reset();
     clearErrors();
     submit.classList.remove('loading');
