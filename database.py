@@ -1467,6 +1467,35 @@ def get_vaccine_records(user_id):
         conn.close()
 
 
+def get_vaccine_record_for_inquiry(record_number, national_id):
+    """بحث عام محدود: يعيد السجل بعد مطابقة VCC والهوية داخل البيانات المحفوظة."""
+    import json
+    normalized_record = str(record_number or "").strip().upper()
+    normalized_id = str(national_id or "").strip()
+    if not normalized_record.startswith("VCC") or not normalized_id:
+        return None
+    conn = get_conn()
+    try:
+        row = conn.execute(
+            "SELECT record_number, data_json, created_at FROM vaccine_records "
+            "WHERE UPPER(TRIM(record_number))=? LIMIT 1",
+            (normalized_record,),
+        ).fetchone()
+        if not row:
+            return None
+        record = dict(row)
+        try:
+            data = json.loads(record.get("data_json") or "{}")
+        except (TypeError, ValueError):
+            return None
+        if str(data.get("national_id") or "").strip() != normalized_id:
+            return None
+        record["data"] = data
+        return record
+    finally:
+        conn.close()
+
+
 def get_user_orders(user_id):
     conn = get_conn()
     try:

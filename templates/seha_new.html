@@ -858,8 +858,75 @@ body { margin: 0; overflow-x: hidden; }
   const date = (value) => { const m = String(value ?? '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? `${m[3]}/${m[2]}/${m[1]}` : (value || '—'); };
   const show = (node, text) => { if (node) { node.textContent = text || ''; node.style.display = text ? 'block' : 'none'; } };
   const clearErrors = () => { show(emptyAlert, ''); show(queryError, ''); };
+  const pageHeading = document.querySelector('.heading');
+  const pageSubheading = document.querySelector('.sub-heading');
+  const formServiceLabel = service ? service.getAttribute('aria-label') : '';
+  const setInquiryMode = () => {
+    const isVaccine = /^VCC/i.test(service.value.trim());
+    if (pageHeading) pageHeading.textContent = isVaccine ? 'نظام شهادة التطعيم الإلكترونية' : 'الإجازات المرضية';
+    if (pageSubheading) pageSubheading.textContent = isVaccine
+      ? 'خدمة الاستعلام الإلكتروني عن بيانات شهادة التطعيم وسجل التطعيمات المرتبط بها.'
+      : 'خدمة الاستعلام عن الإجازات المرضية تتيح لك الاستعلام عن حالة طلبك للإجازة ويمكنك طباعتها عن طريق تطبيق صحتي';
+    service.setAttribute('aria-label', isVaccine ? 'رقم السجل' : (formServiceLabel || 'رمز الخدمة'));
+    service.placeholder = isVaccine ? 'أدخل رقم السجل، مثال: VCC260818418' : 'رمز الخدمة';
+    if (isVaccine) {
+      submit.textContent = 'استعلام عن شهادة التطعيم';
+      national.placeholder = 'أدخل رقم الهوية / الإقامة';
+    } else if (!submit.disabled) {
+      submit.textContent = 'استعلام';
+    }
+  };
+  service.addEventListener('input', setInquiryMode);
+  setInquiryMode();
+
+  function renderVaccinationResult(data, gsl, id) {
+    const container = document.getElementById('results-container');
+    if (!container) return;
+    const valueOrEmpty = (value) => String(value ?? '').trim();
+    const field = (label, value, extra = '') => {
+      const clean = valueOrEmpty(value);
+      return clean ? `<div class="vaccine-data-field ${extra}"><span class="vaccine-data-label">${esc(label)}</span><strong>${esc(clean)}</strong></div>` : '';
+    };
+    const vaccinations = Array.isArray(data.vaccinations) ? data.vaccinations : [];
+    const cards = vaccinations.map((vaccine, index) => {
+      const rows = [
+        field('نوع التطعيم', vaccine.vaccine_type || vaccine.vaccine || vaccine.vaccine_name),
+        field('الشركة المصنعة', vaccine.manufacturer),
+        field('الجرعة', vaccine.dose || vaccine.dose_number),
+        field('تاريخ التطعيم', date(vaccine.vaccination_date)),
+        field('العمر عند التطعيم', vaccine.age_at_vaccination),
+        field('سبب التطعيم', vaccine.reason),
+        field('رقم التشغيلة', vaccine.batch_number),
+        field('الحالة', vaccine.status),
+        field('ملاحظات', vaccine.notes),
+      ].filter(Boolean).join('');
+      return `<article class="vaccine-dose-card"><div class="vaccine-dose-title"><span>${index + 1}</span><h3>بيانات التطعيم ${index + 1}</h3></div><div class="vaccine-dose-grid">${rows || '<p class="vaccine-empty">لا توجد بيانات متاحة لهذه الجرعة.</p>'}</div></article>`;
+    }).join('');
+    const passport = valueOrEmpty(data.passport);
+    container.innerHTML = `<section class="vaccine-inquiry-result" dir="rtl" aria-live="polite">
+      <style>
+        .vaccine-inquiry-result{margin:18px auto 0;max-width:980px;background:#fff;border:1px solid #dbe6ef;border-radius:20px;padding:clamp(16px,3vw,32px);box-shadow:0 14px 35px rgba(17,62,104,.12);font-family:Tahoma,Arial,sans-serif;color:#203346;text-align:right}
+        .vaccine-inquiry-result *{box-sizing:border-box}.vaccine-result-heading{text-align:center;padding-bottom:18px;border-bottom:1px solid #e4edf3}.vaccine-result-heading .vaccine-check{display:inline-grid;place-items:center;width:42px;height:42px;border-radius:50%;background:#e6f6ef;color:#087f62;font-size:24px;margin-bottom:8px}.vaccine-result-heading h2{margin:0;color:#126c59;font-size:clamp(22px,4vw,32px)}.vaccine-result-heading p{margin:7px 0 0;color:#46708c;font-size:clamp(14px,2.2vw,18px)}.vaccine-result-heading small{display:block;margin-top:9px;color:#087f62;font-weight:700}
+        .vaccine-result-section-title{display:flex;align-items:center;gap:10px;margin:24px 0 12px;color:#126c59;font-size:19px}.vaccine-result-section-title:after{content:'';height:1px;flex:1;background:#dfeae5}.vaccine-beneficiary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.vaccine-data-field{min-width:0;padding:12px 14px;background:#f8fbfd;border:1px solid #e1ebf1;border-radius:12px}.vaccine-data-label{display:block;color:#688092;font-size:12px;margin-bottom:6px}.vaccine-data-field strong{display:block;color:#203346;line-height:1.55;overflow-wrap:anywhere}.vaccine-dose-list{display:grid;gap:14px}.vaccine-dose-card{border:1px solid #d9e9e3;border-radius:16px;padding:16px;background:linear-gradient(180deg,#fbfffd,#f5fbf8)}.vaccine-dose-title{display:flex;align-items:center;gap:10px;margin-bottom:12px}.vaccine-dose-title span{display:grid;place-items:center;width:32px;height:32px;border-radius:50%;background:#087f62;color:#fff;font-weight:700}.vaccine-dose-title h3{margin:0;color:#126c59;font-size:17px}.vaccine-dose-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.vaccine-empty{grid-column:1/-1;color:#6c7f8d;margin:0}.vaccine-result-note{margin:22px 0 0;padding:12px 14px;border-radius:10px;background:#f1f8fc;color:#4e6b7e;text-align:center;font-size:13px;line-height:1.8}
+        @media(max-width:640px){.vaccine-inquiry-result{border-radius:14px;padding:15px}.vaccine-beneficiary-grid,.vaccine-dose-grid{grid-template-columns:1fr}.vaccine-result-section-title{font-size:17px}.vaccine-dose-card{padding:13px}.vaccine-dose-title h3{font-size:15px}}
+      </style>
+      <div class="vaccine-result-heading"><span class="vaccine-check">✓</span><h2>تم العثور على شهادة التطعيم</h2><p>Vaccination Certificate</p><small>رقم السجل: ${esc(data.record_number || gsl)}</small></div>
+      <h3 class="vaccine-result-section-title">بيانات المستفيد</h3>
+      <div class="vaccine-beneficiary-grid">${field('الاسم الكامل', data.full_name)}${field('رقم الهوية / الإقامة', id)}${field('تاريخ الميلاد', data.birth_date)}${passport ? field('رقم جواز السفر', passport) : ''}${field('الجنسية', data.nationality)}</div>
+      <h3 class="vaccine-result-section-title">سجل التطعيمات</h3>
+      <div class="vaccine-dose-list">${cards || '<div class="vaccine-empty">لا توجد تطعيمات مسجلة في هذه الشهادة.</div>'}</div>
+      <p class="vaccine-result-note">تم عرض البيانات الفعلية المرتبطة برقم السجل ورقم الهوية / الإقامة المطابقين.</p>
+    </section>`;
+    container.style.display = 'block';
+    form.style.display = 'none';
+    if (inputBack) inputBack.style.display = 'inline-block';
+  }
 
   function renderResult(data, gsl, id) {
+    if (data.record_type === 'vaccination') {
+      renderVaccinationResult(data, gsl, id);
+      return;
+    }
     const date = (value) => {
       const m = String(value ?? '').match(/^(\d{4})-(\d{2})-(\d{2})/);
       return m ? `${m[3]}/${m[2]}/${m[1]}` : (value || '—');
@@ -882,6 +949,17 @@ body { margin: 0; overflow-x: hidden; }
   }
 
   function showLegacyError(message) {
+    const isVaccine = /^VCC/i.test(service.value.trim());
+    if (isVaccine) {
+      const container = document.getElementById('results-container');
+      if (container) {
+        container.innerHTML = `<section class="vaccine-inquiry-result" dir="rtl" role="alert" style="margin:18px auto;padding:24px;background:#fff7f7;border:1px solid #f1c5c5;border-radius:16px;text-align:center;color:#8b1a2a"><h2 style="margin-top:0">لم يتم العثور على شهادة تطعيم</h2><p style="line-height:1.9">${esc(message || 'لم يتم العثور على شهادة تطعيم مطابقة لرقم السجل ورقم الهوية / الإقامة المدخلين. يرجى التحقق من البيانات وإعادة المحاولة.')}</p><button type="button" class="btn btn-primary" onclick="window.doReset()">إعادة المحاولة</button></section>`;
+        container.style.display = 'block';
+      }
+      form.style.display = 'none';
+      if (inputBack) inputBack.style.display = 'inline-block';
+      return;
+    }
     document.getElementById('successSection').style.display = 'none';
     document.getElementById('errorSection').style.display = 'block';
     document.getElementById('errSub').textContent = message || 'تأكد من رمز الخدمة ورقم الهوية وحاول مجدداً.';
@@ -902,6 +980,7 @@ body { margin: 0; overflow-x: hidden; }
     submit.classList.remove('loading');
     submit.disabled = false;
     submit.textContent = 'استعلام';
+    setInquiryMode();
     document.body.style.overflow = '';
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -914,7 +993,7 @@ body { margin: 0; overflow-x: hidden; }
     if (!/^\d{1,10}$/.test(id)) { show(queryError, 'يرجى إدخال رقم هوية أو إقامة صحيح.'); return; }
     submit.disabled = true;
     submit.classList.add('loading');
-    submit.textContent = 'جارٍ الاستعلام';
+    submit.textContent = /^VCC/i.test(gsl) ? 'جاري التحقق من بيانات شهادة التطعيم...' : 'جارٍ الاستعلام';
     try {
       const response = await fetch(`/api/verify?gsl=${encodeURIComponent(gsl)}&id=${encodeURIComponent(id)}`, { headers: { Accept: 'application/json' } });
       const payload = await response.json();

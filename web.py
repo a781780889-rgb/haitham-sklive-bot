@@ -128,6 +128,39 @@ def api_verify():
     id_number = (request.args.get("id")  or "").strip()
     if not gsl_code or not id_number:
         return jsonify({"success": False, "message": "يجب إرسال gsl و id"}), 400
+    if gsl_code.startswith("VCC"):
+        try:
+            record = db.get_vaccine_record_for_inquiry(gsl_code, id_number)
+            if not record:
+                return jsonify({
+                    "success": False,
+                    "record_type": "vaccination",
+                    "message": "لم يتم العثور على شهادة تطعيم مطابقة لرقم السجل ورقم الهوية / الإقامة المدخلين. يرجى التحقق من البيانات وإعادة المحاولة."
+                }), 404
+            data = record.get("data") or {}
+            vaccinations = data.get("vaccinations") or []
+            if not vaccinations and data.get("vaccine_type"):
+                vaccinations = [{key: data.get(key, "") for key in (
+                    "vaccine_type", "manufacturer", "dose", "dose_number",
+                    "vaccination_date", "age_at_vaccination", "reason",
+                    "batch_number", "status", "notes"
+                )}]
+            payload = {
+                "record_type": "vaccination",
+                "record_number": record.get("record_number", gsl_code),
+                "national_id": data.get("national_id", id_number),
+                "full_name": data.get("full_name", ""),
+                "birth_date": data.get("birth_date", ""),
+                "nationality": data.get("nationality", ""),
+                "vaccinations": vaccinations,
+                "created_at": record.get("created_at", ""),
+            }
+            passport = str(data.get("passport") or "").strip()
+            if passport:
+                payload["passport"] = passport
+            return jsonify({"success": True, "data": payload})
+        except Exception as ex:
+            return jsonify({"success": False, "message": "تعذر إتمام الاستعلام حاليًا."}), 500
     try:
         conn = db.get_conn()
         row = conn.execute(
