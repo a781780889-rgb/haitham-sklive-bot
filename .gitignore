@@ -1,1 +1,15 @@
+# Python cache and compiled artifacts
 __pycache__/
+*.py[cod]
+*$py.class
+
+# Local development database
+bot_data.db
+
+# Local environment and runtime files
+.env
+.env.*
+!.env.example
+!.env.basic.example
+!.env.vip.example
+*.log
