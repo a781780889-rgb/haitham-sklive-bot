@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#087f62">
+  <title>بوابة شهادة التطعيم</title>
+  <style>
+    :root{--green:#087f62;--green-dark:#075b49;--blue:#1769aa;--ink:#203346;--muted:#667b8a;--line:#dce8e6;--bg:#f4f8f8}
+    *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:"Tahoma","Arial",sans-serif;line-height:1.7}
+    .topbar{background:linear-gradient(135deg,var(--green-dark),var(--green));color:#fff;padding:18px 20px;box-shadow:0 3px 12px #063f3326}.topbar-inner{max-width:1080px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:15px}.brand{font-size:19px;font-weight:700}.brand small{display:block;font-size:12px;font-weight:400;opacity:.85}
+    .nav a{color:#fff;text-decoration:none;font-size:13px;margin-right:14px;opacity:.92}.nav a:hover{text-decoration:underline}
+    main{max-width:1080px;margin:0 auto;padding:36px 18px 70px}.hero{text-align:center;margin-bottom:25px}.hero .seal{display:inline-grid;place-items:center;width:54px;height:54px;border-radius:50%;background:#e2f3ed;color:var(--green);font-size:30px;margin-bottom:8px}.hero h1{margin:0;color:var(--green-dark);font-size:clamp(25px,5vw,40px)}.hero p{margin:5px auto 0;color:var(--muted);font-size:clamp(14px,2vw,18px)}
+    .card{background:#fff;border:1px solid var(--line);border-radius:20px;box-shadow:0 10px 30px #134b3d12;padding:clamp(18px,3vw,32px)}.form-card{max-width:680px;margin:0 auto}.section-title{margin:0 0 6px;color:var(--green-dark);font-size:22px}.section-subtitle{margin:0 0 22px;color:var(--muted);font-size:14px}
+    .field{margin-bottom:16px}.field label{display:block;font-weight:700;color:var(--ink);margin-bottom:7px}.field input{width:100%;border:1px solid #cbdad8;border-radius:11px;padding:13px 14px;font-size:16px;direction:ltr;text-align:left;outline:none;transition:.2s}.field input:focus{border-color:var(--green);box-shadow:0 0 0 3px #087f6220}.hint{color:var(--muted);font-size:12px;margin-top:5px;direction:rtl;text-align:right}.primary{width:100%;border:0;border-radius:11px;background:var(--green);color:#fff;padding:13px 18px;font-size:16px;font-weight:700;cursor:pointer;transition:.2s}.primary:hover{background:var(--green-dark)}.primary:disabled{opacity:.6;cursor:wait}.alert{display:none;border-radius:11px;padding:12px 14px;margin:0 0 16px;text-align:center;font-size:14px}.alert.error{background:#fff1f1;border:1px solid #edc3c3;color:#8b1a2a}.alert.loading{background:#edf8f5;border:1px solid #bde2d5;color:var(--green-dark)}
+    #result{display:none;margin-top:25px}.result-head{text-align:center;border-bottom:1px solid var(--line);padding-bottom:18px;margin-bottom:20px}.result-head .ok{display:inline-grid;place-items:center;width:43px;height:43px;border-radius:50%;background:#e4f5ed;color:var(--green);font-size:24px}.result-head h2{margin:5px 0 0;color:var(--green-dark);font-size:clamp(22px,4vw,32px)}.result-head p{margin:2px 0;color:var(--muted)}.record-badge{display:inline-block;color:var(--green);font-weight:700;font-size:14px;margin-top:5px}
+    .title{display:flex;align-items:center;gap:10px;margin:24px 0 12px;color:var(--green-dark);font-size:19px}.title:after{content:"";height:1px;background:var(--line);flex:1}.personal{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.data{padding:12px 14px;background:#f8fbfb;border:1px solid #e5efed;border-radius:11px;min-width:0}.data span{display:block;color:var(--muted);font-size:12px;margin-bottom:3px}.data strong{display:block;overflow-wrap:anywhere}
+    .dose-list{display:grid;gap:14px}.dose{border:1px solid #cfe5dc;border-radius:15px;padding:16px;background:linear-gradient(180deg,#fbfffd,#f2faf7)}.dose-head{display:flex;align-items:center;gap:9px;color:var(--green-dark);margin-bottom:11px}.dose-num{display:grid;place-items:center;width:31px;height:31px;border-radius:50%;background:var(--green);color:#fff;font-weight:700}.dose h4{margin:0;font-size:17px}.dose-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}.empty{color:var(--muted);text-align:center;padding:15px}.note{text-align:center;background:#edf7f5;color:#54736a;border-radius:10px;padding:11px;margin:22px 0 0;font-size:13px}
+    .back{display:block;margin:20px auto 0;max-width:240px;background:#fff;color:var(--green);border:1px solid #abd2c5}.back:hover{background:#edf8f5}.footer{text-align:center;color:var(--muted);font-size:12px;margin-top:30px}.hidden{display:none!important}
+    @media(max-width:640px){.topbar-inner{display:block;text-align:center}.nav{margin-top:8px}.nav a{margin:0 7px}.personal,.dose-grid{grid-template-columns:1fr}.card{border-radius:14px;padding:16px}.hero{margin-bottom:18px}main{padding:25px 12px 50px}.dose{padding:13px}.dose h4{font-size:15px}}
+  </style>
+</head>
+<body>
+  <header class="topbar"><div class="topbar-inner"><div class="brand">نظام شهادة التطعيم الإلكترونية<small>بوابة الاستعلام عن سجل التطعيمات</small></div><nav class="nav"><a href="/vaccination">الرئيسية</a><a href="#query">الاستعلام</a><a href="#help">المساعدة</a></nav></div></header>
+  <main>
+    <section class="hero"><span class="seal">✓</span><h1>شهادة التطعيم</h1><p>خدمة الاستعلام الإلكتروني عن بيانات شهادة التطعيم وسجل التطعيمات المرتبط بها</p></section>
+    <section id="query" class="card form-card"><h2 class="section-title">الاستعلام عن شهادة التطعيم</h2><p class="section-subtitle">أدخل رقم السجل ورقم الهوية / الإقامة للتحقق من بيانات الشهادة.</p>
+      <div id="error" class="alert error" role="alert"></div><div id="loading" class="alert loading">جاري التحقق من بيانات شهادة التطعيم...</div>
+      <form id="query-form" novalidate>
+        <div class="field"><label for="record">رقم السجل</label><input id="record" name="record" type="text" maxlength="32" autocomplete="off" placeholder="VCC260818418" required><div class="hint">مثال توضيحي فقط، وكل شهادة لها رقم سجل مختلف.</div></div>
+        <div class="field"><label for="national-id">رقم الهوية / الإقامة</label><input id="national-id" name="national-id" type="text" inputmode="numeric" maxlength="10" placeholder="1074820224" required><div class="hint">لا تُحفظ القيمة في المتصفح ولا تُعرض إلا عند مطابقة السجل.</div></div>
+        <button id="submit" class="primary" type="submit">استعلام</button>
+      </form>
+    </section>
+    <section id="result" class="card" aria-live="polite"></section>
+    <button id="back" class="primary back hidden" type="button">إجراء استعلام جديد</button>
+    <div id="help" class="footer">بوابة إلكترونية مستقلة لعرض بيانات شهادات التطعيم المسجلة في النظام.</div>
+  </main>
+  <script>
+  (()=>{
+    const form=document.getElementById('query-form'), record=document.getElementById('record'), national=document.getElementById('national-id'), submit=document.getElementById('submit'), error=document.getElementById('error'), loading=document.getElementById('loading'), result=document.getElementById('result'), back=document.getElementById('back');
+    const esc=v=>String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const date=v=>{const m=String(v??'').match(/^(\d{4})-(\d{2})-(\d{2})/);return m?`${m[3]}/${m[2]}/${m[1]}`:(v||'—')};
+    const field=(label,value)=>String(value??'').trim()?`<div class="data"><span>${esc(label)}</span><strong>${esc(value)}</strong></div>`:'';
+    const showError=m=>{error.textContent=m;error.style.display='block'};
+    function draw(data){
+      const vaccines=Array.isArray(data.vaccinations)?data.vaccinations:[];
+      const doses=vaccines.map((v,i)=>`<article class="dose"><div class="dose-head"><span class="dose-num">${i+1}</span><h4>بيانات التطعيم ${i+1}</h4></div><div class="dose-grid">${field('نوع التطعيم',v.vaccine_type||v.vaccine_name||v.vaccine)}${field('الشركة المصنعة',v.manufacturer)}${field('الجرعة',v.dose||v.dose_number)}${field('تاريخ التطعيم',date(v.vaccination_date))}${field('العمر عند التطعيم',v.age_at_vaccination)}${field('سبب التطعيم',v.reason)}${field('رقم التشغيلة',v.batch_number)}${field('الحالة',v.status)}${field('ملاحظات',v.notes)}</div></article>`).join('');
+      result.innerHTML=`<div class="result-head"><span class="ok">✓</span><h2>تم العثور على شهادة التطعيم</h2><p>Vaccination Certificate</p><span class="record-badge">رقم السجل: ${esc(data.record_number)}</span></div><h3 class="title">بيانات المستفيد</h3><div class="personal">${field('الاسم الكامل',data.full_name)}${field('رقم الهوية / الإقامة',data.national_id)}${field('تاريخ الميلاد',data.birth_date)}${field('رقم جواز السفر',data.passport)}${field('الجنسية',data.nationality)}</div><h3 class="title">سجل التطعيمات</h3><div class="dose-list">${doses||'<div class="empty">لا توجد جرعات مسجلة لهذه الشهادة.</div>'}</div><p class="note">تم عرض البيانات الفعلية بعد مطابقة رقم السجل مع رقم الهوية / الإقامة.</p>`;
+      result.style.display='block';form.parentElement.style.display='none';back.classList.remove('hidden');result.scrollIntoView({behavior:'smooth',block:'start'});
+    }
+    form.addEventListener('submit',async e=>{e.preventDefault();error.style.display='none';const r=record.value.trim().toUpperCase(),n=national.value.trim();if(!/^VCC[A-Z0-9-]{3,31}$/.test(r)){showError('يرجى إدخال رقم سجل شهادة تطعيم صحيح يبدأ بـ VCC.');return}if(!/^\d{1,10}$/.test(n)){showError('يرجى إدخال رقم هوية أو إقامة صحيح.');return}submit.disabled=true;loading.style.display='block';try{const res=await fetch(`/api/vaccination/verify?record_number=${encodeURIComponent(r)}&national_id=${encodeURIComponent(n)}`,{headers:{Accept:'application/json'}});const p=await res.json();if(!res.ok||!p.success)throw new Error(p.message||'لم يتم العثور على شهادة تطعيم مطابقة.');draw(p.data)}catch(err){showError(err.message||'تعذر إتمام الاستعلام حاليًا.')}finally{loading.style.display='none';submit.disabled=false}});
+    back.addEventListener('click',()=>{result.style.display='none';result.innerHTML='';form.parentElement.style.display='';form.reset();back.classList.add('hidden');record.focus();window.scrollTo({top:0,behavior:'smooth'})});
+  })();
+  </script>
+</body>
+</html>

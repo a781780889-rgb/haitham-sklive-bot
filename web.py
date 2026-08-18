@@ -81,6 +81,24 @@ def get_html():
     return _HTML_CACHE
 
 
+_VACCINATION_HTML_CACHE = None
+
+def get_vaccination_html():
+    global _VACCINATION_HTML_CACHE
+    if _VACCINATION_HTML_CACHE is None:
+        template_path = os.path.join(_THIS_DIR, "templates", "vaccination_portal.html")
+        with open(template_path, "r", encoding="utf-8") as template_file:
+            _VACCINATION_HTML_CACHE = template_file.read()
+    return _VACCINATION_HTML_CACHE
+
+
+@app.route("/vaccination")
+@app.route("/vaccination/")
+def vaccination_portal():
+    """بوابة مستقلة لشهادات التطعيم؛ لا تستخدم قالب الإجازات الطبية."""
+    return get_vaccination_html()
+
+
 @app.route("/")
 @app.route("/verify")
 @app.route("/verify/<path:gsl_code>")
@@ -120,6 +138,36 @@ def api_chat_link():
             "message": "المحادثة غير مهيأة حاليًا. يرجى التواصل مع إدارة الموقع."
         }), 503
     return jsonify({"success": True, "url": chat_url})
+
+
+@app.route("/api/vaccination/verify")
+def api_vaccination_verify():
+    record_number = (request.args.get("record_number") or "").strip().upper()
+    national_id = (request.args.get("national_id") or "").strip()
+    if not record_number or not national_id:
+        return jsonify({"success": False, "message": "يرجى إدخال رقم السجل ورقم الهوية / الإقامة."}), 400
+    if not record_number.startswith("VCC") or not national_id.isdigit() or len(national_id) > 10:
+        return jsonify({"success": False, "message": "بيانات الاستعلام غير صحيحة."}), 400
+    try:
+        record = db.get_vaccine_record_for_inquiry(record_number, national_id)
+        if not record:
+            return jsonify({"success": False, "message": "لم يتم العثور على شهادة تطعيم مطابقة لرقم السجل ورقم الهوية / الإقامة المدخلين."}), 404
+        data = record.get("data") or {}
+        vaccinations = data.get("vaccinations") or []
+        if not vaccinations and data.get("vaccine_type"):
+            vaccinations = [{key: data.get(key, "") for key in ("vaccine_type", "manufacturer", "dose", "dose_number", "vaccination_date", "age_at_vaccination", "reason", "batch_number", "status", "notes")}]
+        response_data = {
+            "record_type": "vaccination", "record_number": record.get("record_number", record_number),
+            "national_id": data.get("national_id", national_id), "full_name": data.get("full_name", ""),
+            "birth_date": data.get("birth_date", ""), "nationality": data.get("nationality", ""),
+            "vaccinations": vaccinations, "created_at": record.get("created_at", ""),
+        }
+        passport = str(data.get("passport") or "").strip()
+        if passport:
+            response_data["passport"] = passport
+        return jsonify({"success": True, "data": response_data})
+    except Exception:
+        return jsonify({"success": False, "message": "تعذر إتمام الاستعلام حاليًا."}), 500
 
 
 @app.route("/api/verify")

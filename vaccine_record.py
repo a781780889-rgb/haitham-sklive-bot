@@ -529,7 +529,7 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
 
     # QR المرجعي: على صفحة A3 النهائية x=383.50، y=324.84، بمقاس 75×75 نقطة.
     # تُحوّل الإحداثيات عكسيًا إلى طبقة القالب الداخلية قبل تكبيرها مع الصفحة.
-    qr_url = "https://sehasa.online/#/inquiries/slenquiry"
+    qr_url = "https://sehasa.online/vaccination"
     qr_x = 383.50 / scale_x
     # موضع Certificate No السابق: QR متمركز أسفل رقم الشهادة وبمقاس 75×75 نقطة.
     qr_y = 238.0 / scale_y
@@ -572,7 +572,7 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
     c.drawCentredString(issue_center_x, 195.0 / scale_y, "Scan the QR code to electronically validate this document or visit the following URL:")
     c.setFont(FONT_EN, 4.4)
     c.setFillColor(colors.HexColor("#111111"))
-    c.drawCentredString(issue_center_x, 180.0 / scale_y, "https://sehasa.online/#/inquiries/slenquiry")
+    c.drawCentredString(issue_center_x, 180.0 / scale_y, "https://sehasa.online/vaccination")
     c.save()
     overlay = PdfReader(str(overlay_path))
     overlay_page = overlay.pages[0]
