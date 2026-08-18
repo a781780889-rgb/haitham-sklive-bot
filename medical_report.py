@@ -393,6 +393,8 @@ def create_template_pdf(data, output_path, template_path):
     # مراكز الأعمدة مستخرجة من الصورة المرجعية بعد تحويلها إلى نقاط A3.
     # العمود الإنجليزي: 314.6pt، العمود العربي: 550.0pt، والقيم المفردة: 432.0pt.
     x_en, x_ar, x_single = 314.6, 550.0, 432.0
+    # رفع موحد وقليل لكل قيم البيانات مع إبقاء كل قيمة مقابل عنوانها.
+    data_vertical_lift_pt = 3.0
     admission = date_display(value("admission_date"))
     discharge = date_display(value("discharge_date", data.get("discharge_or_days", "—")))
     issue_date = date_display(value("issue_date", datetime.now().strftime("%d/%m/%Y")))
@@ -412,45 +414,45 @@ def create_template_pdf(data, output_path, template_path):
     # الرفع هنا بوحدة PDF الفعلية (points)، وليس بوحدة القالب أو الشاشة.
     # إجمالي الرفع عن الموضع الأصلي: 17 نقطة PDF (إضافة 8 نقاط فوق الرفع السابق).
     leave_code_vertical_shift_pt = 17.0
-    leave_code_center_x, leave_code_center_y = x_single, sy(698) + leave_code_vertical_shift_pt
+    leave_code_center_x, leave_code_center_y = x_single, sy(698) + leave_code_vertical_shift_pt + data_vertical_lift_pt
     fit_center(_medical_leave_code(data), leave_code_center_x, leave_code_center_y, english_font)
     # توسيط تاريخ الدخول الميلادي أمام Admission Date في مركز خانته.
     # مطابق للصورة المرجعية: مركز النص عند 314.6 نقطة أفقياً.
     admission_date_vertical_shift_pt = -4.6
     admission_date_center_x = x_en
-    admission_date_center_y = sy(678) + admission_date_vertical_shift_pt
+    admission_date_center_y = sy(678) + admission_date_vertical_shift_pt + data_vertical_lift_pt
     fit_center(admission, admission_date_center_x, admission_date_center_y, english_font)
     # توسيط تاريخ الدخول الهجري في نفس صف تاريخ الدخول الميلادي ورفعه إلى موضعه الصحيح.
-    admission_hijri_x, admission_hijri_y = x_ar, sy(678)
+    admission_hijri_x, admission_hijri_y = x_ar, sy(678) + data_vertical_lift_pt
     fit_center(hijri_value(admission), admission_hijri_x, admission_hijri_y, english_font)
-    fit_center(discharge, x_en, sy(650), english_font)
+    fit_center(discharge, x_en, sy(650) + data_vertical_lift_pt, english_font)
     # مركز تاريخ الخروج الهجري مقابل صف «تاريخ الخروج» بدقة.
-    discharge_hijri_x, discharge_hijri_y = x_ar, sy(634)
+    discharge_hijri_x, discharge_hijri_y = x_ar, sy(634) + data_vertical_lift_pt
     fit_center(hijri_value(discharge), discharge_hijri_x, discharge_hijri_y, english_font)
     # إنزال تاريخ الإصدار إلى مركز صف «تاريخ إصدار التقرير» فقط.
-    issue_center_x, issue_center_y = x_single, sy(600)
+    issue_center_x, issue_center_y = x_single, sy(600) + data_vertical_lift_pt
     fit_center(issue_date, issue_center_x, issue_center_y, english_font)
     # إنزال اسم المريض إلى مركز صف «الاسم» فقط.
-    name_center_x_en, name_center_x_ar, name_center_y = x_en, x_ar, sy(570)
+    name_center_x_en, name_center_x_ar, name_center_y = x_en, x_ar, sy(570) + data_vertical_lift_pt
     fit_center(name_en, name_center_x_en, name_center_y, english_font)
     fit_center(name_ar, name_center_x_ar, name_center_y, "MedicalArabicTemplate", rtl=True)
     # إنزال رقم الهوية إلى مركز صف «رقم الهوية / الإقامة» فقط.
-    identity_center_x, identity_center_y = x_single, sy(541)
+    identity_center_x, identity_center_y = x_single, sy(541) + data_vertical_lift_pt
     fit_center(id_number, identity_center_x, identity_center_y, english_font)
     # مركز صف «الجنسية» مقابل التسمية العربية مباشرة.
-    nationality_center_x_en, nationality_center_x_ar, nationality_center_y = x_en, x_ar, sy(513)
+    nationality_center_x_en, nationality_center_x_ar, nationality_center_y = x_en, x_ar, sy(513) + data_vertical_lift_pt
     fit_center(nationality_en, nationality_center_x_en, nationality_center_y, english_font)
     fit_center(nationality_ar, nationality_center_x_ar, nationality_center_y, "MedicalArabicTemplate", rtl=True)
     # مركز صف «جهة العمل» قبل صف اسم الممارس مباشرة.
-    workplace_center_x_en, workplace_center_x_ar, workplace_center_y = x_en, x_ar, sy(485)
+    workplace_center_x_en, workplace_center_x_ar, workplace_center_y = x_en, x_ar, sy(485) + data_vertical_lift_pt
     fit_center(workplace_en, workplace_center_x_en, workplace_center_y, english_font)
     fit_center(workplace_ar, workplace_center_x_ar, workplace_center_y, "MedicalArabicTemplate", rtl=True)
     # مركز صف «اسم الممارس» أعلى صف المسمى الوظيفي مباشرة.
-    practitioner_center_x_en, practitioner_center_x_ar, practitioner_center_y = x_en, x_ar, sy(457)
+    practitioner_center_x_en, practitioner_center_x_ar, practitioner_center_y = x_en, x_ar, sy(457) + data_vertical_lift_pt
     fit_center(doctor_en, practitioner_center_x_en, practitioner_center_y, english_font)
     fit_center(doctor_ar, practitioner_center_x_ar, practitioner_center_y, "MedicalArabicTemplate", rtl=True)
     # مركز خانة «المسمى الوظيفي»: نفس المركز الأفقي للعمود مع ضبط خط الأساس بصريًا.
-    position_center_x_en, position_center_x_ar, position_center_y = x_en, x_ar, sy(429)
+    position_center_x_en, position_center_x_ar, position_center_y = x_en, x_ar, sy(429) + data_vertical_lift_pt
     fit_center(specialty_en, position_center_x_en, position_center_y, english_font)
     fit_center(specialty_ar, position_center_x_ar, position_center_y, "MedicalArabicTemplate", rtl=True)
 
