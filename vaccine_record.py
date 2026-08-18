@@ -506,8 +506,8 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
     # رفع نص إصدار الوثيقة فوق QR بفاصل صغير؛ التغطية تتم قبل إعادة رسم QR.
     issue_center_x = 421.00 / scale_x
     # موضع QR السابق: هنا يوضع نص إصدار الوثيقة على سطرين.
-    issue_ar_y = 375.0 / scale_y
-    issue_en_y = 361.5 / scale_y
+    issue_ar_y = 430.0 / scale_y
+    issue_en_y = 416.5 / scale_y
     c.setFillColor(colors.white)
     c.rect(100.0 / scale_x, 270.0 / scale_y, 642.0 / scale_x, 160.0 / scale_y, stroke=0, fill=1)
     c.setFillColor(FONT_COLOR)
@@ -515,6 +515,11 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
     c.drawCentredString(issue_center_x, issue_ar_y, _pdf_text("تم إصدار هذه الوثيقة من قبل وزارة الصحة، المملكة العربية السعودية"))
     c.setFont(FONT_EN, FIELD_EN_SIZE)
     c.drawCentredString(issue_center_x, issue_en_y, "This Document has been issued by the Ministry of Health, Kingdom of Saudi Arabia")
+    # نقل عبارة رقم الشهادة إلى موضع QR السابق، مع فصلها عن نص الإصدار.
+    c.setFont(FONT_EN, FIELD_EN_SIZE)
+    c.drawCentredString(issue_center_x, 370.0 / scale_y, "Certificate No.")
+    c.setFont(FONT_AR, FIELD_AR_SIZE)
+    c.drawCentredString(issue_center_x, 356.0 / scale_y, _pdf_text("رقم الشهادة"))
 
     # QR المرجعي: على صفحة A3 النهائية x=383.50، y=324.84، بمقاس 75×75 نقطة.
     # تُحوّل الإحداثيات عكسيًا إلى طبقة القالب الداخلية قبل تكبيرها مع الصفحة.
