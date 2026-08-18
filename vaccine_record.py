@@ -482,6 +482,8 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
         for index, key in enumerate(bottom_keys):
             value = vaccination.get(key) or ""
             x = green_left + index * green_width
+            if key == "reason":
+                x -= 4.0
             value_color = FONT_COLOR
             english_value = _pdf_display_value(value, key, "en")
             arabic_value = _pdf_display_value(value, key, "ar")
