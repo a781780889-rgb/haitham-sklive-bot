@@ -427,9 +427,11 @@ def create_template_pdf(data, output_path, template_path):
     # وضع التاريخين على خط صف واحد فعلياً مقابل Admission Date / تاريخ الدخول.
     admission_hijri_x, admission_hijri_y = x_ar, admission_row_center_y
     fit_center(hijri_value(admission), admission_hijri_x, admission_hijri_y, english_font)
-    fit_center(discharge, x_en, sy(650) + data_vertical_lift_pt, english_font)
-    # مركز تاريخ الخروج الهجري مقابل صف «تاريخ الخروج» بدقة.
-    discharge_hijri_x, discharge_hijri_y = x_ar, sy(634) + data_vertical_lift_pt
+    # صف تاريخ الخروج واحد فعلياً للتاريخين الميلادي والهجري.
+    discharge_row_center_y = sy(650) + data_vertical_lift_pt
+    fit_center(discharge, x_en, discharge_row_center_y, english_font)
+    # وضع 28-01-1448 على نفس خط 13/07/2026 أمام تاريخ الخروج.
+    discharge_hijri_x, discharge_hijri_y = x_ar, discharge_row_center_y
     fit_center(hijri_value(discharge), discharge_hijri_x, discharge_hijri_y, english_font)
     # إنزال تاريخ الإصدار إلى مركز صف «تاريخ إصدار التقرير» فقط.
     issue_center_x, issue_center_y = x_single, sy(600) + data_vertical_lift_pt
