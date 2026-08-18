@@ -451,9 +451,9 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
         if key == "passport" and value == "Not Provided":
             field_en_y = y + 7.0
             field_ar_y = y + 7.0
-        elif key == "birth_date" and value == "1995":
-            field_en_y = y + 3.0
-            field_ar_y = y + 2.0
+        elif key == "birth_date":
+            field_en_y = y + 5.0
+            field_ar_y = y + 5.0
         elif key == "full_name":
             field_en_y = y - 3.0
             field_ar_y = y - 3.0
