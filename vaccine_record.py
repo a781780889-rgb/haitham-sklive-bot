@@ -503,6 +503,18 @@ def make_pdf(data: dict[str, str], record_number: str) -> Path:
     # رقم السجل الداخلي أسفل عنوان رقم الشهادة في القالب.
     _draw_fit_centered(c, record_number, 112.0, 180.0, 145.0, FONT_EN, 4.875, FONT_COLOR, min_size=3.25)
 
+    # رفع نص إصدار الوثيقة فوق QR بفاصل صغير؛ التغطية تتم قبل إعادة رسم QR.
+    issue_center_x = 421.00 / scale_x
+    issue_ar_y = 414.0 / scale_y
+    issue_en_y = 400.5 / scale_y
+    c.setFillColor(colors.white)
+    c.rect(100.0 / scale_x, 280.0 / scale_y, 642.0 / scale_x, 150.0 / scale_y, stroke=0, fill=1)
+    c.setFillColor(FONT_COLOR)
+    c.setFont(FONT_AR, FIELD_AR_SIZE)
+    c.drawCentredString(issue_center_x, issue_ar_y, _pdf_text("تم إصدار هذه الوثيقة من قبل وزارة الصحة، المملكة العربية السعودية"))
+    c.setFont(FONT_EN, FIELD_EN_SIZE)
+    c.drawCentredString(issue_center_x, issue_en_y, "This Document has been issued by the Ministry of Health, Kingdom of Saudi Arabia")
+
     # QR المرجعي: على صفحة A3 النهائية x=383.50، y=324.84، بمقاس 75×75 نقطة.
     # تُحوّل الإحداثيات عكسيًا إلى طبقة القالب الداخلية قبل تكبيرها مع الصفحة.
     qr_url = "https://sehasa.online/#/inquiries/slenquiry"
