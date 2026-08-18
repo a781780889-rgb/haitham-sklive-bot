@@ -409,7 +409,8 @@ def create_template_pdf(data, output_path, template_path):
 
     # مركز رقم التقرير مقابل صف «رمز الإجازة» بدقة.
     # الرفع هنا بوحدة PDF الفعلية (points)، وليس بوحدة القالب أو الشاشة.
-    leave_code_vertical_shift_pt = 3.0
+    # إجمالي الرفع عن الموضع الأصلي: 9 نقاط PDF (3 سابقة + 6 إضافية).
+    leave_code_vertical_shift_pt = 9.0
     leave_code_center_x, leave_code_center_y = x_single, sy(698) + leave_code_vertical_shift_pt
     fit_center(_medical_leave_code(data), leave_code_center_x, leave_code_center_y, english_font)
     fit_center(admission, x_en, sy(678), english_font)
