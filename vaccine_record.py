@@ -277,7 +277,7 @@ def transliterate_arabic_name(value: str) -> str:
     mapping = {
         "ا": "a", "أ": "a", "إ": "i", "آ": "a", "ب": "b", "ت": "t", "ث": "th", "ج": "j", "ح": "h", "خ": "kh",
         "د": "d", "ذ": "dh", "ر": "r", "ز": "z", "س": "s", "ش": "sh", "ص": "s", "ض": "d", "ط": "t", "ظ": "z",
-        "ع": "a", "غ": "gh", "ف": "f", "ق": "q", "ك": "k", "ل": "l", "م": "m", "ن": "n", "ه": "h", "و": "w", "ي": "y", "ى": "a", "ة": "h", "ء": "a",
+        "ع": "a", "غ": "gh", "ف": "f", "ق": "q", "ك": "k", "ل": "l", "م": "m", "ن": "n", "ه": "h", "و": "w", "ي": "y", "ى": "a", "ة": "h", "ء": "a", "ئ": "i", "ؤ": "w",
     }
     words = ["".join(mapping.get(ch, ch) for ch in word) for word in str(value or "").split()]
     return " ".join(words).upper()
@@ -286,7 +286,7 @@ def transliterate_arabic_name(value: str) -> str:
 def translate(value: str, field: str) -> str:
     maps = {
         "هيثم العقلاني": "Haitham Al-Aqlani", "هيثم عقلان": "Haitham Al-Aqlani",
-        "سعودي": "Saudi", "السعودية": "Saudi Arabia", "مصري": "Egyptian", "مصر": "Egypt",
+        "سعودي": "Saudi", "السعودية": "Saudi Arabia", "السعوديه": "Saudi Arabia", "مصري": "Egyptian", "مصر": "Egypt",
         "إماراتي": "Emirati", "الإمارات": "United Arab Emirates", "كويتي": "Kuwaiti",
         "جرعة روتينية": "Routine vaccination", "سفر": "Travel requirement", "للوقاية": "Preventive vaccination",
         "وقاية": "Preventive vaccination", "متطلب وظيفي": "Occupational requirement",
