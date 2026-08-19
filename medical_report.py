@@ -445,7 +445,10 @@ def create_template_pdf(data, output_path, template_path):
     c.setFillColor(HexColor("#3A75B8"))
     fit_center(_medical_leave_code(data), ref_x(304), leave_row_y, table_bold_font, size=10.0, max_width=150)
     c.restoreState()
-    fit_center("رمز الإجازة", ref_x(515), leave_row_y, arabic_font, size=8.53, max_width=105, rtl=True)
+    c.saveState()
+    c.setFillColor(HexColor("#3A75B8"))
+    fit_center("رمز الإجازة", ref_x(515), leave_row_y, table_bold_font, size=10.0, max_width=105, rtl=True)
+    c.restoreState()
 
 
     # صف الدخول: أربعة عناصر في سطر واحد والخط الأحمر يمر عبر منتصفها.
