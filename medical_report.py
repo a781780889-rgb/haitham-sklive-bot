@@ -676,6 +676,8 @@ def create_template_pdf(data, output_path, template_path):
     c.setStrokeColor(HexColor("#3A75B8"))
     c.setLineWidth(1.0 * scale)
     c.rect(sx(27), sy(265), sx(541), sy(145), stroke=1, fill=0)
+    # فاصل رأسي في منتصف المستطيل بين التشخيص الإنجليزي والعربي.
+    c.line(sx(297.5), sy(265), sx(297.5), sy(410))
     c.restoreState()
 
     c.save()
