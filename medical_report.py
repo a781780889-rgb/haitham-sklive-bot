@@ -477,7 +477,20 @@ def create_template_pdf(data, output_path, template_path):
     c.line(ref_x(30), name_row_y + 3.2 * scale, ref_x(565), name_row_y + 3.2 * scale)
     c.restoreState()
 
-    fit_center(id_number, ref_x(302.640), ref_y_top(278.028), english_font)
+    # صف الهوية: ثلاثة عناصر في سطر واحد والخط الأحمر يمر عبر منتصفها.
+    c.saveState()
+    c.setFillColorRGB(1, 1, 1)
+    c.rect(ref_x(24), page_h - ref_y_top(305.0), ref_x(547), ref_y_top(275.0) - ref_y_top(305.0), stroke=0, fill=1)
+    c.restoreState()
+
+    id_row_y = ref_y_top(292.0)
+    fit_center(id_number, ref_x(304), id_row_y, english_font, size=9.2, max_width=120)
+
+    c.saveState()
+    c.setStrokeColor(HexColor("#D9534F"))
+    c.setLineWidth(0.9 * scale)
+    c.line(ref_x(30), id_row_y + 3.2 * scale, ref_x(565), id_row_y + 3.2 * scale)
+    c.restoreState()
     fit_center(nationality_en, ref_x(191.182), ref_y_top(309.248), english_font)
     fit_center(nationality_ar, ref_x(404.676), ref_y_top(307.285), "MedicalArabicTemplate", rtl=True)
     fit_center(workplace_en, ref_x(214.270), ref_y_top(337.658), english_font)
