@@ -518,8 +518,22 @@ def create_template_pdf(data, output_path, template_path):
     c.setLineWidth(0.9 * scale)
     c.line(ref_x(30), id_row_y + 3.2 * scale, ref_x(565), id_row_y + 3.2 * scale)
     c.restoreState()
-    fit_center(nationality_en, ref_x(191.182), ref_y_top(309.248), english_font)
-    fit_center(nationality_ar, ref_x(404.676), ref_y_top(307.285), "MedicalArabicTemplate", rtl=True)
+    # صف الجنسية: أربعة عناصر في سطر واحد والخط الأحمر يمر عبر منتصفها.
+    c.saveState()
+    c.setFillColorRGB(1, 1, 1)
+    c.rect(ref_x(24), page_h - ref_y_top(335.0), ref_x(547), ref_y_top(300.0) - ref_y_top(335.0), stroke=0, fill=1)
+    c.restoreState()
+
+    # خط الأساس المصحح يطابق مركز العناوين المرئية Nationality والجنسية.
+    nationality_row_y = ref_y_top(323.0)
+    fit_center(nationality_en, ref_x(215), nationality_row_y, english_font, size=9.2, max_width=115)
+    fit_center(nationality_ar, ref_x(405), nationality_row_y, "MedicalArabicTemplate", size=9.2, max_width=115, rtl=True)
+
+    c.saveState()
+    c.setStrokeColor(HexColor("#D9534F"))
+    c.setLineWidth(0.9 * scale)
+    c.line(ref_x(30), nationality_row_y + 3.2 * scale, ref_x(565), nationality_row_y + 3.2 * scale)
+    c.restoreState()
     # صف جهة العمل: أربعة عناصر في سطر واحد والخط الأحمر يمر عبر منتصفها.
     c.saveState()
     c.setFillColorRGB(1, 1, 1)
