@@ -869,7 +869,7 @@ _TITLE_MAP = {
     "استشاري":"Consultant",      "استشارية":"Consultant",
     "أخصائي":"Specialist",       "أخصائية":"Specialist",
     "اخصائي":"Specialist",       "اخصائية":"Specialist",
-    "ممارس عام":"General Practitioner",
+    "ممارس عام":"General Practitioner", "طبيب عام":"General Practitioner",
     "طب عام":"General Medicine", "جراح":"Surgeon",
     "طب الطوارئ":"Emergency Medicine","طوارئ":"Emergency",
     "باطنية":"Internal Medicine","باطنة":"Internal Medicine",
@@ -900,6 +900,13 @@ _TRANS_CACHE = {}
 # الأسماء الإنجليزية الرسمية المعتمدة — لا ترجمة آلية
 # ══════════════════════════════════════════════════════════════
 _HOSPITAL_MAP = {
+    # ── الأسماء الأساسية الشائعة ─────────────────────────────
+    "مستشفى السلام":                            "Al Salam Hospital",
+    "مستشفى الملك فهد":                         "King Fahd Hospital",
+    "مستشفى الملك فيصل التخصصي":                "King Faisal Specialist Hospital",
+    "مستشفى النور التخصصي":                     "Al Noor Specialist Hospital",
+    "مستشفى القوات المسلحة":                    "Armed Forces Hospital",
+
     # ── مدن طبية حكومية ──────────────────────────────────────
     "مدينة الأمير سلطان الطبية العسكرية":          "Prince Sultan Military Medical City",
     "مدينة الملك سعود الطبية":                      "King Saud Medical City",

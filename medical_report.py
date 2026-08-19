@@ -413,13 +413,37 @@ def create_template_pdf(data, output_path, template_path):
     def value(key, fallback="—"):
         return str(data.get(key) or fallback).strip()
 
-    def english_value(text):
+    def english_value(text, context="general"):
+        """ترجمة سياقية: أسماء المؤسسات ترجمة معنوية، والأسماء الشخصية نقل صوتي منظم فقط."""
+        raw = str(text or "").strip()
+        if not raw:
+            return ""
+        if not any("\u0600" <= ch <= "\u06ff" for ch in raw):
+            return raw
         try:
-            from pdf_gen import _to_en
-            translated = str(_to_en(text) or "").strip()
-            return translated or text
+            from pdf_gen import _lookup_hospital, nat_en, _lookup_title, translate_ar_to_en
+            if context == "hospital":
+                official = _lookup_hospital(raw)
+                if official:
+                    return official
+                # قاعدة احتياطية طبيعية للأسماء غير الموجودة في القاموس: مستشفى = Hospital.
+                if raw.startswith("مستشفى "):
+                    return f"{raw[8:].strip()} Hospital"
+            if context == "nationality":
+                return nat_en(raw) or raw
+            if context == "title":
+                title = _lookup_title(raw)
+                if title:
+                    return title
+            # النص الطبي العام يترجم معنىً، ولا يُمرر عبر transliteration.
+            if context in {"diagnosis", "workplace", "general"}:
+                translated = str(translate_ar_to_en(raw) or "").strip()
+                if translated and not translated.lower().replace(" ", "").startswith(("mstshfa", "alslam")):
+                    return translated
+            from pdf_gen import transliterate_name
+            return str(transliterate_name(raw) or raw).strip()
         except Exception:
-            return text
+            return raw
 
     def date_display(text):
         parsed = _parse_date(text)
@@ -473,13 +497,13 @@ def create_template_pdf(data, output_path, template_path):
     name_ar = value("patient_name")
     name_en = value("patient_name_en", english_value(name_ar)).upper()
     nationality_ar = value("nationality")
-    nationality_en = value("nationality_en", english_value(nationality_ar))
+    nationality_en = value("nationality_en", english_value(nationality_ar, "nationality"))
     workplace_ar = value("workplace")
-    workplace_en = value("workplace_en", english_value(workplace_ar))
+    workplace_en = value("workplace_en", english_value(workplace_ar, "workplace"))
     doctor_ar = value("doctor")
-    doctor_en = value("doctor_en", english_value(doctor_ar)).upper()
+    doctor_en = value("doctor_en", english_value(doctor_ar, "person")).upper()
     specialty_ar = value("specialty")
-    specialty_en = value("specialty_en", english_value(specialty_ar))
+    specialty_en = value("specialty_en", english_value(specialty_ar, "title"))
 
     # صف رمز الإجازة: ثلاثة عناصر في سطر واحد والخط الأحمر يمر عبر منتصفها.
     leave_row_y = ref_y_top(148.0)
@@ -684,8 +708,8 @@ def create_template_pdf(data, output_path, template_path):
     c.restoreState()
 
     # النص الطبي الإنجليزي الديناميكي داخل المستطيل الثاني.
-    english_patient = english_value(value("patient_name"))
-    english_diagnosis = english_value(value("diagnosis"))
+    english_patient = english_value(value("patient_name"), "person")
+    english_diagnosis = english_value(value("diagnosis"), "diagnosis")
     english_days = english_value(str(days_for_text))
     english_start = str(start_for_text).replace("/", "-")
     english_end = str(end_for_text).replace("/", "-")
@@ -764,7 +788,12 @@ def create_template_pdf(data, output_path, template_path):
     hospital_name = str(data.get("hospital") or "").strip()
     hospital_info = db.get_hospital_by_name(hospital_name) or {}
     hospital_name_ar = hospital_name or "—"
-    hospital_name_en = str(hospital_info.get("name_en") or english_value(hospital_name_ar)).strip()
+    try:
+        from pdf_gen import _lookup_hospital
+        official_hospital_en = _lookup_hospital(hospital_name_ar)
+    except Exception:
+        official_hospital_en = None
+    hospital_name_en = str(official_hospital_en or hospital_info.get("name_en") or english_value(hospital_name_ar, "hospital")).strip()
     hospital_license = str(data.get("hospital_license") or "").strip()
     hospital_private = _is_private_hospital(data)
     hospital_logo_path = None
