@@ -675,7 +675,10 @@ def create_template_pdf(data, output_path, template_path):
     c.saveState()
     c.setStrokeColor(HexColor("#3A75B8"))
     c.setLineWidth(1.0 * scale)
-    c.rect(sx(27), sy(265), sx(541), sy(145), stroke=1, fill=0)
+    # إطار مستقل كامل للتشخيص الإنجليزي من الحد الأيسر حتى الفاصل الأوسط.
+    c.rect(sx(27), sy(265), sx(270.5), sy(145), stroke=1, fill=0)
+    # إطار مستقل كامل للتشخيص العربي من الفاصل الأوسط حتى الحد الأيمن.
+    c.rect(sx(297.5), sy(265), sx(270.5), sy(145), stroke=1, fill=0)
     # فاصل رأسي في منتصف المستطيل بين التشخيص الإنجليزي والعربي.
     c.line(sx(297.5), sy(265), sx(297.5), sy(410))
     c.restoreState()
@@ -700,7 +703,7 @@ def create_template_pdf(data, output_path, template_path):
     # إزالة خط الباركود القديم المجاور ثم إعادة رسم الباركود الحالي فوقه.
     c.saveState()
     c.setFillColorRGB(1, 1, 1)
-    c.rect(sx(180), sy(190), sx(80), sy(100), stroke=0, fill=1)
+    c.rect(sx(180), sy(190), sx(80), sy(70), stroke=0, fill=1)
     c.restoreState()
     qr_size = sx(60)
     c.drawImage(qr_asset_path, sx(150) - qr_size / 2, sy(190), width=qr_size, height=qr_size, mask="auto")
