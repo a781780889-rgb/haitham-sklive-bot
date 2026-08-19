@@ -558,10 +558,10 @@ def create_template_pdf(data, output_path, template_path):
     fit_center(specialty_en, ref_x(215), position_row_y, english_font, size=8.53, max_width=110)
     fit_center(specialty_ar, ref_x(405), position_row_y, arabic_font, size=8.53, max_width=110, rtl=True)
 
-    # خط رابط دقيق: من مركز حرف «ر» في رمز الإجازة إلى مركز حرف «ا» في المسمى الوظيفي.
+    # خط رابط دقيق: من مركز حرف «ر» في رمز الإجازة إلى أول حرف «أ» في المسمى الوظيفي.
     leave_label_text = _arabic("رمز الإجازة")
-    position_label_text = _arabic("المسمى الوظيفي")
     leave_label_width = pdfmetrics.stringWidth(leave_label_text, arabic_bold_font, 12.0)
+    position_label_text = _arabic("المسمى الوظيفي")
     position_label_width = pdfmetrics.stringWidth(position_label_text, arabic_font, 8.53)
     leave_r_x = ref_x(515) + 35.0 + leave_label_width / 2.0 - pdfmetrics.stringWidth(_arabic("ر"), arabic_bold_font, 12.0) / 2.0
     position_alif_x = ref_x(515) + position_label_width / 2.0 - pdfmetrics.stringWidth(_arabic("ا"), arabic_font, 8.53) / 2.0 + 36.0
