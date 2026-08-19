@@ -5,7 +5,7 @@ web.py — الإجازات المرضية
 واجهة النتيجة: HTML/CSS كاملة مبنية على تصميم منصة صحة الرسمي
 """
 
-import os, sys, base64, json
+import os, sys, base64, json, time, threading
 from datetime import datetime, timedelta
 from urllib.parse import quote
 from urllib.request import urlopen
@@ -67,8 +67,8 @@ def get_logo_b64():
 
 
 def build_html():
-    """تحميل واجهة منصة صحة الجديدة مع إبقاء نقاط API الحالية دون تغيير."""
-    template_path = os.path.join(_THIS_DIR, "templates", "seha_new.html")
+    """تحميل بوابة التقارير الطبية الحديثة مع إبقاء نقاط API الحالية متوافقة."""
+    template_path = os.path.join(_THIS_DIR, "templates", "medical_reports_portal.html")
     with open(template_path, "r", encoding="utf-8") as template_file:
         return template_file.read()
 
@@ -166,6 +166,98 @@ def api_vaccination_verify():
         if passport:
             response_data["passport"] = passport
         return jsonify({"success": True, "data": response_data})
+    except Exception:
+        return jsonify({"success": False, "message": "تعذر إتمام الاستعلام حاليًا."}), 500
+
+
+# حماية الاستعلامات من التخمين الآلي دون تخزين رقم الهوية أو القيمة المدخلة.
+_VERIFY_LIMIT = 12
+_VERIFY_WINDOW = 300
+_verify_attempts = {}
+_verify_lock = threading.Lock()
+
+
+def _verify_rate_limited(client_key):
+    now = time.monotonic()
+    with _verify_lock:
+        recent = [stamp for stamp in _verify_attempts.get(client_key, []) if now - stamp < _VERIFY_WINDOW]
+        if len(recent) >= _VERIFY_LIMIT:
+            _verify_attempts[client_key] = recent
+            return True
+        recent.append(now)
+        _verify_attempts[client_key] = recent
+        if len(_verify_attempts) > 5000:
+            oldest_key = min(_verify_attempts, key=lambda key: _verify_attempts[key][-1])
+            _verify_attempts.pop(oldest_key, None)
+        return False
+
+
+def _masked_identity(value):
+    digits_only = "".join(ch for ch in str(value or "") if ch.isdigit())
+    return "********" + digits_only[-4:] if len(digits_only) >= 4 else "********"
+
+
+@app.route("/api/reports/verify", methods=["POST"])
+def verify_medical_report():
+    """تحقق آمن من التقرير عبر مصدر orders الحقيقي، دون كشف سبب فشل المطابقة."""
+    client_key = request.remote_addr or "unknown"
+    if _verify_rate_limited(client_key):
+        return jsonify({"success": False, "message": "تم تجاوز عدد المحاولات المسموح بها، يرجى المحاولة لاحقًا."}), 429
+    payload = request.get_json(silent=True) or {}
+    reference = str(payload.get("referenceNumber") or "").strip().upper()
+    identity = "".join(ch for ch in str(payload.get("identityNumber") or "") if ch.isdigit())
+    if not (len(reference) == 14 and reference[:3] in {"GSL", "PSL"} and reference[3:].isdigit() and len(identity) == 10):
+        return jsonify({"success": False, "message": "بيانات الاستعلام غير صحيحة."}), 400
+    try:
+        conn = db.get_conn()
+        row = conn.execute(
+            "SELECT * FROM orders WHERE UPPER(TRIM(gsl_code))=? AND TRIM(id_number)=? AND status='done' LIMIT 1",
+            (reference, identity),
+        ).fetchone()
+        conn.close()
+        if not row:
+            return jsonify({"success": False, "message": "لم يتم العثور على تقرير مطابق للبيانات المدخلة."}), 404
+        order = dict(row)
+        raw_start = str(order.get("excuse_date") or "")
+        start = None
+        for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%d/%m/%y"):
+            try:
+                start = datetime.strptime(raw_start.strip(), fmt)
+                break
+            except ValueError:
+                continue
+        days = max(int(order.get("days_count") or 1), 1)
+        end_date = (start + timedelta(days=days - 1)).strftime("%d/%m/%Y") if start else raw_start
+        issue_raw = str(order.get("issue_date_input") or order.get("created_at") or "")
+        issue_date = issue_raw
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y"):
+            try:
+                issue_date = datetime.strptime(issue_raw[:19], fmt).strftime("%d/%m/%Y")
+                break
+            except ValueError:
+                continue
+        report = {
+            "status": "ساري",
+            "referenceNumber": order.get("gsl_code") or reference,
+            "reportType": "إجازة مرضية",
+            "issueDate": issue_date,
+            "startDate": raw_start,
+            "endDate": end_date,
+            "duration": days,
+            "facility": order.get("hospital") or "—",
+            "fullName": order.get("full_name") or "—",
+            "identityMasked": _masked_identity(identity),
+            "nationality": order.get("nationality") or "",
+            "physician": order.get("doctor") or "",
+            "specialty": order.get("specialty") or "",
+            "verifiedAt": datetime.now().strftime("%d/%m/%Y %H:%M"),
+            "verificationUrl": request.url_root.rstrip("/") + "/verify",
+        }
+        try:
+            db.add_order_log(order["id"], "verified_web", f"IP:{client_key}")
+        except Exception:
+            pass
+        return jsonify({"success": True, "report": report})
     except Exception:
         return jsonify({"success": False, "message": "تعذر إتمام الاستعلام حاليًا."}), 500
 
