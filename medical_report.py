@@ -646,7 +646,7 @@ def create_template_pdf(data, output_path, template_path):
     # رسم يدوي مضبوط الأسطر داخل المستطيل لتفادي أي تجاوز أو تداخل.
     box_x, box_y, box_w, box_h = sx(300), sy(265), sx(265), sy(145)
     medical_font = "CairoRegular" if os.path.exists(cairo_regular_path) else arabic_font
-    # مطابق للصورة المرجعية: Cairo-Regular 9.0 وleading يقارب 14.3 نقطة.
+    # ضبط تكيفي: لا نقص النص أبدًا؛ نصغّر الخط تدريجيًا حتى تدخل جميع الأسطر داخل الصندوق.
     medical_font_size = 9.0
     medical_leading = 14.3
     c.setFillColor(HexColor("#2F5496"))
@@ -679,20 +679,33 @@ def create_template_pdf(data, output_path, template_path):
     # ترتيب مطابق للمستطيل الثاني: اسم المريض، التشخيص والتفاصيل الطبية، ثم الإجازة والتواريخ.
     source_paragraphs = [
         f"دخل المريض: {patient_for_text}",
+        f"التشخيص: {diagnosis_for_text}",
+        "التقييم: تم تقييم الحالة سريريًا وتقديم العلاج والإرشادات الطبية اللازمة.",
+        "التوصية: الراحة التامة والمتابعة الطبية حسب الحاجة.",
         (
-            f"التشخيص: {diagnosis_for_text}. التقييم والعلاج: تم تقييم الحالة سريريًا مع تقديم العلاج "
-            "والإرشادات الطبية اللازمة. التوصية: الراحة التامة والمتابعة الطبية المستمرة حسب الحاجة "
-            "لضمان استقرار الحالة وتحسنها."
-        ),
-        (
-            f"تم منحه إجازة لمدة {days_for_text} يوم، من تاريخ "
+            f"الإجازة: {days_for_text} يوم، من تاريخ "
             f"{str(start_for_text).replace('/', '-')} إلى تاريخ {str(end_for_text).replace('/', '-')}."
         ),
     ]
-    wrapped_lines = wrap_pdf_text(source_paragraphs, medical_font, medical_font_size, box_w - sx(8), rtl=True)
-    max_lines = int((box_h - sy(10)) // medical_leading)
-    wrapped_lines = wrapped_lines[:max_lines]
-    # قصّ صارم داخل مستطيل التشخيص العربي.
+    def fit_diagnosis_lines(paragraphs, font_name, width, height, rtl, start_size, min_size, leading_ratio):
+        """إرجاع جميع أسطر التشخيص داخل الصندوق؛ لا تستخدم truncation."""
+        size = start_size
+        while size >= min_size:
+            leading = max(size * leading_ratio, 8.2)
+            lines = wrap_pdf_text(paragraphs, font_name, size, width, rtl=rtl)
+            capacity = max(int((height - sy(10)) // leading), 1)
+            if len(lines) <= capacity:
+                return lines, size, leading
+            size -= 0.25
+        # الاحتياط الأخير: يستخدم أصغر حجم، مع بقاء كل الكلمات والأسطر.
+        size = min_size
+        leading = max(size * leading_ratio, 8.2)
+        return wrap_pdf_text(paragraphs, font_name, size, width, rtl=rtl), size, leading
+
+    wrapped_lines, medical_font_size, medical_leading = fit_diagnosis_lines(
+        source_paragraphs, medical_font, box_w - sx(8), box_h, True, 9.0, 6.6, 1.34
+    )
+    # قص هندسي للصندوق فقط؛ لا يتم قص أي حرف لأن كل الأسطر حُسبت داخله.
     c.saveState()
     arabic_clip = c.beginPath()
     arabic_clip.rect(box_x, box_y, box_w, box_h)
@@ -715,24 +728,21 @@ def create_template_pdf(data, output_path, template_path):
     english_end = str(end_for_text).replace("/", "-")
     english_source_paragraphs = [
         f"Patient Name: {english_patient}",
+        f"Diagnosis: {english_diagnosis}.",
+        "Assessment: The patient was clinically evaluated and received the necessary treatment and instructions.",
+        "Recommendation: Complete rest and medical follow-up as needed.",
         (
-            f"Diagnosis: The patient is suffering from {english_diagnosis}. "
-            "The patient was clinically evaluated, and the necessary treatment and medical instructions "
-            "were provided. Complete rest and continuous medical follow-up were recommended as needed "
-            "to ensure the patient's condition remains stable and improves."
-        ),
-        (
-            f"The patient was granted medical leave for {english_days} days, "
-            f"from {english_start} to {english_end}."
+            f"Leave: {english_days} days, from {english_start} to {english_end}."
         ),
     ]
     english_font_size = 10.78
     english_leading = 10.5
     english_box_x, english_box_y, english_box_w, english_box_h = sx(30), sy(265), sx(265), sy(145)
-    english_lines = wrap_pdf_text(english_source_paragraphs, diagnosis_english_font, english_font_size, english_box_w - sx(8), rtl=False)
-    english_max_lines = int((english_box_h - sy(10)) // english_leading)
-    english_lines = english_lines[:english_max_lines]
-    # قصّ صارم داخل مستطيل التشخيص الإنجليزي.
+    english_lines, english_font_size, english_leading = fit_diagnosis_lines(
+        english_source_paragraphs, diagnosis_english_font, english_box_w - sx(8), english_box_h,
+        False, english_font_size, 7.2, 1.18
+    )
+    # قص هندسي للصندوق فقط؛ كل النص موجود بعد الملاءمة التكيفية.
     c.saveState()
     english_clip = c.beginPath()
     english_clip.rect(english_box_x, english_box_y, english_box_w, english_box_h)
