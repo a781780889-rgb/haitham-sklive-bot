@@ -596,12 +596,37 @@ def create_template_pdf(data, output_path, template_path):
     )
     # رسم يدوي مضبوط الأسطر داخل المستطيل لتفادي أي تجاوز أو تداخل.
     box_x, box_y, box_w, box_h = sx(300), sy(265), sx(265), sy(145)
-    medical_font = arabic_font
+    medical_font = "CairoRegular" if os.path.exists(cairo_regular_path) else arabic_font
     # مطابق للصورة المرجعية: Cairo-Regular 9.0 وleading يقارب 14.3 نقطة.
     medical_font_size = 9.0
     medical_leading = 14.3
     c.setFillColor(HexColor("#2F5496"))
     c.setFont(medical_font, medical_font_size)
+    def wrap_pdf_text(paragraphs, font_name, font_size, max_width, rtl=False):
+        """يلف النص على الكلمات، ويكسر الكلمة الطويلة حرفياً عند الحاجة."""
+        lines = []
+        for paragraph in paragraphs:
+            current = ""
+            for word in str(paragraph).split():
+                candidate = f"{current} {word}".strip()
+                rendered = _arabic(candidate) if rtl else candidate
+                if current and pdfmetrics.stringWidth(rendered, font_name, font_size) > max_width:
+                    lines.append(current)
+                    current = ""
+                if pdfmetrics.stringWidth(_arabic(word) if rtl else word, font_name, font_size) <= max_width:
+                    current = f"{current} {word}".strip()
+                else:
+                    for char in word:
+                        char_candidate = f"{current}{char}"
+                        if current and pdfmetrics.stringWidth(_arabic(char_candidate) if rtl else char_candidate, font_name, font_size) > max_width:
+                            lines.append(current)
+                            current = char
+                        else:
+                            current = char_candidate
+            if current:
+                lines.append(current)
+        return lines
+
     # ترتيب مطابق للمستطيل الثاني: اسم المريض، التشخيص والتفاصيل الطبية، ثم الإجازة والتواريخ.
     source_paragraphs = [
         f"دخل المريض: {patient_for_text}",
@@ -615,21 +640,14 @@ def create_template_pdf(data, output_path, template_path):
             f"{str(start_for_text).replace('/', '-')} إلى تاريخ {str(end_for_text).replace('/', '-')}."
         ),
     ]
-    wrapped_lines = []
-    for paragraph in source_paragraphs:
-        current_words = []
-        for word in paragraph.split():
-            candidate = " ".join(current_words + [word])
-            if current_words and pdfmetrics.stringWidth(_arabic(candidate), medical_font, medical_font_size) > box_w:
-                wrapped_lines.append(" ".join(current_words))
-                current_words = [word]
-            else:
-                current_words.append(word)
-        if current_words:
-            wrapped_lines.append(" ".join(current_words))
-    max_lines = int(box_h // medical_leading)
-    if len(wrapped_lines) > max_lines:
-        wrapped_lines = wrapped_lines[:max_lines]
+    wrapped_lines = wrap_pdf_text(source_paragraphs, medical_font, medical_font_size, box_w - sx(8), rtl=True)
+    max_lines = int((box_h - sy(10)) // medical_leading)
+    wrapped_lines = wrapped_lines[:max_lines]
+    # قصّ صارم داخل مستطيل التشخيص العربي.
+    c.saveState()
+    arabic_clip = c.beginPath()
+    arabic_clip.rect(box_x, box_y, box_w, box_h)
+    c.clipPath(arabic_clip, stroke=0, fill=0)
     # تنظيم عربي مطابق للمرجع: محاذاة يمين، بداية من أعلى المستطيل، وهوامش ثابتة.
     y_cursor = box_y + box_h - medical_leading - sy(5)
     right_text_x = box_x + box_w - sx(8)
@@ -638,6 +656,7 @@ def create_template_pdf(data, output_path, template_path):
             c.setFont(medical_font, medical_font_size)
             c.drawRightString(right_text_x, y_cursor, _arabic(line))
         y_cursor -= medical_leading
+    c.restoreState()
 
     # النص الطبي الإنجليزي الديناميكي داخل المستطيل الثاني.
     english_patient = english_value(value("patient_name"))
@@ -661,21 +680,14 @@ def create_template_pdf(data, output_path, template_path):
     english_font_size = 10.78
     english_leading = 10.5
     english_box_x, english_box_y, english_box_w, english_box_h = sx(30), sy(265), sx(265), sy(145)
-    english_lines = []
-    for paragraph in english_source_paragraphs:
-        current_words = []
-        for word in paragraph.split():
-            candidate = " ".join(current_words + [word])
-            if current_words and pdfmetrics.stringWidth(candidate, diagnosis_english_font, english_font_size) > english_box_w:
-                english_lines.append(" ".join(current_words))
-                current_words = [word]
-            else:
-                current_words.append(word)
-        if current_words:
-            english_lines.append(" ".join(current_words))
-    english_max_lines = int(english_box_h // english_leading)
-    if len(english_lines) > english_max_lines:
-        english_lines = english_lines[:english_max_lines]
+    english_lines = wrap_pdf_text(english_source_paragraphs, diagnosis_english_font, english_font_size, english_box_w - sx(8), rtl=False)
+    english_max_lines = int((english_box_h - sy(10)) // english_leading)
+    english_lines = english_lines[:english_max_lines]
+    # قصّ صارم داخل مستطيل التشخيص الإنجليزي.
+    c.saveState()
+    english_clip = c.beginPath()
+    english_clip.rect(english_box_x, english_box_y, english_box_w, english_box_h)
+    c.clipPath(english_clip, stroke=0, fill=0)
     # تنظيم إنجليزي مطابق للمرجع: محاذاة يسار، بداية من أعلى المستطيل، وهوامش ثابتة.
     english_y = english_box_y + english_box_h - english_leading - sy(5)
     english_left_x = english_box_x + sx(8)
@@ -684,6 +696,7 @@ def create_template_pdf(data, output_path, template_path):
     for english_line in english_lines:
         c.drawString(english_left_x, english_y, english_line)
         english_y -= english_leading
+    c.restoreState()
 
     # الإطار النهائي فوق النصين لضمان إحاطة التشخيص العربي والإنجليزي بالكامل.
     c.saveState()
