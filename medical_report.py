@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import random
 import tempfile
 from datetime import datetime, timedelta
 from html import escape
@@ -369,6 +370,19 @@ def create_template_pdf(data, output_path, template_path):
     if os.path.exists(arabic_bold_path):
         pdfmetrics.registerFont(TTFont("MedicalArabicBold", arabic_bold_path))
     arabic_bold_font = "MedicalArabicBold" if os.path.exists(arabic_bold_path) else arabic_font
+    kufi_path = os.path.join(os.path.dirname(__file__), "fonts", "DroidArabicKufi-Bold.ttf")
+    if not os.path.exists(kufi_path):
+        kufi_path = "/usr/share/fonts/truetype/noto/NotoKufiArabic-Bold.ttf"
+    if os.path.exists(kufi_path):
+        pdfmetrics.registerFont(TTFont("HospitalArabicBold", kufi_path))
+    # نستخدم خطاً عربياً Unicode مضمون الظهور عند عدم توفر DroidArabicKufi الفعلي.
+    hospital_arabic_font = "HospitalArabicBold" if (os.path.exists(kufi_path) and os.path.basename(kufi_path) == "DroidArabicKufi-Bold.ttf") else arabic_bold_font
+    noto_bold_path = os.path.join(os.path.dirname(__file__), "fonts", "NotoSans-Bold.ttf")
+    if not os.path.exists(noto_bold_path):
+        noto_bold_path = "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf"
+    if os.path.exists(noto_bold_path):
+        pdfmetrics.registerFont(TTFont("HospitalNotoBold", noto_bold_path))
+    hospital_english_font = "HospitalNotoBold" if os.path.exists(noto_bold_path) else diagnosis_english_font
     leave_label_font_size = 10.0
 
     def value(key, fallback="—"):
@@ -708,6 +722,30 @@ def create_template_pdf(data, output_path, template_path):
     qr_size = sx(60)
     c.drawImage(qr_asset_path, sx(150) - qr_size / 2, sy(190), width=qr_size, height=qr_size, mask="auto")
 
+    # بيانات المنشأة المختارة مقابل الباركود: الشعار ثم الاسم العربي والإنجليزي ثم الترخيص.
+    hospital_name = str(data.get("hospital") or "").strip()
+    hospital_info = db.get_hospital_by_name(hospital_name) or {}
+    hospital_name_ar = hospital_name or "—"
+    hospital_name_en = str(hospital_info.get("name_en") or english_value(hospital_name_ar)).strip()
+    hospital_license = str(data.get("hospital_license") or "").strip()
+    hospital_logo_path = None
+    try:
+        hospital_logo_path = db.get_hospital_logo(hospital_name)
+    except Exception:
+        hospital_logo_path = None
+    hospital_center_x = ref_x(430)
+    # تنظيف موضع بيانات المنشأة القديمة في الجهة المقابلة للباركود.
+    c.saveState()
+    c.setFillColorRGB(1, 1, 1)
+    c.rect(ref_x(350), sy(112), ref_x(205), sy(178), stroke=0, fill=1)
+    c.restoreState()
+    if hospital_logo_path and os.path.exists(hospital_logo_path):
+        c.drawImage(hospital_logo_path, hospital_center_x - sx(25), sy(225), width=sx(50), height=sx(42), preserveAspectRatio=True, anchor="c", mask="auto")
+    c.setFillColor(HexColor("#000000"))
+    fit_center(hospital_name_ar, hospital_center_x, sy(213), hospital_arabic_font, size=9.0, max_width=ref_x(150), rtl=True)
+    fit_center(hospital_name_en, hospital_center_x, sy(199), hospital_english_font, size=9.0, max_width=ref_x(150))
+    fit_center(hospital_license, hospital_center_x, sy(185), hospital_english_font, size=9.0, max_width=ref_x(150))
+
     c.save()
 
     background = PdfReader(template_path)
@@ -729,6 +767,8 @@ def create_pdf(data, output_path):
     # نولّد الرمز هنا قبل تعبئة القالب حتى يظهر فعلياً داخل ملف PDF الناتج.
     data = dict(data or {})
     data["leave_id"] = _medical_leave_code(data)
+    # رقم ترخيص متغير من 16 رقماً لكل تقرير طبي.
+    data["hospital_license"] = "".join(str(random.SystemRandom().randrange(10)) for _ in range(16))
 
     template_path = os.path.join(os.path.dirname(__file__), "templates", "medical_report_reference_a3.pdf")
     if os.path.exists(template_path):
