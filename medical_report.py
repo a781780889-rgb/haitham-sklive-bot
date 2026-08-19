@@ -680,6 +680,17 @@ def create_template_pdf(data, output_path, template_path):
     c.line(sx(297.5), sy(265), sx(297.5), sy(410))
     c.restoreState()
 
+    # إظهار عبارة التحقق العربية كاملة في التذييل السفلي.
+    c.saveState()
+    c.setFillColorRGB(1, 1, 1)
+    c.rect(sx(24), sy(120), sx(270), sy(70), stroke=0, fill=1)
+    c.setFillColor(HexColor("#000000"))
+    fit_center(
+        "للتحقق من بيانات التقرير يرجى التأكد من زيارة موقع منصة صحة الرسمي",
+        sx(150), sy(158), arabic_font, size=8.53, max_width=sx(255), rtl=True,
+    )
+    c.restoreState()
+
     c.save()
 
     background = PdfReader(template_path)
