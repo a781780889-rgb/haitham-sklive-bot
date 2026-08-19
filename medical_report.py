@@ -430,7 +430,7 @@ def create_template_pdf(data, output_path, template_path):
     # تنظيف الطبقة القديمة في النطاق الرأسي لصف الخروج فقط، دون المساس بالدخول أو الإصدار.
     c.saveState()
     c.setFillColorRGB(1, 1, 1)
-    c.rect(ref_x(24), page_h - ref_y_top(170.0), ref_x(547), ref_y_top(170.0) - ref_y_top(207.0), stroke=0, fill=1)
+    c.rect(ref_x(24), page_h - ref_y_top(207.0), ref_x(547), ref_y_top(170.0) - ref_y_top(207.0), stroke=0, fill=1)
     c.restoreState()
 
     # موضع خط الأساس المصحح يطابق صف Discharge Date الفعلي في القالب.
@@ -445,8 +445,20 @@ def create_template_pdf(data, output_path, template_path):
     c.line(ref_x(30), discharge_row_y + 3.2 * scale, ref_x(565), discharge_row_y + 3.2 * scale)
     c.restoreState()
 
-    # تاريخ الإصدار في مركز صف Issue Date / تاريخ إصدار التقرير.
-    fit_center(issue_date, ref_x(303.851), ref_y_top(215.825), english_font)
+    # صف الإصدار: العناصر الثلاثة في سطر واحد والخط الأحمر يمر عبر منتصفها.
+    c.saveState()
+    c.setFillColorRGB(1, 1, 1)
+    c.rect(ref_x(24), page_h - ref_y_top(245.0), ref_x(547), ref_y_top(200.0) - ref_y_top(245.0), stroke=0, fill=1)
+    c.restoreState()
+
+    issue_row_y = ref_y_top(230.0)
+    fit_center(issue_date, ref_x(304), issue_row_y, english_font, size=9.2, max_width=105)
+
+    c.saveState()
+    c.setStrokeColor(HexColor("#D9534F"))
+    c.setLineWidth(0.9 * scale)
+    c.line(ref_x(30), issue_row_y + 3.2 * scale, ref_x(565), issue_row_y + 3.2 * scale)
+    c.restoreState()
 
     # البيانات الشخصية بحسب صفوف المرجع.
     fit_center(name_en, ref_x(214.270), ref_y_top(249.369), english_font)
