@@ -365,6 +365,7 @@ def create_template_pdf(data, output_path, template_path):
     if os.path.exists(arabic_bold_path):
         pdfmetrics.registerFont(TTFont("MedicalArabicBold", arabic_bold_path))
     arabic_bold_font = "MedicalArabicBold" if os.path.exists(arabic_bold_path) else arabic_font
+    leave_label_font_size = 10.0
 
     def value(key, fallback="—"):
         return str(data.get(key) or fallback).strip()
@@ -446,7 +447,7 @@ def create_template_pdf(data, output_path, template_path):
     c.restoreState()
     c.saveState()
     c.setFillColor(HexColor("#3A75B8"))
-    fit_center("Admission Date", ref_x(78), leave_row_y, table_bold_font, size=10.0, max_width=115)
+    fit_center("Admission Date", ref_x(78), leave_row_y, table_bold_font, size=leave_label_font_size, max_width=115)
     c.restoreState()
     c.saveState()
     c.setFillColor(HexColor("#3A75B8"))
@@ -454,7 +455,7 @@ def create_template_pdf(data, output_path, template_path):
     c.restoreState()
     c.saveState()
     c.setFillColor(HexColor("#3A75B8"))
-    fit_center("رمز الإجازة", ref_x(515), leave_row_y, arabic_bold_font, size=10.0, max_width=150, rtl=True)
+    fit_center("رمز الإجازة", ref_x(515), leave_row_y, arabic_bold_font, size=leave_label_font_size, max_width=150, rtl=True)
     c.restoreState()
 
 
