@@ -780,13 +780,13 @@ def confirm_keyboard():
     ], resize_keyboard=True)
 
 def confirm_inline_keyboard(license_enabled: bool = False):
-    """Inline keyboard لتأكيد الطلب — 5 أزرار"""
-    license_label = "🟢 رقم الترخيص: مُفعَّل" if license_enabled else "🔴 رقم الترخيص: مُعطَّل"
+    """لوحة المراجعة النهائية: خمسة أزرار ثابتة بالترتيب المرجعي."""
+    license_label = "🟢 رقم الترخيص: مفعل" if license_enabled else "⚪ رقم الترخيص: غير مفعل"
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ تأكيد الإصدار", callback_data="confirm_order")],
-        [InlineKeyboardButton("✏️ تعديل البيانات", callback_data="edit_data")],
-        [InlineKeyboardButton("⬅️ رجوع للمستشفى BACK", callback_data="back_to_hospital")],
+        [InlineKeyboardButton("✅ تأكيد إنشاء التقرير الطبي", callback_data="confirm_order")],
         [InlineKeyboardButton(license_label, callback_data="toggle_license")],
+        [InlineKeyboardButton("✏️ تعديل البيانات", callback_data="edit_data")],
+        [InlineKeyboardButton("🔄 إعادة التحقق", callback_data="recheck_data")],
         [InlineKeyboardButton("❌ إلغاء", callback_data="cancel_order")],
     ])
 
@@ -1633,10 +1633,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             await update.message.reply_text(
                 "✅ تم استلام البيانات واجتازت المراجعة الأولية.\n\n" + review.message(),
-                reply_markup=confirm_keyboard()
-            )
-            await update.message.reply_text(
-                "👆 راجع البيانات والترجمة ثم اضغط تأكيد وإنشاء PDF.",
                 reply_markup=confirm_inline_keyboard(context.user_data.get("license_enabled", False))
             )
         return
@@ -4758,6 +4754,21 @@ def main():
                 )
             except Exception as exc:
                 logger.warning("تعذر تحديث زر الترخيص: %s", exc)
+            return
+        if data == "recheck_data":
+            od = context.user_data.get("order_data", {})
+            fresh_review = review_patient_data(od)
+            context.user_data["reviewed_patient_data"] = fresh_review.audit
+            if fresh_review.valid:
+                await query.message.reply_text(
+                    "🔄 تمت إعادة التحقق بنجاح.\n\n" + fresh_review.message(),
+                    reply_markup=confirm_inline_keyboard(context.user_data.get("license_enabled", False))
+                )
+            else:
+                await query.message.reply_text(
+                    "❌ لم تجتز البيانات إعادة التحقق.\n\n" + "\n".join(fresh_review.errors),
+                    reply_markup=confirm_inline_keyboard(context.user_data.get("license_enabled", False))
+                )
             return
         if data == "cancel_order":
             context.user_data.pop("order_data", None)
