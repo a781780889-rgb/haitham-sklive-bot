@@ -419,8 +419,22 @@ def create_template_pdf(data, output_path, template_path):
     specialty_ar = value("specialty")
     specialty_en = value("specialty_en", english_value(specialty_ar))
 
-    # كل قيمة تُرسم على الإحداثية المقابلة لها في المرجع، مع فروق الخطوط الأصلية.
-    fit_center(_medical_leave_code(data), leave_code_center_x, leave_code_center_y, english_font)
+    # صف رمز الإجازة: ثلاثة عناصر في سطر واحد والخط الأحمر يمر عبر منتصفها.
+    leave_row_y = ref_y_top(148.0)
+    c.saveState()
+    c.setFillColorRGB(1, 1, 1)
+    # تنظيف شريط الصف وفق إحداثية السطر الفعلية لمنع بقاء Leave ID القديم.
+    c.rect(ref_x(24), leave_row_y - 18 * scale, ref_x(547), 40 * scale, stroke=0, fill=1)
+    c.restoreState()
+    fit_center("Admission Date", ref_x(78), leave_row_y, english_font, size=8.8, max_width=115)
+    fit_center(_medical_leave_code(data), ref_x(304), leave_row_y, english_font, size=9.2, max_width=150)
+    fit_center("رمز الإجازة", ref_x(515), leave_row_y, "MedicalArabicTemplate", size=9.2, max_width=105, rtl=True)
+
+    c.saveState()
+    c.setStrokeColor(HexColor("#D9534F"))
+    c.setLineWidth(0.9 * scale)
+    c.line(ref_x(30), leave_row_y + 3.2 * scale, ref_x(565), leave_row_y + 3.2 * scale)
+    c.restoreState()
 
     # صف الدخول: أربعة عناصر في سطر واحد والخط الأحمر يمر عبر منتصفها.
     c.saveState()
