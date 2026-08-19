@@ -814,14 +814,6 @@ def create_template_pdf(data, output_path, template_path):
     logo_h = qr_size
     if hospital_logo_path and os.path.exists(hospital_logo_path):
         c.drawImage(hospital_logo_path, logo_x, logo_y, width=logo_w, height=logo_h, preserveAspectRatio=True, anchor="c", mask="auto")
-    # خطّان أحمران مستقيمان يحددان الحد العلوي والسفلي لمربع الشعار.
-    c.saveState()
-    c.setStrokeColor(HexColor("#D92D20"))
-    c.setLineWidth(1.0 * scale)
-    c.setDash()
-    c.line(logo_x, logo_y + logo_h, logo_x + logo_w, logo_y + logo_h)
-    c.line(logo_x, logo_y, logo_x + logo_w, logo_y) 
-    c.restoreState()
     c.setFillColor(HexColor("#000000"))
     fit_center(hospital_name_ar, hospital_center_x, sy(153), hospital_arabic_font, size=9.0, max_width=ref_x(150), rtl=True)
     fit_center(hospital_name_en, hospital_center_x, sy(139), hospital_english_font, size=9.0, max_width=ref_x(150))
