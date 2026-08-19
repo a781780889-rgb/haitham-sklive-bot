@@ -430,8 +430,8 @@ def create_template_pdf(data, output_path, template_path):
     # إنزال تاريخ الخروج الميلادي 13/07/2026 إلى الموضع المباشر فوق الخط الأحمر.
     # الإزاحة الإجمالية: 24 نقطة PDF إلى الأسفل من الإحداثية المرجعية.
     fit_center(discharge, ref_x(214.270), ref_y_top(182.606) - 24.0, english_font)
-    # إنزال التاريخ الهجري 28-01-1448 إلى الموضع المباشر فوق الخط الأحمر.
-    fit_center(hijri_value(discharge), ref_x(404.804), ref_y_top(188.976) - 24.0, english_font)
+    # توحيد خط أساس 28-01-1448 مع 13/07/2026 وتوسيطهما بصرياً فوق الخط الأحمر.
+    fit_center(hijri_value(discharge), ref_x(404.804), ref_y_top(182.606) - 24.0, english_font)
     # خط مركزي أسفل بيانات الخروج الأربعة وفوق Issue Date.
     c.saveState()
     c.setStrokeColor(HexColor("#D9534F"))
