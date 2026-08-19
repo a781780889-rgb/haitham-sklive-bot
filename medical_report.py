@@ -359,6 +359,10 @@ def create_template_pdf(data, output_path, template_path):
     if os.path.exists(carlito_path):
         pdfmetrics.registerFont(TTFont("CarlitoRegular", carlito_path))
     diagnosis_english_font = "CarlitoRegular" if os.path.exists(carlito_path) else table_font
+    open_sans_path = os.path.join(os.path.dirname(__file__), "fonts", "OpenSans-Regular.ttf")
+    if os.path.exists(open_sans_path):
+        pdfmetrics.registerFont(TTFont("OpenSansRegular", open_sans_path))
+    open_sans_font = "OpenSansRegular" if os.path.exists(open_sans_path) else table_font
     # Cairo يحافظ على مواصفات الخط المرجعية للاتينية، بينما هذا الخط العربي يمنع فقدان glyphs العربية.
     arabic_font = "MedicalArabicTemplate"
     arabic_bold_path = os.path.join(os.path.dirname(__file__), "fonts", "NotoSansArabic-Bold.ttf")
@@ -514,7 +518,7 @@ def create_template_pdf(data, output_path, template_path):
     c.restoreState()
 
     id_row_y = ref_y_top(292.0)
-    fit_center(id_number, ref_x(304), id_row_y, english_font, size=8.53, max_width=120)
+    fit_center(id_number, ref_x(304), id_row_y, open_sans_font, size=8.53, max_width=120)
 
     # صف الجنسية: أربعة عناصر في سطر واحد والخط الأحمر يمر عبر منتصفها.
     c.saveState()
@@ -524,7 +528,7 @@ def create_template_pdf(data, output_path, template_path):
 
     # خط الأساس المصحح يطابق مركز العناوين المرئية Nationality والجنسية.
     nationality_row_y = ref_y_top(323.0)
-    fit_center(nationality_en, ref_x(215), nationality_row_y, english_font, size=8.53, max_width=115)
+    fit_center(nationality_en, ref_x(215), nationality_row_y, open_sans_font, size=8.53, max_width=115)
     fit_center(nationality_ar, ref_x(405), nationality_row_y, arabic_font, size=8.53, max_width=115, rtl=True)
 
     # صف جهة العمل: أربعة عناصر في سطر واحد والخط الأحمر يمر عبر منتصفها.
