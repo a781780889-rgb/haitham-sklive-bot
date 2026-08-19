@@ -144,11 +144,35 @@ def _doctor_keyboard(hospital):
     return _kb(rows)
 
 
-def _review_keyboard():
-    rows = [[InlineKeyboardButton("✅ تأكيد إنشاء النموذج", callback_data="mr:confirm")],
-            [InlineKeyboardButton("✏️ تعديل البيانات", callback_data="mr:edit")],
-            [InlineKeyboardButton("🔄 إعادة التحقق", callback_data="mr:review")],
-            [InlineKeyboardButton("❌ إلغاء", callback_data="mr:cancel")]]
+def _hospital_type(data):
+    try:
+        info = db.get_hospital_by_name(str((data or {}).get("hospital") or "")) or {}
+        return str(info.get("hospital_type") or "حكومي").strip()
+    except Exception:
+        return "حكومي"
+
+
+def _is_private_hospital(data):
+    return _hospital_type(data) in {"خاص", "private", "Private"}
+
+
+def _review_keyboard(data=None):
+    data = data or {}
+    rows = []
+    if _is_private_hospital(data):
+        selected = str(data.get("license_status") or "")
+        enabled_label = "✅ رقم الترخيص: مفعل" + (" ✓" if selected == "enabled" else "")
+        disabled_label = "🚫 رقم الترخيص: ملغي" + (" ✓" if selected == "disabled" else "")
+        rows.append([
+            InlineKeyboardButton(enabled_label, callback_data="mr:license:enabled"),
+            InlineKeyboardButton(disabled_label, callback_data="mr:license:disabled"),
+        ])
+    rows.extend([
+        [InlineKeyboardButton("✅ تأكيد إنشاء التقرير الطبي", callback_data="mr:confirm")],
+        [InlineKeyboardButton("✏️ تعديل البيانات", callback_data="mr:edit")],
+        [InlineKeyboardButton("🔄 إعادة التحقق", callback_data="mr:review")],
+        [InlineKeyboardButton("❌ إلغاء", callback_data="mr:cancel")],
+    ])
     return _kb(rows)
 
 
@@ -267,6 +291,7 @@ def _review_text(data):
         f"المستشفى: {data.get('hospital', '')}\n"
         f"الطبيب: {data.get('doctor', '')}\n"
         f"المسمى الوظيفي: {data.get('specialty', '')}"
+        + (f"\nرقم الترخيص: {data.get('hospital_license_preview', 'سيتم توليده عند التأكيد')}\nحالة الترخيص: {'مفعل' if data.get('license_status') == 'enabled' else 'ملغي' if data.get('license_status') == 'disabled' else 'لم يتم التحديد'}" if _is_private_hospital(data) else "\nرقم الترخيص: ملغي (مستشفى حكومي)")
     )
 
 
@@ -741,6 +766,7 @@ def create_template_pdf(data, output_path, template_path):
     hospital_name_ar = hospital_name or "—"
     hospital_name_en = str(hospital_info.get("name_en") or english_value(hospital_name_ar)).strip()
     hospital_license = str(data.get("hospital_license") or "").strip()
+    hospital_private = _is_private_hospital(data)
     hospital_logo_path = None
     try:
         hospital_logo_path = db.get_hospital_logo(hospital_name)
@@ -757,7 +783,8 @@ def create_template_pdf(data, output_path, template_path):
     c.setFillColor(HexColor("#000000"))
     fit_center(hospital_name_ar, hospital_center_x, sy(213), hospital_arabic_font, size=9.0, max_width=ref_x(150), rtl=True)
     fit_center(hospital_name_en, hospital_center_x, sy(199), hospital_english_font, size=9.0, max_width=ref_x(150))
-    fit_center(hospital_license, hospital_center_x, sy(185), hospital_english_font, size=9.0, max_width=ref_x(150))
+    if hospital_private and hospital_license:
+        fit_center(hospital_license, hospital_center_x, sy(185), hospital_english_font, size=9.0, max_width=ref_x(150))
 
     c.save()
 
@@ -780,8 +807,11 @@ def create_pdf(data, output_path):
     # نولّد الرمز هنا قبل تعبئة القالب حتى يظهر فعلياً داخل ملف PDF الناتج.
     data = dict(data or {})
     data["leave_id"] = _medical_leave_code(data)
-    # رقم ترخيص متغير من 16 رقماً لكل تقرير طبي.
-    data["hospital_license"] = "".join(str(random.SystemRandom().randrange(10)) for _ in range(16))
+    # رقم الترخيص يولّد فقط للمستشفى الخاص، أما الحكومي فيُلغى السطر بالكامل.
+    if _is_private_hospital(data):
+        data["hospital_license"] = str(data.get("hospital_license_preview") or "").strip() or "".join(str(random.SystemRandom().randrange(10)) for _ in range(16))
+    else:
+        data["hospital_license"] = ""
 
     template_path = os.path.join(os.path.dirname(__file__), "templates", "medical_report_reference_a3.pdf")
     if os.path.exists(template_path):
@@ -889,8 +919,14 @@ async def _show_review(message, context):
         _set(context, "field:admission_date")
         await message.reply_text("❌ تعذر اعتماد البيانات:\n" + "\n".join(errors), reply_markup=_back_cancel("mr:back:fields"))
         return
+    if _is_private_hospital(data):
+        data.setdefault("license_status", "")
+        data.setdefault("hospital_license_preview", "".join(str(random.SystemRandom().randrange(10)) for _ in range(16)))
+    else:
+        data["license_status"] = "disabled"
+        data.pop("hospital_license_preview", None)
     _set(context, "review")
-    await message.reply_text(_review_text(data), parse_mode="Markdown", reply_markup=_review_keyboard())
+    await message.reply_text(_review_text(data), parse_mode="Markdown", reply_markup=_review_keyboard(data))
 
 
 async def handle_callback(query, context):
@@ -929,10 +965,20 @@ async def handle_callback(query, context):
         _set(context, "manual_doctor_name")
         await query.message.reply_text("✏️ أرسل اسم الطبيب:", reply_markup=_back_cancel("mr:back:hospital"))
         return True
+    if action == "license":
+        if not _is_private_hospital(current):
+            current["license_status"] = "disabled"
+        elif value in {"enabled", "disabled"}:
+            current["license_status"] = value
+        await _show_review(query.message, context)
+        return True
     if action == "confirm":
+        if _is_private_hospital(current) and current.get("license_status") not in {"enabled", "disabled"}:
+            await query.message.reply_text("⚠️ اختر أولاً حالة رقم الترخيص: مفعل أو ملغي.", reply_markup=_review_keyboard(current))
+            return True
         errors = _validate(current)
         if errors:
-            await query.message.reply_text("❌ لا يمكن إنشاء الملف:\n" + "\n".join(errors), reply_markup=_review_keyboard())
+            await query.message.reply_text("❌ لا يمكن إنشاء الملف:\n" + "\n".join(errors), reply_markup=_review_keyboard(current))
             return True
         path = os.path.join(tempfile.gettempdir(), f"medical_report_{query.from_user.id}_{datetime.now().strftime('%Y%m%d%H%M%S')}.pdf")
         try:
@@ -950,7 +996,7 @@ async def handle_callback(query, context):
             except Exception:
                 pass
         except Exception as exc:
-            await query.message.reply_text(f"❌ تعذر إنشاء ملف PDF: {escape(str(exc))}", reply_markup=_review_keyboard())
+            await query.message.reply_text(f"❌ تعذر إنشاء ملف PDF: {escape(str(exc))}", reply_markup=_review_keyboard(current))
         finally:
             try:
                 if os.path.exists(path):
