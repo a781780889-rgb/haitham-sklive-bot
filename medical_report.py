@@ -359,6 +359,8 @@ def create_template_pdf(data, output_path, template_path):
     if os.path.exists(carlito_path):
         pdfmetrics.registerFont(TTFont("CarlitoRegular", carlito_path))
     diagnosis_english_font = "CarlitoRegular" if os.path.exists(carlito_path) else table_font
+    # Cairo يحافظ على مواصفات الخط المرجعية للاتينية، بينما هذا الخط العربي يمنع فقدان glyphs العربية.
+    arabic_font = "MedicalArabicTemplate"
 
     def value(key, fallback="—"):
         return str(data.get(key) or fallback).strip()
@@ -438,12 +440,12 @@ def create_template_pdf(data, output_path, template_path):
     # تنظيف شريط الصف وفق إحداثية السطر الفعلية لمنع بقاء Leave ID القديم.
     c.rect(ref_x(24), leave_row_y - 18 * scale, ref_x(547), 40 * scale, stroke=0, fill=1)
     c.restoreState()
-    fit_center("Admission Date", ref_x(78), leave_row_y, table_font, size=8.53, max_width=115)
+    fit_center("Admission Date", ref_x(78), leave_row_y, english_font, size=8.53, max_width=115)
     c.saveState()
     c.setFillColor(HexColor("#3A75B8"))
     fit_center(_medical_leave_code(data), ref_x(304), leave_row_y, table_bold_font, size=10.0, max_width=150)
     c.restoreState()
-    fit_center("رمز الإجازة", ref_x(515), leave_row_y, table_font, size=8.53, max_width=105, rtl=True)
+    fit_center("رمز الإجازة", ref_x(515), leave_row_y, arabic_font, size=8.53, max_width=105, rtl=True)
 
 
     # صف الدخول: أربعة عناصر في سطر واحد والخط الأحمر يمر عبر منتصفها.
@@ -491,7 +493,7 @@ def create_template_pdf(data, output_path, template_path):
     # خط الأساس المصحح يطابق مركز العناوين المرئية Name والاسم في القالب.
     name_row_y = ref_y_top(263.0)
     fit_center(name_en, ref_x(215), name_row_y, english_font, size=8.53, max_width=120)
-    fit_center(name_ar, ref_x(405), name_row_y, table_font, size=8.53, max_width=120, rtl=True)
+    fit_center(name_ar, ref_x(405), name_row_y, arabic_font, size=8.53, max_width=120, rtl=True)
 
 
     # صف الهوية: ثلاثة عناصر في سطر واحد والخط الأحمر يمر عبر منتصفها.
@@ -512,7 +514,7 @@ def create_template_pdf(data, output_path, template_path):
     # خط الأساس المصحح يطابق مركز العناوين المرئية Nationality والجنسية.
     nationality_row_y = ref_y_top(323.0)
     fit_center(nationality_en, ref_x(215), nationality_row_y, english_font, size=8.53, max_width=115)
-    fit_center(nationality_ar, ref_x(405), nationality_row_y, table_font, size=8.53, max_width=115, rtl=True)
+    fit_center(nationality_ar, ref_x(405), nationality_row_y, arabic_font, size=8.53, max_width=115, rtl=True)
 
     # صف جهة العمل: أربعة عناصر في سطر واحد والخط الأحمر يمر عبر منتصفها.
     c.saveState()
@@ -523,7 +525,7 @@ def create_template_pdf(data, output_path, template_path):
     # خط الأساس المصحح يطابق مركز العناوين المرئية Employer وجهة العمل.
     workplace_row_y = ref_y_top(354.0)
     fit_center(workplace_en, ref_x(215), workplace_row_y, english_font, size=8.53, max_width=110)
-    fit_center(workplace_ar, ref_x(405), workplace_row_y, table_font, size=8.53, max_width=110, rtl=True)
+    fit_center(workplace_ar, ref_x(405), workplace_row_y, arabic_font, size=8.53, max_width=110, rtl=True)
 
     # صف الممارس: أربعة عناصر في سطر واحد والخط الأحمر يمر عبر منتصفها.
     c.saveState()
@@ -533,7 +535,7 @@ def create_template_pdf(data, output_path, template_path):
 
     practitioner_row_y = ref_y_top(383.0)
     fit_center(doctor_en, ref_x(215), practitioner_row_y, english_font, size=8.53, max_width=110)
-    fit_center(doctor_ar, ref_x(405), practitioner_row_y, table_font, size=8.53, max_width=110, rtl=True)
+    fit_center(doctor_ar, ref_x(405), practitioner_row_y, arabic_font, size=8.53, max_width=110, rtl=True)
 
     # صف المسمى الوظيفي: أربعة عناصر في سطر واحد والخط الأحمر يمر عبر منتصفها.
     c.saveState()
@@ -545,12 +547,12 @@ def create_template_pdf(data, output_path, template_path):
     position_row_y = ref_y_top(413.0)
     fit_center("Position", ref_x(78), position_row_y, english_font, size=8.53, max_width=90)
     fit_center(specialty_en, ref_x(215), position_row_y, english_font, size=8.53, max_width=110)
-    fit_center(specialty_ar, ref_x(405), position_row_y, table_font, size=8.53, max_width=110, rtl=True)
-    fit_center("المسمى الوظيفي", ref_x(515), position_row_y, table_font, size=8.53, max_width=125, rtl=True)
+    fit_center(specialty_ar, ref_x(405), position_row_y, arabic_font, size=8.53, max_width=110, rtl=True)
+    fit_center("المسمى الوظيفي", ref_x(515), position_row_y, arabic_font, size=8.53, max_width=125, rtl=True)
 
 
     diagnosis_ar_style = ParagraphStyle(
-        "medical-diagnosis-ar", fontName=table_font, fontSize=9.0,
+        "medical-diagnosis-ar", fontName=arabic_font, fontSize=9.0,
         leading=16, alignment=TA_RIGHT, textColor=HexColor("#2F5496"),
     )
     diagnosis_en_style = ParagraphStyle(
@@ -572,7 +574,7 @@ def create_template_pdf(data, output_path, template_path):
     )
     # رسم يدوي مضبوط الأسطر داخل المستطيل لتفادي أي تجاوز أو تداخل.
     box_x, box_y, box_w, box_h = sx(300), sy(265), sx(265), sy(145)
-    medical_font = table_font
+    medical_font = arabic_font
     # مطابق للصورة المرجعية: Cairo-Regular 9.0 وleading يقارب 14.3 نقطة.
     medical_font_size = 9.0
     medical_leading = 14.3
