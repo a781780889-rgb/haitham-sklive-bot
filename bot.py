@@ -791,8 +791,8 @@ def confirm_keyboard():
 
 def confirm_inline_keyboard(license_enabled: bool = False):
     """لوحة المراجعة النهائية: خمسة أزرار ثابتة بالترتيب المرجعي."""
-    license_label = ("🟢 رقم الترخيص (مفعل - غير مفعل): مفعل"
-                     if license_enabled else "⚪ رقم الترخيص (مفعل - غير مفعل): غير مفعل")
+    license_label = ("🟢 رقم الترخيص (مفعل/ملغي): مفعل"
+                     if license_enabled else "⚪ رقم الترخيص (مفعل/ملغي): ملغي")
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ تأكيد إنشاء التقرير الطبي", callback_data="confirm_order")],
         [InlineKeyboardButton(license_label, callback_data="toggle_license")],

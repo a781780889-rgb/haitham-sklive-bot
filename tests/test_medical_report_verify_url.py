@@ -26,7 +26,8 @@ def test_license_toggle_is_second_keyboard_row():
     assert block.index('InlineKeyboardButton("✅ تأكيد إنشاء التقرير الطبي"') < block.index('InlineKeyboardButton(license_label')
     assert block.index('InlineKeyboardButton(license_label') < block.index('InlineKeyboardButton("✏️ تعديل البيانات"')
     assert block.count("InlineKeyboardButton(") == 5
-    assert "رقم الترخيص (مفعل - غير مفعل)" in block
+    assert "رقم الترخيص (مفعل/ملغي)" in block
+    assert "غير مفعل" not in block
 
 
 if __name__ == "__main__":
