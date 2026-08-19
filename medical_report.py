@@ -432,6 +432,12 @@ def create_template_pdf(data, output_path, template_path):
     fit_center(discharge, ref_x(214.270), ref_y_top(182.606) - 24.0, english_font)
     # إنزال التاريخ الهجري 28-01-1448 إلى الموضع المباشر فوق الخط الأحمر.
     fit_center(hijri_value(discharge), ref_x(404.804), ref_y_top(188.976) - 24.0, english_font)
+    # خط مركزي أسفل بيانات الخروج الأربعة وفوق Issue Date.
+    c.saveState()
+    c.setStrokeColor(HexColor("#D9534F"))
+    c.setLineWidth(0.9 * scale)
+    c.line(ref_x(45), ref_y_top(208.0), ref_x(550), ref_y_top(208.0))
+    c.restoreState()
 
     # تاريخ الإصدار في مركز صف Issue Date / تاريخ إصدار التقرير.
     fit_center(issue_date, ref_x(303.851), ref_y_top(215.825), english_font)
