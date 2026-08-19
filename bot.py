@@ -357,16 +357,26 @@ def get_scaffold_price(uid: int = None) -> float:
         return db.get_price_for_tier(tier)
     return float(db.get_setting("scaffold_price", "5.0"))
 
+MEDICAL_REPORT_VERIFY_URL = "https://sehasa.online/#/inquiries/slenquiry"
+
+
 def get_website_url():
-    url = db.get_setting("website_url", "https://sehasa.online/#/inquiries/slenquiry")
-    # استبدال أي رابط قديم خاطئ تلقائياً
-    if (not url
-        or "sehaseinquiresslendquiry.com" in url
-        or "seah.s.com" in url
-        or "seha-s.com" in url
-        or "seha.sa" in url
-        or "sehasaa.com" in url):
-        url = "https://sehasa.online/#/inquiries/slenquiry"
+    """إرجاع رابط تحقق HTTPS عامل فقط لاستخدامه في QR ورسائل البوت.
+
+    يمنع هذا الحاجز بقاء روابط placeholder مثل medical-report-demo.example
+    في إعدادات قديمة، لأن هذا النطاق لا يملك DNS وسيؤدي إلى NXDOMAIN عند المسح.
+    """
+    raw_url = db.get_setting("website_url", MEDICAL_REPORT_VERIFY_URL)
+    url = str(raw_url or "").strip()
+    lowered = url.lower()
+    invalid_markers = (
+        ".example", "localhost", "127.0.0.1", "0.0.0.0",
+        "sehaseinquiresslendquiry.com", "seah.s.com", "seha-s.com",
+        "seha.sa", "sehasaa.com",
+    )
+    if (not url or not lowered.startswith("https://")
+            or any(marker in lowered for marker in invalid_markers)):
+        return MEDICAL_REPORT_VERIFY_URL
     return url
 
 def is_admin_user(user_id: int) -> bool:
