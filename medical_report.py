@@ -430,11 +430,6 @@ def create_template_pdf(data, output_path, template_path):
     fit_center(_medical_leave_code(data), ref_x(304), leave_row_y, english_font, size=9.2, max_width=150)
     fit_center("رمز الإجازة", ref_x(515), leave_row_y, "MedicalArabicTemplate", size=9.2, max_width=105, rtl=True)
 
-    c.saveState()
-    c.setStrokeColor(HexColor("#D9534F"))
-    c.setLineWidth(0.9 * scale)
-    c.line(ref_x(30), leave_row_y + 3.2 * scale, ref_x(565), leave_row_y + 3.2 * scale)
-    c.restoreState()
 
     # صف الدخول: أربعة عناصر في سطر واحد والخط الأحمر يمر عبر منتصفها.
     c.saveState()
@@ -447,11 +442,6 @@ def create_template_pdf(data, output_path, template_path):
     fit_center(admission, ref_x(215), admission_row_y, english_font, size=9.2, max_width=105)
     fit_center(hijri_value(admission), ref_x(405), admission_row_y, english_font, size=9.2, max_width=105)
 
-    c.saveState()
-    c.setStrokeColor(HexColor("#D9534F"))
-    c.setLineWidth(0.9 * scale)
-    c.line(ref_x(30), admission_row_y + 3.2 * scale, ref_x(565), admission_row_y + 3.2 * scale)
-    c.restoreState()
 
     # صف الخروج: إعادة رسم العناصر الأربعة في سطر أفقي واحد، مع خط يمر عبر منتصف النصوص.
     # تنظيف الطبقة القديمة في النطاق الرأسي لصف الخروج فقط، دون المساس بالدخول أو الإصدار.
@@ -466,11 +456,6 @@ def create_template_pdf(data, output_path, template_path):
     fit_center(hijri_value(discharge), ref_x(405), discharge_row_y, english_font, size=9.2, max_width=105)
 
     # الخط الأحمر يمر عبر منتصف الكلمات الأربعة نفسها، وليس أسفل الصف.
-    c.saveState()
-    c.setStrokeColor(HexColor("#D9534F"))
-    c.setLineWidth(0.9 * scale)
-    c.line(ref_x(30), discharge_row_y + 3.2 * scale, ref_x(565), discharge_row_y + 3.2 * scale)
-    c.restoreState()
 
     # صف الإصدار: العناصر الثلاثة في سطر واحد والخط الأحمر يمر عبر منتصفها.
     c.saveState()
@@ -481,11 +466,6 @@ def create_template_pdf(data, output_path, template_path):
     issue_row_y = ref_y_top(230.0)
     fit_center(issue_date, ref_x(304), issue_row_y, english_font, size=9.2, max_width=105)
 
-    c.saveState()
-    c.setStrokeColor(HexColor("#D9534F"))
-    c.setLineWidth(0.9 * scale)
-    c.line(ref_x(30), issue_row_y + 3.2 * scale, ref_x(565), issue_row_y + 3.2 * scale)
-    c.restoreState()
 
     # صف الاسم: أربعة عناصر في سطر واحد والخط الأحمر يمر عبر منتصفها.
     c.saveState()
@@ -498,11 +478,6 @@ def create_template_pdf(data, output_path, template_path):
     fit_center(name_en, ref_x(215), name_row_y, english_font, size=9.2, max_width=120)
     fit_center(name_ar, ref_x(405), name_row_y, "MedicalArabicTemplate", size=9.2, max_width=120, rtl=True)
 
-    c.saveState()
-    c.setStrokeColor(HexColor("#D9534F"))
-    c.setLineWidth(0.9 * scale)
-    c.line(ref_x(30), name_row_y + 3.2 * scale, ref_x(565), name_row_y + 3.2 * scale)
-    c.restoreState()
 
     # صف الهوية: ثلاثة عناصر في سطر واحد والخط الأحمر يمر عبر منتصفها.
     c.saveState()
@@ -513,11 +488,6 @@ def create_template_pdf(data, output_path, template_path):
     id_row_y = ref_y_top(292.0)
     fit_center(id_number, ref_x(304), id_row_y, english_font, size=9.2, max_width=120)
 
-    c.saveState()
-    c.setStrokeColor(HexColor("#D9534F"))
-    c.setLineWidth(0.9 * scale)
-    c.line(ref_x(30), id_row_y + 3.2 * scale, ref_x(565), id_row_y + 3.2 * scale)
-    c.restoreState()
     # صف الجنسية: أربعة عناصر في سطر واحد والخط الأحمر يمر عبر منتصفها.
     c.saveState()
     c.setFillColorRGB(1, 1, 1)
@@ -529,11 +499,6 @@ def create_template_pdf(data, output_path, template_path):
     fit_center(nationality_en, ref_x(215), nationality_row_y, english_font, size=9.2, max_width=115)
     fit_center(nationality_ar, ref_x(405), nationality_row_y, "MedicalArabicTemplate", size=9.2, max_width=115, rtl=True)
 
-    c.saveState()
-    c.setStrokeColor(HexColor("#D9534F"))
-    c.setLineWidth(0.9 * scale)
-    c.line(ref_x(30), nationality_row_y + 3.2 * scale, ref_x(565), nationality_row_y + 3.2 * scale)
-    c.restoreState()
     # صف جهة العمل: أربعة عناصر في سطر واحد والخط الأحمر يمر عبر منتصفها.
     c.saveState()
     c.setFillColorRGB(1, 1, 1)
@@ -545,11 +510,6 @@ def create_template_pdf(data, output_path, template_path):
     fit_center(workplace_en, ref_x(215), workplace_row_y, english_font, size=9.2, max_width=110)
     fit_center(workplace_ar, ref_x(405), workplace_row_y, "MedicalArabicTemplate", size=9.2, max_width=110, rtl=True)
 
-    c.saveState()
-    c.setStrokeColor(HexColor("#D9534F"))
-    c.setLineWidth(0.9 * scale)
-    c.line(ref_x(30), workplace_row_y + 3.2 * scale, ref_x(565), workplace_row_y + 3.2 * scale)
-    c.restoreState()
     # صف الممارس: أربعة عناصر في سطر واحد والخط الأحمر يمر عبر منتصفها.
     c.saveState()
     c.setFillColorRGB(1, 1, 1)
@@ -560,11 +520,6 @@ def create_template_pdf(data, output_path, template_path):
     fit_center(doctor_en, ref_x(215), practitioner_row_y, english_font, size=9.2, max_width=110)
     fit_center(doctor_ar, ref_x(405), practitioner_row_y, "MedicalArabicTemplate", size=9.2, max_width=110, rtl=True)
 
-    c.saveState()
-    c.setStrokeColor(HexColor("#D9534F"))
-    c.setLineWidth(0.9 * scale)
-    c.line(ref_x(30), practitioner_row_y + 3.2 * scale, ref_x(565), practitioner_row_y + 3.2 * scale)
-    c.restoreState()
     # صف المسمى الوظيفي: أربعة عناصر في سطر واحد والخط الأحمر يمر عبر منتصفها.
     c.saveState()
     c.setFillColorRGB(1, 1, 1)
@@ -578,11 +533,6 @@ def create_template_pdf(data, output_path, template_path):
     fit_center(specialty_ar, ref_x(405), position_row_y, "MedicalArabicTemplate", size=9.2, max_width=110, rtl=True)
     fit_center("المسمى الوظيفي", ref_x(515), position_row_y, "MedicalArabicTemplate", size=8.8, max_width=125, rtl=True)
 
-    c.saveState()
-    c.setStrokeColor(HexColor("#D9534F"))
-    c.setLineWidth(0.9 * scale)
-    c.line(ref_x(30), position_row_y + 3.2 * scale, ref_x(565), position_row_y + 3.2 * scale)
-    c.restoreState()
 
     diagnosis_ar_style = ParagraphStyle(
         "medical-diagnosis-ar", fontName="MedicalArabicTemplate", fontSize=10.5,
