@@ -564,7 +564,7 @@ def create_template_pdf(data, output_path, template_path):
     leave_label_width = pdfmetrics.stringWidth(leave_label_text, arabic_bold_font, 12.0)
     position_label_width = pdfmetrics.stringWidth(position_label_text, arabic_font, 8.53)
     leave_r_x = ref_x(515) + 35.0 + leave_label_width / 2.0 - pdfmetrics.stringWidth(_arabic("ر"), arabic_bold_font, 12.0) / 2.0
-    position_alif_x = ref_x(515) + position_label_width / 2.0 - pdfmetrics.stringWidth(_arabic("ا"), arabic_font, 8.53) / 2.0
+    position_alif_x = ref_x(515) + position_label_width / 2.0 - pdfmetrics.stringWidth(_arabic("ا"), arabic_font, 8.53) / 2.0 + 36.0
     c.saveState()
     c.setStrokeColor(HexColor("#FF0000"))
     c.setLineWidth(0.8)
