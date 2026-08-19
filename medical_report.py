@@ -440,7 +440,10 @@ def create_template_pdf(data, output_path, template_path):
     # تنظيف شريط الصف وفق إحداثية السطر الفعلية لمنع بقاء Leave ID القديم.
     c.rect(ref_x(24), leave_row_y - 18 * scale, ref_x(547), 40 * scale, stroke=0, fill=1)
     c.restoreState()
-    fit_center("Admission Date", ref_x(78), leave_row_y, english_font, size=8.53, max_width=115)
+    c.saveState()
+    c.setFillColor(HexColor("#3A75B8"))
+    fit_center("Admission Date", ref_x(78), leave_row_y, table_bold_font, size=10.0, max_width=115)
+    c.restoreState()
     c.saveState()
     c.setFillColor(HexColor("#3A75B8"))
     fit_center(_medical_leave_code(data), ref_x(304), leave_row_y, table_bold_font, size=10.0, max_width=150)
@@ -548,10 +551,16 @@ def create_template_pdf(data, output_path, template_path):
 
     # خط الأساس المصحح يطابق مركز العناوين المرئية Position والمسمى الوظيفي.
     position_row_y = ref_y_top(413.0)
-    fit_center("Position", ref_x(78), position_row_y, english_font, size=8.53, max_width=90)
+    c.saveState()
+    c.setFillColor(HexColor("#3A75B8"))
+    fit_center("Position", ref_x(78), position_row_y, table_bold_font, size=10.0, max_width=90)
+    c.restoreState()
     fit_center(specialty_en, ref_x(215), position_row_y, english_font, size=8.53, max_width=110)
     fit_center(specialty_ar, ref_x(405), position_row_y, arabic_font, size=8.53, max_width=110, rtl=True)
-    fit_center("المسمى الوظيفي", ref_x(515), position_row_y, arabic_font, size=8.53, max_width=125, rtl=True)
+    c.saveState()
+    c.setFillColor(HexColor("#3A75B8"))
+    fit_center("المسمى الوظيفي", ref_x(515), position_row_y, table_bold_font, size=10.0, max_width=125, rtl=True)
+    c.restoreState()
 
 
     diagnosis_ar_style = ParagraphStyle(
