@@ -776,15 +776,24 @@ def create_template_pdf(data, output_path, template_path):
     # تنظيف موضع بيانات المنشأة القديمة في الجهة المقابلة للباركود.
     c.saveState()
     c.setFillColorRGB(1, 1, 1)
-    c.rect(ref_x(350), sy(112), ref_x(205), sy(178), stroke=0, fill=1)
+    c.rect(ref_x(350), sy(80), ref_x(205), sy(160), stroke=0, fill=1)
     c.restoreState()
     if hospital_logo_path and os.path.exists(hospital_logo_path):
-        c.drawImage(hospital_logo_path, hospital_center_x - sx(25), sy(225), width=sx(50), height=sx(42), preserveAspectRatio=True, anchor="c", mask="auto")
+        c.drawImage(hospital_logo_path, hospital_center_x - sx(25), sy(165), width=sx(50), height=sx(42), preserveAspectRatio=True, anchor="c", mask="auto")
     c.setFillColor(HexColor("#000000"))
-    fit_center(hospital_name_ar, hospital_center_x, sy(213), hospital_arabic_font, size=9.0, max_width=ref_x(150), rtl=True)
-    fit_center(hospital_name_en, hospital_center_x, sy(199), hospital_english_font, size=9.0, max_width=ref_x(150))
+    fit_center(hospital_name_ar, hospital_center_x, sy(153), hospital_arabic_font, size=9.0, max_width=ref_x(150), rtl=True)
+    fit_center(hospital_name_en, hospital_center_x, sy(139), hospital_english_font, size=9.0, max_width=ref_x(150))
     if hospital_private and hospital_license:
-        fit_center(hospital_license, hospital_center_x, sy(185), hospital_english_font, size=9.0, max_width=ref_x(150))
+        fit_center(hospital_license, hospital_center_x, sy(125), hospital_english_font, size=9.0, max_width=ref_x(150))
+
+    # إعادة رسم إطارَي التشخيص في آخر طبقة لضمان اكتمالهما وعدم قص الحد العربي.
+    c.saveState()
+    c.setStrokeColor(HexColor("#3A75B8"))
+    c.setLineWidth(1.0 * scale)
+    c.rect(sx(27), sy(265), sx(270.5), sy(145), stroke=1, fill=0)
+    c.rect(sx(297.5), sy(265), sx(270.5), sy(145), stroke=1, fill=0)
+    c.line(sx(297.5), sy(265), sx(297.5), sy(410))
+    c.restoreState()
 
     c.save()
 
