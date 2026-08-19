@@ -509,8 +509,21 @@ def create_template_pdf(data, output_path, template_path):
     c.setLineWidth(0.9 * scale)
     c.line(ref_x(30), workplace_row_y + 3.2 * scale, ref_x(565), workplace_row_y + 3.2 * scale)
     c.restoreState()
-    fit_center(doctor_en, ref_x(214.270), ref_y_top(367.207), english_font)
-    fit_center(doctor_ar, ref_x(404.804), ref_y_top(370.899), "MedicalArabicTemplate", rtl=True)
+    # صف الممارس: أربعة عناصر في سطر واحد والخط الأحمر يمر عبر منتصفها.
+    c.saveState()
+    c.setFillColorRGB(1, 1, 1)
+    c.rect(ref_x(24), page_h - ref_y_top(395.0), ref_x(547), ref_y_top(365.0) - ref_y_top(395.0), stroke=0, fill=1)
+    c.restoreState()
+
+    practitioner_row_y = ref_y_top(383.0)
+    fit_center(doctor_en, ref_x(215), practitioner_row_y, english_font, size=9.2, max_width=110)
+    fit_center(doctor_ar, ref_x(405), practitioner_row_y, "MedicalArabicTemplate", size=9.2, max_width=110, rtl=True)
+
+    c.saveState()
+    c.setStrokeColor(HexColor("#D9534F"))
+    c.setLineWidth(0.9 * scale)
+    c.line(ref_x(30), practitioner_row_y + 3.2 * scale, ref_x(565), practitioner_row_y + 3.2 * scale)
+    c.restoreState()
     fit_center(specialty_en, ref_x(198.908), ref_y_top(401.923), english_font)
     fit_center(specialty_ar, ref_x(409.644), ref_y_top(400.659), "MedicalArabicTemplate", rtl=True)
 
