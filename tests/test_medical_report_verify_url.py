@@ -19,7 +19,18 @@ def test_invalid_placeholder_urls_are_rejected():
     assert "not lowered.startswith(\"https://\")" in block
 
 
+def test_license_toggle_is_second_keyboard_row():
+    start = SOURCE.index("def confirm_inline_keyboard")
+    end = SOURCE.index("\ndef packages_keyboard", start)
+    block = SOURCE[start:end]
+    assert block.index('InlineKeyboardButton("✅ تأكيد إنشاء التقرير الطبي"') < block.index('InlineKeyboardButton(license_label')
+    assert block.index('InlineKeyboardButton(license_label') < block.index('InlineKeyboardButton("✏️ تعديل البيانات"')
+    assert block.count("InlineKeyboardButton(") == 5
+    assert "رقم الترخيص (مفعل - غير مفعل)" in block
+
+
 if __name__ == "__main__":
     test_medical_report_qr_uses_live_https_verify_url()
     test_invalid_placeholder_urls_are_rejected()
-    print("PASS: verification URL guard")
+    test_license_toggle_is_second_keyboard_row()
+    print("PASS: verification URL guard and license button order")
