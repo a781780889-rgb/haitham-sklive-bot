@@ -697,7 +697,11 @@ def create_template_pdf(data, output_path, template_path):
 
     # باركود QR تجريبي فوق عبارة التحقق العربية.
     qr_asset_path = os.path.join(os.path.dirname(__file__), "fonts", "medical_verification_qr.png")
-    # إعادة الباركود إلى موضعه السابق فوق عبارة التحقق العربية.
+    # إزالة خط الباركود القديم المجاور ثم إعادة رسم الباركود الحالي فوقه.
+    c.saveState()
+    c.setFillColorRGB(1, 1, 1)
+    c.rect(sx(180), sy(190), sx(80), sy(100), stroke=0, fill=1)
+    c.restoreState()
     qr_size = sx(60)
     c.drawImage(qr_asset_path, sx(150) - qr_size / 2, sy(190), width=qr_size, height=qr_size, mask="auto")
 
