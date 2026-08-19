@@ -807,23 +807,20 @@ def create_template_pdf(data, output_path, template_path):
     c.setFillColorRGB(1, 1, 1)
     c.rect(ref_x(350), sy(80), ref_x(205), sy(160), stroke=0, fill=1)
     c.restoreState()
-    logo_x = hospital_center_x - sx(25)
-    logo_y = sy(165)
-    logo_w = sx(50)
-    logo_h = sx(42)
+    # مربع الشعار المقابل للباركود: نفس الحجم 60×60 نقطة وفي الجهة اليمنى.
+    logo_x = hospital_center_x - qr_size / 2
+    logo_y = sy(190)
+    logo_w = qr_size
+    logo_h = qr_size
     if hospital_logo_path and os.path.exists(hospital_logo_path):
         c.drawImage(hospital_logo_path, logo_x, logo_y, width=logo_w, height=logo_h, preserveAspectRatio=True, anchor="c", mask="auto")
-    # خطّا قياس إرشاديان: من نهاية الباركود إلى نهاية الشعار، ومن رأس الباركود إلى رأس الشعار.
-    guide_qr_x = sx(150) - qr_size / 2
-    guide_qr_y = sy(190)
-    guide_qr_right = guide_qr_x + qr_size
-    guide_logo_right = logo_x + logo_w
+    # خطّان أحمران مستقيمان يحددان الحد العلوي والسفلي لمربع الشعار.
     c.saveState()
     c.setStrokeColor(HexColor("#D92D20"))
-    c.setLineWidth(0.8 * scale)
-    c.setDash(3 * scale, 2 * scale)
-    c.line(guide_qr_right, guide_qr_y + qr_size, guide_logo_right, logo_y + logo_h)
-    c.line(guide_qr_right, guide_qr_y, guide_logo_right, logo_y)
+    c.setLineWidth(1.0 * scale)
+    c.setDash()
+    c.line(logo_x, logo_y + logo_h, logo_x + logo_w, logo_y + logo_h)
+    c.line(logo_x, logo_y, logo_x + logo_w, logo_y) 
     c.restoreState()
     c.setFillColor(HexColor("#000000"))
     fit_center(hospital_name_ar, hospital_center_x, sy(153), hospital_arabic_font, size=9.0, max_width=ref_x(150), rtl=True)
