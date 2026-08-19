@@ -357,7 +357,8 @@ def get_scaffold_price(uid: int = None) -> float:
         return db.get_price_for_tier(tier)
     return float(db.get_setting("scaffold_price", "5.0"))
 
-MEDICAL_REPORT_VERIFY_URL = "https://sehasa.online/#/inquiries/slenquiry"
+DEFAULT_VERIFY_URL = "https://sehasa.online/#/inquiries/slenquiry"
+MEDICAL_REPORT_VERIFY_URL = "https://haitham-sklive-bot-production.up.railway.app/#/inquiries/slenquiry"
 
 
 def get_website_url():
@@ -366,7 +367,7 @@ def get_website_url():
     يمنع هذا الحاجز بقاء روابط placeholder مثل medical-report-demo.example
     في إعدادات قديمة، لأن هذا النطاق لا يملك DNS وسيؤدي إلى NXDOMAIN عند المسح.
     """
-    raw_url = db.get_setting("website_url", MEDICAL_REPORT_VERIFY_URL)
+    raw_url = db.get_setting("website_url", DEFAULT_VERIFY_URL)
     url = str(raw_url or "").strip()
     lowered = url.lower()
     invalid_markers = (
@@ -376,7 +377,7 @@ def get_website_url():
     )
     if (not url or not lowered.startswith("https://")
             or any(marker in lowered for marker in invalid_markers)):
-        return MEDICAL_REPORT_VERIFY_URL
+        return DEFAULT_VERIFY_URL
     return url
 
 def is_admin_user(user_id: int) -> bool:
@@ -2295,7 +2296,8 @@ async def generate_and_send_pdf(update, context, uid):
         # المسار القديم قد يشير إلى ملف مؤقت انتهت صلاحيته؛ استخدم البيانات المباشرة كبديل موثوق.
         if not logo_path or (isinstance(logo_path, (str, os.PathLike)) and not os.path.exists(logo_path)):
             logo_path = db.get_hospital_logo_data(hospital)
-        website_url = get_website_url()
+        # رابط قسم التقارير الطبيّة منشور على Railway ومستقل عن رابط الأقسام الأخرى.
+        website_url = MEDICAL_REPORT_VERIFY_URL
         pdf_path_temp = os.path.join(tempfile.gettempdir(), f"excuse_{uid}_{int(datetime.now().timestamp())}.pdf")
         pdf_path = pdf_path_temp
 

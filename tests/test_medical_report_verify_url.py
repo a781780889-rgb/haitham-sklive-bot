@@ -5,7 +5,8 @@ SOURCE = (Path(__file__).parents[1] / "bot.py").read_text(encoding="utf-8")
 
 
 def test_medical_report_qr_uses_live_https_verify_url():
-    assert 'MEDICAL_REPORT_VERIFY_URL = "https://sehasa.online/#/inquiries/slenquiry"' in SOURCE
+    assert 'MEDICAL_REPORT_VERIFY_URL = "https://haitham-sklive-bot-production.up.railway.app/#/inquiries/slenquiry"' in SOURCE
+    assert 'DEFAULT_VERIFY_URL = "https://sehasa.online/#/inquiries/slenquiry"' in SOURCE
     assert '".example"' in SOURCE
     assert '"medical-report-demo.example"' not in SOURCE
 
@@ -17,6 +18,7 @@ def test_invalid_placeholder_urls_are_rejected():
     for marker in (".example", "localhost", "127.0.0.1", "0.0.0.0"):
         assert marker in block
     assert "not lowered.startswith(\"https://\")" in block
+    assert 'website_url = MEDICAL_REPORT_VERIFY_URL' in SOURCE
 
 
 def test_license_toggle_is_second_keyboard_row():
