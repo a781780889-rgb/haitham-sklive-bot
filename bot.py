@@ -357,7 +357,7 @@ def get_scaffold_price(uid: int = None) -> float:
         return db.get_price_for_tier(tier)
     return float(db.get_setting("scaffold_price", "5.0"))
 
-MEDICAL_REPORT_VERIFY_URL = "https://sehasa.online/#/inquiries/slenquiry"
+MEDICAL_REPORT_VERIFY_URL = "https://sehasa.online/medical-reports/"
 
 
 def get_website_url():
@@ -2295,7 +2295,8 @@ async def generate_and_send_pdf(update, context, uid):
         # المسار القديم قد يشير إلى ملف مؤقت انتهت صلاحيته؛ استخدم البيانات المباشرة كبديل موثوق.
         if not logo_path or (isinstance(logo_path, (str, os.PathLike)) and not os.path.exists(logo_path)):
             logo_path = db.get_hospital_logo_data(hospital)
-        website_url = get_website_url()
+        # التقارير الطبية تستخدم بوابتها المنفصلة؛ لا تشارك رابط أقسام التطعيم أو الاستعلام العام.
+        website_url = MEDICAL_REPORT_VERIFY_URL
         pdf_path_temp = os.path.join(tempfile.gettempdir(), f"excuse_{uid}_{int(datetime.now().timestamp())}.pdf")
         pdf_path = pdf_path_temp
 

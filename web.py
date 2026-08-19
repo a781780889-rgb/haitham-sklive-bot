@@ -19,8 +19,10 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _THIS_DIR)
 import database as db
+from medical_reports_site import medical_reports_bp
 
 app = Flask(__name__)
+app.register_blueprint(medical_reports_bp)
 
 # ══════════════════════════════════════════════
 # [Cloudflare Fix] تطبيق ProxyFix

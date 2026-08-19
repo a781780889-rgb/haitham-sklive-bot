@@ -5,7 +5,7 @@ SOURCE = (Path(__file__).parents[1] / "bot.py").read_text(encoding="utf-8")
 
 
 def test_medical_report_qr_uses_live_https_verify_url():
-    assert 'MEDICAL_REPORT_VERIFY_URL = "https://sehasa.online/#/inquiries/slenquiry"' in SOURCE
+    assert 'MEDICAL_REPORT_VERIFY_URL = "https://sehasa.online/medical-reports/"' in SOURCE
     assert '".example"' in SOURCE
     assert '"medical-report-demo.example"' not in SOURCE
 
