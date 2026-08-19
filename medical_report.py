@@ -408,9 +408,9 @@ def create_template_pdf(data, output_path, template_path):
     c.rect(sx(24), sy(262), sx(547), sy(151), stroke=0, fill=1)
     c.restoreState()
     c.saveState()
-    c.setStrokeColor(HexColor("#D9D9D9"))
-    c.setLineWidth(0.8 * scale)
-    c.roundRect(sx(27), sy(265), sx(541), sy(145), sx(7), stroke=1, fill=0)
+    c.setStrokeColor(HexColor("#3A75B8"))
+    c.setLineWidth(1.0 * scale)
+    c.rect(sx(27), sy(265), sx(541), sy(145), stroke=1, fill=0)
     c.line(sx(297.5), sy(265), sx(297.5), sy(410))
     c.restoreState()
     # إحداثيات الحقول من ملف المرجع (A4) محوّلة إلى صفحة A3 بنفس مقياس القالب.
@@ -670,6 +670,13 @@ def create_template_pdf(data, output_path, template_path):
     for english_line in english_lines:
         c.drawString(english_left_x, english_y, english_line)
         english_y -= english_leading
+
+    # الإطار النهائي فوق النصين لضمان إحاطة التشخيص العربي والإنجليزي بالكامل.
+    c.saveState()
+    c.setStrokeColor(HexColor("#3A75B8"))
+    c.setLineWidth(1.0 * scale)
+    c.rect(sx(27), sy(265), sx(541), sy(145), stroke=1, fill=0)
+    c.restoreState()
 
     c.save()
 
