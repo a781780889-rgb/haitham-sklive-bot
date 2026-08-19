@@ -422,9 +422,22 @@ def create_template_pdf(data, output_path, template_path):
     # كل قيمة تُرسم على الإحداثية المقابلة لها في المرجع، مع فروق الخطوط الأصلية.
     fit_center(_medical_leave_code(data), leave_code_center_x, leave_code_center_y, english_font)
 
-    # صف الدخول: الميلادي والهجري مقابل Admission Date / تاريخ الدخول.
-    fit_center(admission, ref_x(214.270), ref_y_top(161.290), english_font)
-    fit_center(hijri_value(admission), ref_x(404.804), ref_y_top(165.098), english_font)
+    # صف الدخول: أربعة عناصر في سطر واحد والخط الأحمر يمر عبر منتصفها.
+    c.saveState()
+    c.setFillColorRGB(1, 1, 1)
+    c.rect(ref_x(24), page_h - ref_y_top(180.0), ref_x(547), ref_y_top(150.0) - ref_y_top(180.0), stroke=0, fill=1)
+    c.restoreState()
+
+    # خط الأساس المصحح يطابق مركز العناوين المرئية Admission Date وتاريخ الدخول.
+    admission_row_y = ref_y_top(174.0)
+    fit_center(admission, ref_x(215), admission_row_y, english_font, size=9.2, max_width=105)
+    fit_center(hijri_value(admission), ref_x(405), admission_row_y, english_font, size=9.2, max_width=105)
+
+    c.saveState()
+    c.setStrokeColor(HexColor("#D9534F"))
+    c.setLineWidth(0.9 * scale)
+    c.line(ref_x(30), admission_row_y + 3.2 * scale, ref_x(565), admission_row_y + 3.2 * scale)
+    c.restoreState()
 
     # صف الخروج: إعادة رسم العناصر الأربعة في سطر أفقي واحد، مع خط يمر عبر منتصف النصوص.
     # تنظيف الطبقة القديمة في النطاق الرأسي لصف الخروج فقط، دون المساس بالدخول أو الإصدار.
