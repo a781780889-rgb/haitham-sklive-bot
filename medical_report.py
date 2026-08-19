@@ -459,7 +459,7 @@ def create_template_pdf(data, output_path, template_path):
     c.restoreState()
     c.saveState()
     c.setFillColor(HexColor("#3A75B8"))
-    fit_center("رمز الإجازة", ref_x(515), leave_row_y, arabic_bold_font, size=leave_label_font_size, max_width=150, rtl=True)
+    fit_center("رمز الإجازة", ref_x(515), leave_row_y, arabic_bold_font, size=12.0, max_width=180, rtl=True)
     c.restoreState()
 
 
