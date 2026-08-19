@@ -426,17 +426,23 @@ def create_template_pdf(data, output_path, template_path):
     fit_center(admission, ref_x(214.270), ref_y_top(161.290), english_font)
     fit_center(hijri_value(admission), ref_x(404.804), ref_y_top(165.098), english_font)
 
-    # صف الخروج: الميلادي والهجري مقابل Discharge Date / تاريخ الخروج.
-    # إنزال تاريخ الخروج الميلادي 13/07/2026 إلى الموضع المباشر فوق الخط الأحمر.
-    # الإزاحة الإجمالية: 24 نقطة PDF إلى الأسفل من الإحداثية المرجعية.
-    fit_center(discharge, ref_x(214.270), ref_y_top(182.606) - 24.0, english_font)
-    # توحيد خط أساس 28-01-1448 مع 13/07/2026 وتوسيطهما بصرياً فوق الخط الأحمر.
-    fit_center(hijri_value(discharge), ref_x(404.804), ref_y_top(182.606) - 24.0, english_font)
-    # خط مركزي أسفل بيانات الخروج الأربعة وفوق Issue Date.
+    # صف الخروج: إعادة رسم العناصر الأربعة في سطر أفقي واحد، مع خط يمر عبر منتصف النصوص.
+    # تنظيف الطبقة القديمة في النطاق الرأسي لصف الخروج فقط، دون المساس بالدخول أو الإصدار.
+    c.saveState()
+    c.setFillColorRGB(1, 1, 1)
+    c.rect(ref_x(24), page_h - ref_y_top(170.0), ref_x(547), ref_y_top(170.0) - ref_y_top(207.0), stroke=0, fill=1)
+    c.restoreState()
+
+    # موضع خط الأساس المصحح يطابق صف Discharge Date الفعلي في القالب.
+    discharge_row_y = ref_y_top(202.0)
+    fit_center(discharge, ref_x(215), discharge_row_y, english_font, size=9.2, max_width=105)
+    fit_center(hijri_value(discharge), ref_x(405), discharge_row_y, english_font, size=9.2, max_width=105)
+
+    # الخط الأحمر يمر عبر منتصف الكلمات الأربعة نفسها، وليس أسفل الصف.
     c.saveState()
     c.setStrokeColor(HexColor("#D9534F"))
     c.setLineWidth(0.9 * scale)
-    c.line(ref_x(45), ref_y_top(208.0), ref_x(550), ref_y_top(208.0))
+    c.line(ref_x(30), discharge_row_y + 3.2 * scale, ref_x(565), discharge_row_y + 3.2 * scale)
     c.restoreState()
 
     # تاريخ الإصدار في مركز صف Issue Date / تاريخ إصدار التقرير.
